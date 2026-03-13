@@ -1,0 +1,21 @@
+# --- Core Web Server ---
+fastapi[all]          # Include pydantic, uvicorn, jinja2 e starlette
+python-multipart      # Necessario per gestire i form di login e invio punti
+
+# --- Database ---
+sqlmodel              # L'unione tra SQLAlchemy e Pydantic
+psycopg2-binary       # Driver per PostgreSQL (necessario per GCP Cloud SQL)
+alembic               # Per gestire le migrazioni del database in produzione
+
+# --- Security & Auth ---
+python-jose[cryptography]  # Per la creazione e validazione dei JWT (token di sessione) 
+#passlib[bcrypt]            # Per l'hashing sicuro delle password dei merchant
+cryptography               # Per criptare le API Key di Digital Humani nel DB
+
+# --- Integration & Utility ---
+httpx                 # Client asincrono per chiamare le API di Digital Humani
+#qrcode[pil]           # Per generare i QR code delle Treecard lato server
+python-dotenv         # Per caricare le variabili d'ambiente dal file .env
+
+# --- Production ---
+gunicorn              # Process manager per far girare FastAPI su Cloud Run

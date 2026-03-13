@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Merchant Login - Fidelitree</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-slate-50 flex items-center justify-center min-h-screen p-6">
+    <div class="max-w-sm w-full space-y-8 text-center">
+        <div>
+            <div class="inline-block p-4 bg-white rounded-3xl shadow-sm mb-4">
+                <img src="/static/logo_light.jpg" alt="Logo" class="h-12 w-12">
+            </div>
+            <h1 class="text-2xl font-black text-slate-800 tracking-tight">Accesso Partner</h1>
+            <p class="text-slate-500 text-sm mt-2">Inserisci la tua password per gestire le Treecard</p>
+        </div>
+
+        <form action="/merchant/login" method="POST" class="space-y-4">
+            <div class="relative">
+                <input type="password" name="password" required
+                    class="w-full p-5 bg-white border-2 border-slate-100 rounded-2xl text-center text-2xl tracking-widest focus:border-green-500 focus:outline-none transition-all shadow-sm"
+                    placeholder="••••••••">
+            </div>
+            <button type="submit"
+                class="w-full bg-slate-900 text-white font-bold py-5 rounded-2xl shadow-lg active:scale-95 transition-transform text-lg">
+                ENTRA NELLA DASHBOARD
+            </button>
+        </form>
+
+        <p class="text-xs text-slate-400 font-medium uppercase tracking-widest">Sicurezza garantita da Fidelitree</p>
+    </div>
+</body>
+
+</html>

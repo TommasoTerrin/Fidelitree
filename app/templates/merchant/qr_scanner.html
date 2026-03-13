@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanner - Fidelitree</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+</head>
+
+<body class="bg-black min-h-screen flex flex-col font-sans">
+
+    <div class="p-6 bg-slate-900 flex justify-between items-center text-white">
+        <h2 class="font-bold">Scannerizza Treecard</h2>
+        <a href="/merchant/dashboard" class="text-xs bg-slate-800 px-3 py-2 rounded-lg">Chiudi</a>
+    </div>
+
+    <div class="flex-1 flex flex-col items-center justify-center p-6">
+        <div id="reader"
+            class="w-full max-w-sm overflow-hidden rounded-[2.5rem] border-4 border-green-500 shadow-[0_0_30px_rgba(34,197,94,0.3)]">
+        </div>
+
+        <div id="error-msg"
+            class="hidden mt-6 bg-red-500/10 border border-red-500 text-red-500 p-4 rounded-2xl text-sm font-bold flex items-center gap-2">
+            <span>⚠️</span> <span id="error-text">QR non valido o scaduto</span>
+        </div>
+    </div>
+
+    <div class="p-10 bg-slate-900 text-center text-slate-400">
+        <p class="text-sm">Inquadra il QR code del cliente per caricare i Treepoints</p>
+    </div>
+
+    <script>
+        function onScanSuccess(decodedText) {
+            // Se il QR contiene l'URL della card, lo redirigiamo alla gestione punti
+            // Assumiamo che il QR sia: https://tuodominio.it/card/ID_CARD
+            window.location.href = decodedText + "/manage";
+        }
+
+        function onScanFailure(error) {
+            // Possiamo loggare l'errore o mostrarlo se critico
+            console.warn(`Scan error: ${error}`);
+        }
+
+        let html5QrcodeScanner = new Html5QrcodeScanner("reader", {
+            fps: 15,
+            qrbox: { width: 250, height: 250 },
+            aspectRatio: 1.0
+        });
+        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+    </script>
+</body>
+
+</html>

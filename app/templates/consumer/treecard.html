@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>La tua Treecard - Fidelitree</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+
+<body class="bg-gray-50 flex justify-center items-center min-h-screen p-4">
+
+    <div class="max-w-sm w-full bg-white rounded-[2rem] shadow-2xl overflow-hidden border border-gray-100">
+        <div class="p-8 pb-4 text-center">
+            <h1 class="text-2xl font-black text-gray-800">{{ merchant.business_name }}</h1>
+            <p class="text-green-600 font-medium">Treecard Program 🌳</p>
+        </div>
+
+        <div class="px-8 py-4">
+            <div class="bg-green-50 rounded-2xl p-6 border border-green-100">
+                <div class="flex justify-between items-end mb-2">
+                    <span class="text-sm text-green-700 font-bold uppercase tracking-wider">Treepoints</span>
+                    <span class="text-3xl font-black text-green-900">{{ card.current_points }}<span
+                            class="text-lg text-green-600">/{{ merchant.points_to_tree }}</span></span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-3">
+                    <div class="bg-green-600 h-3 rounded-full transition-all duration-500"
+                        style="width: {{ (card.current_points / merchant.points_to_tree) * 100 }}%"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-8 flex flex-col items-center">
+            <div id="qrcode" class="p-4 bg-white border-2 border-green-500 rounded-3xl shadow-inner"></div>
+            <p class="mt-4 text-xs text-gray-400 font-medium text-center uppercase tracking-widest">Mostra allo scanner
+            </p>
+        </div>
+
+        <div class="bg-gray-800 p-6 text-center">
+            <p class="text-white text-sm">Hai già piantato <span class="text-green-400 font-bold text-lg">{{
+                    card.total_trees_planted }}</span> alberi!</p>
+        </div>
+    </div>
+
+    <script>
+        // Genera il QR Code dinamicamente usando l'URL della pagina corrente
+        new QRCode(document.getElementById("qrcode"), {
+            text: "{{ full_url }}",
+            width: 180,
+            height: 180,
+            colorDark: "#111827",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.H
+        });
+    </script>
+</body>
+
+</html>
