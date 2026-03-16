@@ -48,11 +48,13 @@
             // Vibrazione per feedback (se supportata)
             if (navigator.vibrate) navigator.vibrate(200);
 
-            // Reindirizzamento
+            // Reindirizzamento corretto per le rotte merchant
             if (decodedText.startsWith("http")) {
-                window.location.href = decodedText + "/manage";
+                // Se l'URL è https://.../card/ID lo trasformiamo in https://.../merchant/card/ID/manage
+                const newUrl = decodedText.replace("/card/", "/merchant/card/") + "/manage";
+                window.location.href = newUrl;
             } else {
-                // Se è solo un ID, costruiamo l'URL (opzionale, dipende dal QR generato)
+                // Se è solo un ID, costruiamo l'URL completo
                 window.location.href = "/merchant/card/" + decodedText + "/manage";
             }
         };
