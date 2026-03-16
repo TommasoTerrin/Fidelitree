@@ -21,7 +21,13 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 
 # --- Database ---
-engine = create_engine(url=settings.DATABASE_URL)
+engine = create_engine(
+    url=settings.DATABASE_URL,
+    pool_pre_ping=True,  # Fix per timeout SSL con Neon DB
+    pool_recycle=300,    # Ricicla connessioni ogni 5 min
+    pool_size=5,
+    max_overflow=10
+)
 
 
 @app.on_event("startup")

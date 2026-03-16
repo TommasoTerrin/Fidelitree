@@ -17,13 +17,24 @@
     </div>
 
     <div class="flex-1 flex flex-col items-center justify-center p-6">
-        <div id="reader"
-            class="w-full max-w-sm overflow-hidden rounded-[2.5rem] border-4 border-green-500 shadow-[0_0_30px_rgba(34,197,94,0.3)]">
+        <div id="reader-container" class="relative w-full max-w-sm">
+            <div id="reader"
+                class="w-full overflow-hidden rounded-[2.5rem] border-4 border-green-500 shadow-[0_0_30px_rgba(34,197,94,0.3)]">
+            </div>
+            <!-- Overlay di caricamento -->
+            <div id="camera-loading"
+                class="absolute inset-0 flex items-center justify-center bg-slate-900 rounded-[2.5rem]">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500"></div>
+            </div>
         </div>
 
-        <div id="error-msg"
-            class="hidden mt-6 bg-red-500/10 border border-red-500 text-red-500 p-4 rounded-2xl text-sm font-bold flex items-center gap-2">
-            <span>⚠️</span> <span id="error-text">QR non valido o scaduto</span>
+        <div id="camera-error"
+            class="hidden mt-6 bg-red-500/10 border border-red-500 text-red-500 p-4 rounded-2xl text-sm font-bold flex flex-col items-center gap-2">
+            <span>⚠️ Errore Fotocamera</span>
+            <p id="error-detail" class="text-xs font-normal text-center">Assicurati di aver dato i permessi e di usare
+                HTTPS.</p>
+            <button onclick="location.reload()"
+                class="mt-2 bg-red-500 text-white px-4 py-2 rounded-xl text-xs">Riprova</button>
         </div>
     </div>
 
@@ -32,23 +43,33 @@
     </div>
 
     <script>
-        function onScanSuccess(decodedText) {
-            // Se il QR contiene l'URL della card, lo redirigiamo alla gestione punti
-            // Assumiamo che il QR sia: https://tuodominio.it/card/ID_CARD
-            window.location.href = decodedText + "/manage";
-        }
+        const html5QrCode = new Html5Qrcode("reader");
+        const qrCodeSuccessCallback = (decodedText, decodedResult) => {
+            // Vibrazione per feedback (se supportata)
+            if (navigator.vibrate) navigator.vibrate(200);
 
-        function onScanFailure(error) {
-            // Possiamo loggare l'errore o mostrarlo se critico
-            console.warn(`Scan error: ${error}`);
-        }
+            // Reindirizzamento
+            if (decodedText.startsWith("http")) {
+                window.location.href = decodedText + "/manage";
+            } else {
+                // Se è solo un ID, costruiamo l'URL (opzionale, dipende dal QR generato)
+                window.location.href = "/merchant/card/" + decodedText + "/manage";
+            }
+        };
 
-        let html5QrcodeScanner = new Html5QrcodeScanner("reader", {
-            fps: 15,
-            qrbox: { width: 250, height: 250 },
-            aspectRatio: 1.0
-        });
-        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+        const config = { fps: 15, qrbox: { width: 250, height: 250 } };
+
+        // Avvio fotocamera posteriore
+        html5QrCode.start({ facingMode: "environment" }, config, qrCodeSuccessCallback)
+            .then(() => {
+                document.getElementById("camera-loading").classList.add("hidden");
+            })
+            .catch((err) => {
+                console.error("Errore avvio fotocamera:", err);
+                document.getElementById("camera-loading").classList.add("hidden");
+                document.getElementById("camera-error").classList.remove("hidden");
+                document.getElementById("error-detail").innerText = err;
+            });
     </script>
 </body>
 
