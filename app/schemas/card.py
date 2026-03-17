@@ -19,3 +19,4 @@ class CardResponse(BaseModel):
     current_points: int
     trees_planted: int
     trees_list: list[str]
+    warnings: list[str] | None = None
