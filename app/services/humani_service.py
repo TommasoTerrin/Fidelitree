@@ -15,7 +15,11 @@ def _get_headers(api_key: str) -> dict:
     return {"X-Api-Key": api_key}
 
 # Piantare alberi
-async def plant_tree(base_url: str, api_key: str, enterprise_id:str, user: str, project_id: str ="44117777", tree_count: int = 1) -> dict:
+async def plant_tree(api_key: str, enterprise_id:str, user: str = 'anonymous', test:bool = True, project_id: str ="44117777", tree_count: int = 1) -> dict:
+    if test:
+        base_url = SANDBOX_BASE_URL
+    else:
+        base_url = settings.HUMANI_BASE_URL
     payload = {
         "enterpriseId": enterprise_id,
         "projectId": project_id,

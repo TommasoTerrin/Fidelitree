@@ -21,7 +21,7 @@
                 </div>
                 <div class="text-right">
                     <span class="text-3xl">🌳</span>
-                    <p class="text-[10px] font-bold text-slate-400">TOTALI: {{ card.total_trees_planted }}</p>
+                    <p class="text-[10px] font-bold text-slate-400">TOTALI: {{ card.trees_planted }}</p>
                 </div>
             </div>
         </div>
@@ -38,13 +38,14 @@
                     class="w-16 h-16 bg-green-100 rounded-full text-3xl font-bold text-green-600 active:bg-green-200 transition-colors">+</button>
             </div>
 
-            <button onclick="showModal()"
+            <button id="btn-aggiorna" onclick="showModal()"
                 class="w-full bg-green-600 text-white font-black py-5 rounded-2xl text-xl shadow-lg shadow-green-100 active:scale-95 transition-transform">
                 AGGIORNA CARD
             </button>
         </div>
     </div>
 
+    <!-- Modal di conferma -->
     <div id="confirm-modal"
         class="hidden fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-6 z-50">
         <div class="bg-white w-full max-w-xs rounded-[2.5rem] p-8 text-center shadow-2xl">
@@ -52,22 +53,26 @@
             <p id="modal-text" class="text-slate-500 mb-8">Stai per aggiungere 1 punto a questa card.</p>
 
             <div class="space-y-3">
-                <form action="/merchant/add-point/{{ card.id }}" method="POST">
-                    <input type="hidden" name="points" id="final-points-input" value="1">
-                    <button type="submit" class="w-full bg-green-600 text-white font-bold py-4 rounded-xl shadow-md">SÌ,
-                        CONFERMO</button>
-                </form>
+                <button id="btn-confirm" onclick="submitPoints()"
+                    class="w-full bg-green-600 text-white font-bold py-4 rounded-xl shadow-md">SÌ,
+                    CONFERMO</button>
                 <button onclick="hideModal()"
                     class="w-full bg-slate-100 text-slate-500 font-bold py-4 rounded-xl">ANNULLA</button>
             </div>
         </div>
     </div>
 
+    <!-- Toast di feedback -->
+    <div id="toast"
+        class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 px-6 py-3 rounded-2xl text-white font-bold shadow-xl z-50 transition-all">
+    </div>
+
     <script>
         const input = document.getElementById('points-input');
-        const finalInput = document.getElementById('final-points-input');
         const modal = document.getElementById('confirm-modal');
         const modalText = document.getElementById('modal-text');
+        const toast = document.getElementById('toast');
+        const cardId = "{{ card.id }}";
 
         function changePoints(val) {
             let current = parseInt(input.value) || 0;
@@ -76,13 +81,50 @@
 
         function showModal() {
             const val = input.value;
-            finalInput.value = val;
             modalText.innerText = `Vuoi modificare i punti di ${val} per questa Treecard?`;
             modal.classList.remove('hidden');
         }
 
         function hideModal() {
             modal.classList.add('hidden');
+        }
+
+        function showToast(message, isError = false) {
+            toast.textContent = message;
+            toast.className = `fixed bottom-6 left-1/2 -translate-x-1/2 px-6 py-3 rounded-2xl text-white font-bold shadow-xl z-50 transition-all ${isError ? 'bg-red-500' : 'bg-green-600'}`;
+            setTimeout(() => { toast.classList.add('hidden'); }, 3000);
+        }
+
+        async function submitPoints() {
+            const points = parseInt(input.value) || 0;
+            const btnConfirm = document.getElementById('btn-confirm');
+            btnConfirm.disabled = true;
+            btnConfirm.textContent = 'Invio in corso...';
+
+            try {
+                const res = await fetch(`/merchant/add-point/${cardId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ points: points })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || 'Errore server');
+                }
+
+                // Successo: ricarica la pagina per mostrare i dati aggiornati
+                showToast('Punti aggiornati! ✅');
+                hideModal();
+                setTimeout(() => { window.location.reload(); }, 800);
+
+            } catch (e) {
+                showToast(e.message, true);
+                hideModal();
+            } finally {
+                btnConfirm.disabled = false;
+                btnConfirm.textContent = 'SÌ, CONFERMO';
+            }
         }
     </script>
 </body>

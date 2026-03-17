@@ -32,11 +32,14 @@ class Merchant(SQLModel, table=True):
 
 
 
+from sqlalchemy import Column, JSON
+
 class TreeCard(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     merchant_id: int= Field(foreign_key="merchant.id") #campo per la l'id necessario associazione a merchant
     current_points: int = Field(default=0)
+    #default_points_to_tree: int = Field(default=10)
     trees_planted: int = Field(default=0) # contatore alberi piantati
-    trees_list: str = Field(default="[]") # JSON serializzato di List[uuid] degli ID degli alberi
+    trees_list: List[str] = Field(default=[], sa_column=Column(JSON)) 
 
     merchant: Merchant = Relationship(back_populates="cards")

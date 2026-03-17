@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Benvenuto in Fidelitree</title>
+    <title>Ricevi la tua Treecard - Fidelitree</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @keyframes float {
@@ -31,6 +31,7 @@
 
     <div class="max-w-md w-full text-center space-y-8">
 
+        <!-- Icona animata -->
         <div class="relative inline-block">
             <div class="bg-green-100 p-8 rounded-full float-icon">
                 <span class="text-6xl">🌳</span>
@@ -40,16 +41,18 @@
             </div>
         </div>
 
-        <div class="space-y-3">
+        <!-- Titolo e descrizione -->
+        <div id="intro-text" class="space-y-3">
             <h1 class="text-4xl font-black tracking-tight text-slate-900">
                 Fiducia che <span class="text-green-600">Cresce</span>
             </h1>
             <p class="text-lg text-slate-500 leading-relaxed">
-                Ottieni la tua <b>Treecard</b> digitale. Ogni acquisto qui si trasforma in un albero vero piantato per
-                il pianeta.
+                Ottieni la tua <b>Treecard</b> digitale. Ogni acquisto si trasforma in
+                un albero vero piantato per il pianeta.
             </p>
         </div>
 
+        <!-- Card preview decorativa -->
         <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-xl transform -rotate-2 scale-95 opacity-90">
             <div class="flex justify-between items-center mb-4">
                 <div class="h-8 w-24 bg-slate-200 rounded"></div>
@@ -61,20 +64,50 @@
             </div>
             <div class="mt-6 flex justify-center">
                 <div class="h-20 w-20 bg-slate-100 rounded-lg flex items-center justify-center text-slate-300 text-xs">
-                    QR PREVIEW</div>
+                    QR PREVIEW
+                </div>
             </div>
         </div>
 
-        <div class="pt-4 space-y-4">
-            <form action="/get-card" method="POST">
-                <button type="submit"
-                    class="w-full bg-green-600 hover:bg-green-700 text-white font-black text-xl py-5 rounded-2xl shadow-lg shadow-green-200 transition-all active:scale-95">
-                    OTTIENI TREECARD GRATIS
-                </button>
-            </form>
+        <!-- Sezione azione principale (default) -->
+        <div id="form-section" class="pt-4 space-y-4">
+            <button id="btn-download" onclick="handleGetCard()" class="w-full bg-green-600 hover:bg-green-700 text-white font-black text-xl py-5 rounded-2xl
+                       shadow-lg shadow-green-200 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed
+                       flex items-center justify-center gap-3">
+                <span>💬</span>
+                <span id="btn-label">RICEVI SU WHATSAPP</span>
+            </button>
             <p class="text-xs text-slate-400 font-medium uppercase tracking-widest">
                 Senza App • Gratuita • Impatto Reale
             </p>
+        </div>
+
+        <!-- Sezione di successo (nascosta di default) -->
+        <div id="success-section" class="hidden pt-4 space-y-4">
+            <div class="bg-green-50 border-2 border-green-200 rounded-3xl p-8 space-y-4">
+                <span class="text-5xl block">🎉</span>
+                <h2 class="text-2xl font-black text-green-800">Quasi fatto!</h2>
+                <p class="text-slate-600 leading-relaxed">
+                    La tua Treecard è pronta. Clicca qui sotto per aprire WhatsApp:
+                    il messaggio con il link è già scritto — devi solo premere <b>Invio</b>!
+                </p>
+                <a id="whatsapp-link" href="#" target="_blank"
+                    class="block w-full bg-[#25D366] hover:bg-[#1ebe5d] text-white font-black text-lg py-5 rounded-2xl
+                           shadow-lg transition-all active:scale-95 text-center flex items-center justify-center gap-3">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path
+                            d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
+                        <path
+                            d="M12 0C5.373 0 0 5.373 0 12c0 2.123.555 4.116 1.524 5.849L.073 23.56a.75.75 0 0 0 .918.919l5.806-1.497A11.95 11.95 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.75a9.702 9.702 0 0 1-4.944-1.352l-.354-.21-3.673.947.982-3.573-.23-.368A9.704 9.704 0 0 1 2.25 12C2.25 6.615 6.615 2.25 12 2.25S21.75 6.615 21.75 12 17.385 21.75 12 21.75z" />
+                    </svg>
+                    <span>APRI WHATSAPP E INVIA</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Toast di errore -->
+        <div id="toast"
+            class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 px-6 py-3 rounded-2xl bg-red-500 text-white font-bold shadow-xl z-50">
         </div>
 
         <footer class="pt-10">
@@ -84,6 +117,64 @@
             </div>
         </footer>
     </div>
+
+    <script>
+        const btnDownload = document.getElementById('btn-download');
+        const btnLabel = document.getElementById('btn-label');
+        const formSection = document.getElementById('form-section');
+        const successSection = document.getElementById('success-section');
+        const whatsappLink = document.getElementById('whatsapp-link');
+        const toast = document.getElementById('toast');
+
+        function showToast(message) {
+            toast.textContent = message;
+            toast.classList.remove('hidden');
+            setTimeout(() => { toast.classList.add('hidden'); }, 4000);
+        }
+
+        async function handleGetCard() {
+            btnDownload.disabled = true;
+            btnLabel.textContent = 'Creazione in corso...';
+
+            try {
+                const res = await fetch('/get-card', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})   // merchant_id usa il default (1)
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || 'Errore durante la creazione');
+                }
+
+                const data = await res.json();
+
+                // Costruisci l'URL assoluto della carta
+                const cardAbsoluteUrl = window.location.origin + data.card_path;
+
+                // Sostituisci il placeholder {card_url} nel link WhatsApp
+                // Il backend ha già fatto l'encoding del messaggio; dobbiamo
+                // sostituire il placeholder ancora nella forma encodata.
+                const encodedPlaceholder = encodeURIComponent('{card_url}');
+                const waLink = data.whatsapp_link_template.replace(
+                    encodedPlaceholder,
+                    encodeURIComponent(cardAbsoluteUrl)
+                );
+
+                whatsappLink.href = waLink;
+
+                // Mostra la sezione di successo
+                formSection.classList.add('hidden');
+                successSection.classList.remove('hidden');
+
+            } catch (e) {
+                showToast(e.message);
+                btnDownload.disabled = false;
+                btnLabel.textContent = 'RICEVI SU WHATSAPP';
+            }
+        }
+    </script>
 
 </body>
 
