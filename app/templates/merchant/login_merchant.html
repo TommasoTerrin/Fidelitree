@@ -19,9 +19,13 @@
         </div>
 
         <form action="/merchant/login" method="POST" class="space-y-4">
-            <div class="relative">
+            <div class="space-y-4">
+                <input type="text" name="phone_number" required
+                    class="w-full p-4 bg-white border-2 border-slate-100 rounded-2xl text-center text-lg focus:border-green-500 focus:outline-none transition-all shadow-sm"
+                    placeholder="+39...">
+                
                 <input type="password" name="password" required
-                    class="w-full p-5 bg-white border-2 border-slate-100 rounded-2xl text-center text-2xl tracking-widest focus:border-green-500 focus:outline-none transition-all shadow-sm"
+                    class="w-full p-4 bg-white border-2 border-slate-100 rounded-2xl text-center text-2xl tracking-widest focus:border-green-500 focus:outline-none transition-all shadow-sm"
                     placeholder="••••••••">
             </div>
             <button type="submit"

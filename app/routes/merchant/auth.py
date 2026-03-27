@@ -17,10 +17,18 @@ from app.core.security import decrypt_key, create_jwt_token
 
 router = APIRouter(prefix="/merchant", tags=["Merchant Auth"])
 
+from sqlmodel import select
+
 @router.post("/login")
-async def login(password: str = Form(...), session: Session = Depends(get_session)):
-    # Nell'MVP usiamo il merchant 1 di test
-    merchant = session.get(Merchant, 1)
+async def login(
+    phone_number: str = Form(...), 
+    password: str = Form(...), 
+    session: Session = Depends(get_session)
+):
+    """Esegue il login del merchant cercandolo per numero di telefono."""
+    statement = select(Merchant).where(Merchant.phone_number == phone_number)
+    merchant = session.exec(statement).first()
+    
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant non trovato")
         
@@ -28,7 +36,8 @@ async def login(password: str = Form(...), session: Session = Depends(get_sessio
         decrypted_password = decrypt_key(merchant.password)
         if password != decrypted_password:
             raise HTTPException(status_code=401, detail="Password errata")
-    except Exception:
+    except Exception as e:
+        print(f"Login error decryption: {e}")
         raise HTTPException(status_code=401, detail="Credenziali non valide")
         
     token = create_jwt_token({"sub": str(merchant.id)})
