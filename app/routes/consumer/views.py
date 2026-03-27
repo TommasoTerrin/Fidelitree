@@ -18,7 +18,10 @@ templates = Jinja2Templates(directory="app/templates")
 @router.get("/download_card", response_class=HTMLResponse)
 async def download_card(request: Request):
     """Serve la pagina per ottenere una nuova Treecard."""
-    return templates.TemplateResponse("consumer/download.html", {"request": request})
+    return templates.TemplateResponse(
+        request=request, 
+        name="consumer/download.html"
+    )
 
 
 # 2. VISUALIZZAZIONE DI UNA SPECIFICA TREECARD (con QR e punti)
@@ -31,9 +34,9 @@ async def view_card(request: Request, card_id: uuid.UUID, session: Session = Dep
 
     merchant = session.get(Merchant, card.merchant_id)
     return templates.TemplateResponse(
-        "consumer/treecard.html",
-        {
-            "request": request,
+        request=request,
+        name="consumer/treecard.html",
+        context={
             "card": card,
             "merchant": merchant,
             "full_url": str(request.url),  # URL per il QR code

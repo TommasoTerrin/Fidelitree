@@ -22,12 +22,19 @@ templates = Jinja2Templates(directory="app/templates")
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     """Serve la pagina di login del merchant."""
-    return templates.TemplateResponse("merchant/login_merchant.html", {"request": request})
+    return templates.TemplateResponse(
+        request=request, 
+        name="merchant/login_merchant.html"
+    )
 
 @router.get("/scanner", response_class=HTMLResponse)
 async def scanner_page(request: Request, merchant: Merchant = Depends(get_current_merchant)):
     """Serve la pagina con il QR scanner."""
-    return templates.TemplateResponse("merchant/qr_scanner.html", {"request": request, "merchant": merchant})
+    return templates.TemplateResponse(
+        request=request, 
+        name="merchant/qr_scanner.html", 
+        context={"merchant": merchant}
+    )
 
 @router.get("/card/{card_id}/manage", response_class=HTMLResponse)
 async def manage_card_page(
@@ -41,8 +48,11 @@ async def manage_card_page(
     if not card or card.merchant_id != merchant.id:
         raise HTTPException(status_code=404, detail="Card non trovata o non associata a questo merchant")
     
-    return templates.TemplateResponse("merchant/update_card.html", {
-        "request": request,
-        "card": card,
-        "merchant": merchant
-    })
+    return templates.TemplateResponse(
+        request=request, 
+        name="merchant/update_card.html", 
+        context={
+            "card": card,
+            "merchant": merchant
+        }
+    )
