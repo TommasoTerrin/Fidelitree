@@ -11,8 +11,21 @@ class Merchant(SQLModel, table=True):
     humami_api_key: str #da criptare
     humami_enterprise_id: str #da criptare
     points_to_tree: int = Field(default= 10) #quanti punti per completare
+    id_telegram: str = Field(default="")
+    type: str = Field(default="test") # 'test', 'free', 'pro'
+    cb_points_per_tree: int = Field(default=0)
     
-    cards: List["TreeCard"] = Relationship(back_populates= "merchant") #relazione con le carte del merchant (1:N)
+    cards: List["TreeCard"] = Relationship(
+        back_populates="merchant", 
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    ) #relazione con le carte del merchant (1:N)
+
+    @field_validator("type")
+    @classmethod
+    def validate_type(cls, v: str):
+        if v not in ('test', 'free', 'pro'):
+            raise ValueError("type deve essere 'test', 'free' o 'pro'")
+        return v
 
     @field_validator("phone_number")
     @classmethod
@@ -38,8 +51,10 @@ class TreeCard(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     merchant_id: int= Field(foreign_key="merchant.id") #campo per la l'id necessario associazione a merchant
     current_points: int = Field(default=0)
+    cashback_point: int = Field(default=0)
     #default_points_to_tree: int = Field(default=10)
     trees_planted: int = Field(default=0) # contatore alberi piantati
     trees_list: List[str] = Field(default=[], sa_column=Column(JSON)) 
+    warnings: Optional[List[str]] = Field(default=None, sa_column=Column(JSON))
 
     merchant: Merchant = Relationship(back_populates="cards")

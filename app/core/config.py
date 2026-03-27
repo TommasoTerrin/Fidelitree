@@ -8,7 +8,11 @@ class Settings(BaseSettings):
     APP_PORT: int = 8000
     
     # Database (Default SQLite locale)
-    DATABASE_URL: str = "sqlite:///./fidelitree.db"
+    DATABASE_PASSWORD: str
+    
+    @property
+    def DATABASE_URL(self) -> str:
+        return f"postgresql://neondb_owner:{self.DATABASE_PASSWORD}@ep-morning-credit-alqqrsao-pooler.c-3.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
     
     # Digital Humani API URLs
     HUMANI_SANDBOX_URL: str = "https://api.sandbox.digitalhumani.com/v1"

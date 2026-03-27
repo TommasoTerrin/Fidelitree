@@ -1,7 +1,5 @@
 import urllib.parse
-import logging
 
-logger = logging.getLogger(__name__)
 
 
 def create_whatsapp_link(chat_phone_number: str, message: str) -> str:
@@ -28,7 +26,7 @@ def create_whatsapp_link(chat_phone_number: str, message: str) -> str:
     MAX_URL_LENGTH = 2000
 
     if len(whatsapp_url) > MAX_URL_LENGTH:
-        logger.warning("Messaggio troppo lungo per link WhatsApp, verrà troncato.")
+        #logger.warning("Messaggio troppo lungo per link WhatsApp, verrà troncato.")
         while len(f"https://wa.me/{clean_number}?text={urllib.parse.quote(message)}") > MAX_URL_LENGTH:
             message = message[:-10]
 
