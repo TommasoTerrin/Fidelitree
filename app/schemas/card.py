@@ -10,13 +10,14 @@ import json
 
 class AddPointsRequest(BaseModel):
     """Richiesta di aggiunta punti a una card."""
-    points: int = Field(default= 1)
+    points: int = Field(default=0)
+    cb_points: float = Field(default=0.0)
 
 
 class CardUpdateRequest(BaseModel):
     """Richiesta per l'aggiornamento diretto dei dati di una TreeCard."""
     current_points: int | None = None
-    cashback_point: int | None = None
+    cashback_point: float | None = None
     trees_planted: int | None = None
 
 
@@ -25,7 +26,7 @@ class CardResponse(BaseModel):
     id: uuid.UUID
     merchant_id: int
     current_points: int
-    cashback_point: int
+    cashback_point: float
     trees_planted: int
     trees_list: list[str]
     warnings: list[str] | None = None

@@ -6,55 +6,111 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestione Punti - Fidelitree</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Nasconde le freccette di default dell'input number per evitare bug grafici */
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+    </style>
 </head>
 
 <body class="bg-slate-50 min-h-screen p-6 font-sans">
     <div class="max-w-sm mx-auto space-y-6">
+
+        {% if merchant.type == 'test' %}
+        <div class="bg-yellow-100 text-yellow-800 text-xs font-bold text-center py-2 uppercase tracking-widest rounded-xl shadow-sm border border-yellow-200">
+            Ambiente di Test
+        </div>
+        {% endif %}
 
         <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
             <p class="text-xs text-slate-400 font-bold uppercase mb-2">Stato Treecard</p>
             <div class="flex justify-between items-center">
                 <div>
                     <h3 class="font-black text-xl text-slate-800">Cliente #{{ card.id.hex[:6] }}</h3>
-                    <p class="text-sm text-green-600 font-bold">{{ card.current_points }} / {{ merchant.points_to_tree
-                        }} Treepoints</p>
+                    {% if card.type in ['just_trees', 'cards_and_cb_points'] %}
+                    <p class="text-sm text-green-600 font-bold">{{ card.current_points }} / {{ merchant.points_to_tree }} Treepoints</p>
+                    {% endif %}
+                    {% if card.type in ['just_cb_points', 'cards_and_cb_points'] %}
+                    <p class="text-sm text-blue-600 font-bold">€ {{ "%.2f"|format(card.cashback_point) }} Cashback</p>
+                    {% endif %}
                 </div>
+                {% if card.type in ['just_trees', 'cards_and_cb_points'] %}
                 <div class="text-right">
                     <span class="text-3xl">🌳</span>
                     <p class="text-[10px] font-bold text-slate-400">TOTALI: {{ card.trees_planted }}</p>
                 </div>
+                {% endif %}
             </div>
         </div>
 
+        {% if card.type in ['just_trees', 'cards_and_cb_points'] %}
         <div class="bg-white p-8 rounded-[2.5rem] shadow-xl text-center border-2 border-green-500">
-            <p class="text-sm font-bold text-slate-500 mb-4 uppercase">Modifica Punti</p>
+            <p class="text-sm font-bold text-green-600 mb-4 uppercase">Modifica Treepoints</p>
 
             <div class="flex items-center justify-between gap-4 mb-8">
-                <button onclick="changePoints(-1)"
-                    class="w-16 h-16 bg-slate-100 rounded-full text-3xl font-bold text-slate-600 active:bg-slate-200 transition-colors">−</button>
-                <input type="number" id="points-input" value="1"
-                    class="flex-1 text-6xl font-black text-center text-slate-900 bg-transparent focus:outline-none">
-                <button onclick="changePoints(1)"
-                    class="w-16 h-16 bg-green-100 rounded-full text-3xl font-bold text-green-600 active:bg-green-200 transition-colors">+</button>
+                <button onclick="changePoints('points-input', -1)"
+                    class="w-14 h-14 bg-slate-100 rounded-full text-3xl font-bold text-slate-600 active:bg-slate-200 transition-colors shrink-0">−</button>
+                <input type="number" id="points-input" value="0"
+                    class="min-w-0 flex-1 text-5xl font-black text-center text-slate-900 bg-transparent focus:outline-none">
+                <button onclick="changePoints('points-input', 1)"
+                    class="w-14 h-14 bg-green-100 rounded-full text-3xl font-bold text-green-600 active:bg-green-200 transition-colors shrink-0">+</button>
             </div>
+        </div>
+        {% endif %}
 
-            <button id="btn-aggiorna" onclick="showModal()"
-                class="w-full bg-green-600 text-white font-black py-5 rounded-2xl text-xl shadow-lg shadow-green-100 active:scale-95 transition-transform">
-                AGGIORNA CARD
+        {% if card.type in ['just_cb_points', 'cards_and_cb_points'] %}
+        <div class="bg-white p-8 rounded-[2.5rem] shadow-xl text-center border-2 border-blue-500 mt-6">
+            <p class="text-sm font-bold text-blue-600 mb-4 uppercase">Modifica Cashback (€)</p>
+
+            <div class="flex items-center justify-between gap-4 mb-8">
+                <button onclick="changePoints('cb-input', -0.50)"
+                    class="w-14 h-14 bg-slate-100 rounded-full text-3xl font-bold text-slate-600 active:bg-slate-200 transition-colors shrink-0">−</button>
+                <div class="flex items-center justify-center flex-1 min-w-0">
+                    <span class="text-4xl font-bold text-slate-400 mr-2">€</span>
+                    <input type="number" id="cb-input" value="0.00" step="0.50"
+                        class="min-w-0 w-full text-5xl font-black text-center text-slate-900 bg-transparent focus:outline-none">
+                </div>
+                <button onclick="changePoints('cb-input', 0.50)"
+                    class="w-14 h-14 bg-blue-100 rounded-full text-3xl font-bold text-blue-600 active:bg-blue-200 transition-colors shrink-0">+</button>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="pt-4 space-y-3">
+            <button id="btn-add" onclick="prepareOperation('add')"
+                class="w-full bg-slate-900 text-white font-black py-5 rounded-2xl text-xl shadow-lg active:scale-95 transition-transform">
+                AGGIUNGI PUNTI
             </button>
+            <button id="btn-subtract" onclick="prepareOperation('subtract')"
+                class="w-full bg-white text-slate-500 font-bold py-3 rounded-2xl text-base active:scale-95 transition-transform border border-slate-200 disabled:opacity-50 disabled:active:scale-100">
+                SOTTRAI PUNTI
+            </button>
+            
+            {% if card.type in ['just_cb_points', 'cards_and_cb_points'] %}
+            <button id="btn-use-all-cb" onclick="prepareOperation('use_all_cb')"
+                class="w-full bg-blue-50 text-blue-600 font-bold py-3 rounded-2xl text-base active:scale-95 transition-transform border border-blue-100 mt-2">
+                USA INTERO CASHBACK
+            </button>
+            {% endif %}
         </div>
     </div>
 
     <!-- Modal di conferma -->
     <div id="confirm-modal"
         class="hidden fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-6 z-50">
-        <div class="bg-white w-full max-w-xs rounded-[2.5rem] p-8 text-center shadow-2xl">
-            <h2 class="text-xl font-bold text-slate-800 mb-2">Confermi l'azione?</h2>
-            <p id="modal-text" class="text-slate-500 mb-8">Stai per aggiungere 1 punto a questa card.</p>
+        <div id="modal-box" class="bg-white w-full max-w-xs rounded-[2.5rem] p-8 text-center shadow-2xl transition-all">
+            <h2 id="modal-title" class="text-xl font-bold text-slate-800 mb-2">Confermi l'azione?</h2>
+            <p id="modal-text" class="text-slate-500 mb-8">Stai per procedere con l'aggiornamento.</p>
 
             <div class="space-y-3">
                 <button id="btn-confirm" onclick="submitPoints()"
-                    class="w-full bg-green-600 text-white font-bold py-4 rounded-xl shadow-md">SÌ,
+                    class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-md">SÌ,
                     CONFERMO</button>
                 <button onclick="hideModal()"
                     class="w-full bg-slate-100 text-slate-500 font-bold py-4 rounded-xl">ANNULLA</button>
@@ -68,20 +124,96 @@
     </div>
 
     <script>
-        const input = document.getElementById('points-input');
         const modal = document.getElementById('confirm-modal');
+        const modalBox = document.getElementById('modal-box');
+        const modalTitle = document.getElementById('modal-title');
         const modalText = document.getElementById('modal-text');
+        const btnConfirm = document.getElementById('btn-confirm');
         const toast = document.getElementById('toast');
         const cardId = "{{ card.id }}";
 
-        function changePoints(val) {
-            let current = parseInt(input.value) || 0;
-            input.value = current + val;
+        // Saldi correnti per validazione
+        const currentTreepoints = {{ card.current_points }};
+        const currentCashback = {{ card.cashback_point }};
+
+        let currentOperation = 'add'; // 'add', 'subtract', 'use_all_cb'
+
+        function changePoints(inputId, val) {
+            const input = document.getElementById(inputId);
+            if (!input) return;
+            let current = parseFloat(input.value) || 0;
+            let newVal = current + val;
+            
+            if (newVal < 0) newVal = 0; // Impedisce valori negativi nell'input
+
+            if (inputId === 'cb-input') {
+                input.value = newVal.toFixed(2);
+            } else {
+                input.value = Math.round(newVal);
+            }
+            validateSubtraction();
         }
 
-        function showModal() {
-            const val = input.value;
-            modalText.innerText = `Vuoi modificare i punti di ${val} per questa Treecard?`;
+        // Aggiunge listener per validazione manuale degli input
+        document.querySelectorAll('input[type="number"]').forEach(input => {
+            input.addEventListener('input', validateSubtraction);
+        });
+
+        function validateSubtraction() {
+            const pointsInput = document.getElementById('points-input');
+            const cbInput = document.getElementById('cb-input');
+            const btnSubtract = document.getElementById('btn-subtract');
+
+            const pointsToSub = pointsInput ? (parseInt(pointsInput.value) || 0) : 0;
+            const cbToSub = cbInput ? (parseFloat(cbInput.value) || 0.0) : 0.0;
+
+            const isPointsOk = pointsToSub <= currentTreepoints;
+            const isCbOk = cbToSub <= currentCashback;
+
+            if (btnSubtract) {
+                btnSubtract.disabled = !(isPointsOk && isCbOk && (pointsToSub > 0 || cbToSub > 0));
+            }
+        }
+
+        function prepareOperation(op) {
+            currentOperation = op;
+            let msgParts = [];
+            const pointsInput = document.getElementById('points-input');
+            const cbInput = document.getElementById('cb-input');
+
+            const pointsVal = pointsInput ? (parseInt(pointsInput.value) || 0) : 0;
+            const cbVal = cbInput ? (parseFloat(cbInput.value) || 0.0) : 0.0;
+
+            // Reset stili modal
+            modalBox.className = "bg-white w-full max-w-xs rounded-[2.5rem] p-8 text-center shadow-2xl transition-all";
+            btnConfirm.className = "w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-md";
+            modalTitle.innerText = "Confermi l'azione?";
+            modalTitle.className = "text-xl font-bold text-slate-800 mb-2";
+
+            if (op === 'use_all_cb') {
+                modalTitle.innerText = "⚠️ FAI ATTENZIONE";
+                modalTitle.className = "text-xl font-black text-red-600 mb-2";
+                modalText.innerHTML = `Stai per <b>AZZERARE COMPLETAMENTE</b> il cashback di <br><span class="text-2xl font-black text-slate-900">€ ${currentCashback.toFixed(2)}</span>`;
+                btnConfirm.className = "w-full bg-red-600 text-white font-bold py-4 rounded-xl shadow-md";
+                modal.classList.remove('hidden');
+                return;
+            }
+
+            if (pointsVal !== 0) msgParts.push(`${pointsVal} Treepoints`);
+            if (cbVal !== 0.0) msgParts.push(`€ ${cbVal.toFixed(2)} Cashback`);
+
+            if (msgParts.length === 0) {
+                showToast('Inserisci una cifra per procedere', true);
+                return;
+            }
+
+            const actionLabel = op === 'add' ? 'aggiungere' : 'sottrarre';
+            modalText.innerHTML = `Stai per ${actionLabel}: <br><span class="text-xl font-black text-slate-900">${msgParts.join(' e ')}</span>`;
+            
+            if (op === 'subtract') {
+                modalBox.classList.add('border-4', 'border-amber-400');
+            }
+
             modal.classList.remove('hidden');
         }
 
@@ -96,16 +228,30 @@
         }
 
         async function submitPoints() {
-            const points = parseInt(input.value) || 0;
-            const btnConfirm = document.getElementById('btn-confirm');
+            const pointsInput = document.getElementById('points-input');
+            const cbInput = document.getElementById('cb-input');
+
+            let points = 0;
+            let cb_points = 0.0;
+
+            if (currentOperation === 'use_all_cb') {
+                cb_points = -currentCashback;
+            } else {
+                const p = pointsInput ? (parseInt(pointsInput.value) || 0) : 0;
+                const c = cbInput ? (parseFloat(cbInput.value) || 0.0) : 0.0;
+                const multiplier = currentOperation === 'add' ? 1 : -1;
+                points = p * multiplier;
+                cb_points = c * multiplier;
+            }
+
             btnConfirm.disabled = true;
             btnConfirm.textContent = 'Invio in corso...';
 
             try {
-                const res = await fetch(`/merchant/add-point/${cardId}`, {
+                const res = await fetch(`/api/merchant/add-point/${cardId}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ points: points })
+                    body: JSON.stringify({ points: points, cb_points: cb_points })
                 });
 
                 if (!res.ok) {
@@ -113,19 +259,20 @@
                     throw new Error(err.detail || 'Errore server');
                 }
 
-                // Successo: ricarica la pagina per mostrare i dati aggiornati
-                showToast('Punti aggiornati! ✅');
+                showToast('Card aggiornata! ✅');
                 hideModal();
                 setTimeout(() => { window.location.reload(); }, 800);
 
             } catch (e) {
                 showToast(e.message, true);
                 hideModal();
-            } finally {
                 btnConfirm.disabled = false;
                 btnConfirm.textContent = 'SÌ, CONFERMO';
             }
         }
+        
+        // Inizializza validazione
+        validateSubtraction();
     </script>
 </body>
 

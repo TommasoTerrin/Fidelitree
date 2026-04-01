@@ -15,7 +15,8 @@ async def add_points_to_card(
     session: Session, 
     merchant: Merchant, 
     card_id: uuid.UUID, 
-    points: int
+    points: int,
+    cb_points: float = 0.0
 ) -> TreeCard:
     """
     Logica di business per aggiungere punti a una carta e piantare alberi.
@@ -27,8 +28,11 @@ async def add_points_to_card(
 
     if card.current_points + points < 0:
         raise HTTPException(status_code=400, detail="Impossibile portare i punti sotto 0")
+    if card.cashback_point + cb_points < -0.001: # Uso tolleranza per float
+        raise HTTPException(status_code=400, detail="Impossibile portare il cashback sotto 0")
 
     card.current_points += points
+    card.cashback_point += cb_points
 
     # Decifra credenziali Humani
     humani_api = decrypt_key(merchant.humami_api_key)
@@ -74,7 +78,20 @@ async def add_points_to_card(
 
 def create_card(session: Session, merchant_id: int) -> TreeCard:
     """Orchestra la creazione della card, delegando al CRUD."""
-    return card_crud.create_card(session, merchant_id)
+    merchant = merchant_crud.get_merchant_by_id(session, merchant_id)
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant non trovato")
+
+    # Logica di assegnazione tipo card basata sul merchant
+    card_type = merchant.default_card_type
+    
+    # Esempio di logica: se pro o test, potresti voler assegnare altro o 
+    # permettere al merchant di scegliere. Per ora lasciamo default e 
+    # aggiungiamo la validazione di coerenza.
+    if merchant.type == "free" and card_type != "just_trees":
+        raise HTTPException(status_code=403, detail="Merchant free può avere solo card 'just_trees'")
+
+    return card_crud.create_card(session, merchant_id, card_type)
 
 def get_card_by_id(session: Session, card_id: uuid.UUID) -> Optional[TreeCard]:
     """Recupera la card tramite CRUD."""

@@ -87,8 +87,8 @@ async def create_test_merchant(session: Session = Depends(get_session)):
         return merchant
 
     test_data = {
-        "business_name": "Test Merchant",
-        "phone_number": "+391234567890",
+        "business_name": "Fidelitree Test",
+        "phone_number": "+393319910276",
         "password": settings.MERCHANT_PASSWORD,
         "humami_api_key": settings.HUMANI_SANDBOX_API_KEY,
         "humami_enterprise_id": settings.HUMANI_ENTERPRISE_ID,
@@ -113,5 +113,6 @@ async def add_point(
         session=session,
         merchant=merchant,
         card_id=card_id,
-        points=body.points
+        points=body.points,
+        cb_points=body.cb_points
     )

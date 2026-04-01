@@ -28,13 +28,13 @@ def _get_clean_trees_list(card: TreeCard) -> List[str]:
     cleaned = [str(t) for t in actual_list if len(str(t)) > 5]
     return cleaned
 
-def create_card(session: Session, merchant_id: int) -> TreeCard:
+def create_card(session: Session, merchant_id: int, card_type: str = "just_trees") -> TreeCard:
     """Crea una nuova TreeCard."""
     merchant = session.get(Merchant, merchant_id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant non trovato")
 
-    new_card = TreeCard(merchant_id=merchant_id)
+    new_card = TreeCard(merchant_id=merchant_id, type=card_type)
     session.add(new_card)
     session.commit()
     session.refresh(new_card)

@@ -136,11 +136,15 @@
             btnDownload.disabled = true;
             btnLabel.textContent = 'Creazione in corso...';
 
+            // Estrai merchant_id dall'URL (es. ?m=1)
+            const urlParams = new URLSearchParams(window.location.search);
+            const merchantId = urlParams.get('m') || 1;
+
             try {
-                const res = await fetch('/get-card', {
+                const res = await fetch('/api/get-card', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({})   // merchant_id usa il default (1)
+                    body: JSON.stringify({ merchant_id: parseInt(merchantId) })
                 });
 
                 if (!res.ok) {
