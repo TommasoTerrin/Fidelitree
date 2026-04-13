@@ -12,6 +12,6 @@ def hello_tool(name: str = "World") -> str:
 @mcp.resource("config://info")
 def info_resource() -> str:
     """Una risorsa di prova che restituisce informazioni sul server."""
-    return "Fidelitree MCP Server v0.1 - Running via FastMCP"
+    return "Fidelitree MCP Server v 0.1 - Running via FastMCP"
 
 
