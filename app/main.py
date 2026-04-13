@@ -20,7 +20,7 @@ from app.routes.merchant.telegram_auth import router as telegram_auth_router
 
 
 # --- App ---
-app = FastAPI(title="Fidelitree MVP", lifespan=mcp_app.lifespan)
+app = FastAPI(title="Fidelitree MVP", lifespan=mcp_app.lifespan, redirect_slashes=False)
 app.mount("/mcp-app", mcp_app)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 

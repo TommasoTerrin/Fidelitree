@@ -4,7 +4,8 @@ async def test_mcp_direct_http():
     # URL basato sulla nuova configurazione:
     # app.mount("/mcp_app", mcp_app) in main.py
     # mcp.http_app(path="/mcp") in server.py
-    url = "http://localhost:8000/mcp-app"
+    local_url = "http://localhost:8000/mcp-app"
+    url= 'https://fidelitree-develop.up.railway.app/mcp-app/'
 
     try:
         client= Client(url)
