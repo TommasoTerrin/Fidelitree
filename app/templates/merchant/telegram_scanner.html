@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanner Telegram - Fidelitree</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+
+<body class="bg-black min-h-screen flex flex-col font-sans text-white">
+
+    <!-- Schermata di caricamento -->
+    <div id="loading-screen" class="fixed inset-0 bg-slate-900 z-50 flex flex-col items-center justify-center p-6 text-center">
+        <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-green-500 mb-4"></div>
+        <h2 class="text-xl font-bold">Caricamento...</h2>
+    </div>
+
+    <!-- Schermata di Login (nascosta) -->
+    <div id="login-screen" class="hidden flex-1 flex flex-col items-center justify-center p-6">
+        <div class="w-full max-w-md bg-slate-900 rounded-[2.5rem] p-8 border border-white/10">
+            <h2 class="text-2xl font-bold text-center mb-2">Collega Account</h2>
+            <p class="text-slate-400 text-center mb-8 text-sm">Inserisci le tue credenziali merchant per collegare Telegram</p>
+            
+            <form id="login-form" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase ml-4 mb-2">Numero di Telefono</label>
+                    <input type="text" name="phone_number" placeholder="+39XXXXXXXXXX" required
+                        class="w-full bg-black border border-white/10 rounded-2xl p-4 text-white placeholder-slate-600 focus:outline-none focus:border-green-500 transition-colors">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase ml-4 mb-2">Password</label>
+                    <input type="password" name="password" placeholder="••••••••" required
+                        class="w-full bg-black border border-white/10 rounded-2xl p-4 text-white placeholder-slate-600 focus:outline-none focus:border-green-500 transition-colors">
+                </div>
+                <input type="hidden" name="telegram_id" id="telegram_id_field">
+                
+                <button type="submit"
+                    class="w-full bg-green-500 hover:bg-green-600 text-black font-bold py-4 rounded-2xl transition-colors shadow-[0_0_20px_rgba(34,197,94,0.2)]">
+                    Accedi e Collega
+                </button>
+            </form>
+            <div id="login-error" class="hidden mt-4 text-red-500 text-center text-sm font-medium"></div>
+        </div>
+    </div>
+
+    <!-- UI Scanner (nascosta) -->
+    <div id="scanner-screen" class="hidden flex-1 flex flex-col">
+        <div class="p-6 bg-slate-900 flex justify-between items-center border-b border-white/10">
+            <h2 class="font-bold text-green-400">Scanner Merchant</h2>
+            <button onclick="Telegram.WebApp.close()" class="text-xs bg-slate-800 px-3 py-2 rounded-lg">Chiudi</button>
+        </div>
+
+        <div class="flex-1 flex flex-col items-center justify-center p-6">
+            <div id="reader-container" class="relative w-full max-w-sm">
+                <div id="reader"
+                    class="w-full overflow-hidden rounded-[2.5rem] border-4 border-green-500 shadow-[0_0_30px_rgba(34,197,94,0.3)]">
+                </div>
+                <div id="camera-loading"
+                    class="absolute inset-0 flex items-center justify-center bg-slate-900 rounded-[2.5rem]">
+                    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500"></div>
+                </div>
+            </div>
+
+            <div id="camera-error"
+                class="hidden mt-6 bg-red-500/10 border border-red-500 text-red-500 p-4 rounded-2xl text-sm font-bold flex flex-col items-center gap-2">
+                <span>⚠️ Errore Fotocamera</span>
+                <p id="error-detail" class="text-xs font-normal text-center">Assicurati di aver dato i permessi.</p>
+                <button onclick="location.reload()"
+                    class="mt-2 bg-red-500 text-white px-4 py-2 rounded-xl text-xs">Riprova</button>
+            </div>
+        </div>
+
+        <div class="p-8 bg-slate-900 text-center text-slate-400 border-t border-white/10">
+            <p class="text-sm">Inquadra il QR code del cliente</p>
+        </div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        
+        let telegramId = "";
+        try {
+            const user = JSON.parse(decodeURIComponent(new URLSearchParams(tg.initData).get('user')));
+            telegramId = user.id.toString();
+            document.getElementById('telegram_id_field').value = telegramId;
+        } catch (e) {
+            console.error("Impossibile recuperare Telegram ID", e);
+        }
+
+        async function initApp() {
+            try {
+                const response = await fetch('/merchant/telegram/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ initData: tg.initData })
+                });
+
+                if (response.ok) {
+                    showScreen('scanner-screen');
+                    startScanner();
+                } else {
+                    showScreen('login-screen');
+                }
+            } catch (err) {
+                showScreen('login-screen');
+            }
+        }
+
+        function showScreen(id) {
+            document.getElementById('loading-screen').classList.add('hidden');
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('scanner-screen').classList.add('hidden');
+            document.getElementById(id).classList.remove('hidden');
+        }
+
+        document.getElementById('login-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const errorEl = document.getElementById('login-error');
+            errorEl.classList.add('hidden');
+
+            try {
+                const response = await fetch('/merchant/login', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+                    showScreen('scanner-screen');
+                    startScanner();
+                } else {
+                    const data = await response.json();
+                    errorEl.innerText = data.detail || "Credenziali non valide";
+                    errorEl.classList.remove('hidden');
+                    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
+                }
+            } catch (err) {
+                errorEl.innerText = "Errore di connessione";
+                errorEl.classList.remove('hidden');
+            }
+        };
+
+        function startScanner() {
+            const html5QrCode = new Html5Qrcode("reader");
+            const config = { fps: 15, qrbox: { width: 250, height: 250 } };
+
+            html5QrCode.start({ facingMode: "environment" }, config, (decodedText) => {
+                if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+                
+                let redirectUrl = "";
+                if (decodedText.startsWith("http")) {
+                    redirectUrl = decodedText.replace("/card/", "/merchant/card/") + "/manage";
+                } else {
+                    redirectUrl = "/merchant/card/" + decodedText + "/manage";
+                }
+                window.location.href = redirectUrl;
+
+            }).then(() => {
+                document.getElementById("camera-loading").classList.add("hidden");
+            }).catch((err) => {
+                document.getElementById("camera-loading").classList.add("hidden");
+                document.getElementById("camera-error").classList.remove("hidden");
+                document.getElementById("error-detail").innerText = err;
+            });
+        }
+
+        initApp();
+    </script>
+</body>
+
+</html>
