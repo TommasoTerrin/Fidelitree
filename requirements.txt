@@ -13,5 +13,8 @@ cryptography               # Per cifrare le password dei merchant nel DB (Fernet
 # --- Utility ---
 requests              # Per lo script di smoke test in produzione
 
+# --- Test ---
+pytest                # Test suite (gira su SQLite in-memory, non tocca Neon)
+
 # --- Production ---
 gunicorn              # Process manager per far girare FastAPI su Cloud Run

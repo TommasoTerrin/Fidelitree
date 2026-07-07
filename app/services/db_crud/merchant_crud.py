@@ -16,12 +16,14 @@ logger = logging.getLogger(__name__)
 def create_merchant(session: Session, merchant_data: dict) -> Merchant:
     """Crea un nuovo merchant. La password viene cifrata prima del salvataggio."""
     try:
-        new_merchant = Merchant(
-            business_name=merchant_data.get("business_name"),
-            phone_number=merchant_data.get("phone_number"),
-            password=encrypt_key(merchant_data.get("password")),
-            type=merchant_data.get("type", "test"),
-        )
+        # model_validate è necessario: con table=True i validatori
+        # non girano sul costruttore diretto
+        new_merchant = Merchant.model_validate({
+            "business_name": merchant_data.get("business_name"),
+            "phone_number": merchant_data.get("phone_number"),
+            "password": encrypt_key(merchant_data.get("password")),
+            "type": merchant_data.get("type", "test"),
+        })
         session.add(new_merchant)
         session.commit()
         session.refresh(new_merchant)
@@ -52,6 +54,9 @@ def update_merchant(session: Session, merchant: Merchant, update_data: dict) -> 
                 setattr(merchant, key, encrypt_key(value))
             else:
                 setattr(merchant, key, value)
+
+        # Rivalida i dati aggiornati (i validatori non girano su setattr)
+        Merchant.model_validate(merchant.model_dump())
 
         session.add(merchant)
         session.commit()
