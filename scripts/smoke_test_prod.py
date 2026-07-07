@@ -1,22 +1,25 @@
-import requests
-import sys
-import os
-import uuid
-
 """
-Script di Smoke Test per l'applicazione Fidelitree in produzione.
-Verifica che i componenti principali (API, Database, Frontend) siano operativi.
+Smoke test per l'applicazione Fidelitree in produzione.
+Verifica che API, database e pagine principali siano operativi.
 
 Utilizzo:
-    python smoke_test_prod.py [URL_BASE] [ADMIN_SECRET_KEY]
+    python scripts/smoke_test_prod.py [URL_BASE] [ADMIN_SECRET_KEY]
 
 Esempio:
-    python smoke_test_prod.py https://fidelitree-app.ondigitalocean.app mia_chiave_segreta
+    python scripts/smoke_test_prod.py https://fidelitree-app.ondigitalocean.app mia_chiave_segreta
 """
 
-def run_smoke_test(base_url, admin_key):
+import os
+import random
+import sys
+
+import requests
+
+
+def run_smoke_test(base_url: str, admin_key: str) -> bool:
     print(f"--- Avvio Smoke Test su: {base_url} ---")
-    
+    headers = {"X-Admin-Key": admin_key}
+
     # 1. Health Check
     try:
         resp = requests.get(f"{base_url}/health", timeout=10)
@@ -25,13 +28,13 @@ def run_smoke_test(base_url, admin_key):
             print("[OK] Health check passato")
         else:
             print("[FAIL] Health check ha risposto con dati inattesi")
+            return False
     except Exception as e:
         print(f"[ERROR] Health check fallito: {e}")
         return False
 
-    # 2. Verifica Pagine Web principali
-    pages = ["/download_card", "/merchant/login"]
-    for page in pages:
+    # 2. Pagine web principali
+    for page in ["/download_card", "/merchant/login"]:
         try:
             resp = requests.get(f"{base_url}{page}", timeout=10)
             if resp.status_code == 200 and "text/html" in resp.headers.get("Content-Type", ""):
@@ -39,55 +42,60 @@ def run_smoke_test(base_url, admin_key):
             else:
                 print(f"[FAIL] Pagina {page} ha risposto con status {resp.status_code}")
         except Exception as e:
-            print(f"[ERROR] Erroresulla pagina {page}: {e}")
+            print(f"[ERROR] Errore sulla pagina {page}: {e}")
 
-    # 3. Test API e Database (Ciclo di vita Merchant)
+    # 3. Ciclo di vita merchant via API (crea -> leggi -> elimina)
     print("--- Test API & Database ---")
     m_id = None
+    ok = True
     try:
-        # Crea un merchant di test
         payload = {
             "business_name": "SMOKE TEST MERCHANT",
-            "phone_number": f"+39{uuid.uuid4().hex[:10]}",
+            "phone_number": "+39" + "".join(random.choices("0123456789", k=10)),
             "password": "testpassword",
-            "humami_api_key": "test",
-            "humami_enterprise_id": "test"
         }
-        headers = {"X-Admin-Token": admin_key}
-        
+
         resp = requests.post(f"{base_url}/api/merchant/", json=payload, headers=headers, timeout=10)
         if resp.status_code == 200:
             m_id = resp.json().get("id")
-            print(f"[OK] API Merchant: Creazione riuscita (ID: {m_id})")
+            print(f"[OK] API Merchant: creazione riuscita (ID: {m_id})")
         else:
-            print(f"[FAIL] API Merchant: Creazione fallita ({resp.status_code}) - {resp.text}")
+            print(f"[FAIL] API Merchant: creazione fallita ({resp.status_code}) - {resp.text}")
             return False
 
-        # Verifica lettura
-        resp = requests.get(f"{base_url}/api/merchant/{m_id}", timeout=10)
+        resp = requests.get(f"{base_url}/api/merchant/{m_id}", headers=headers, timeout=10)
         if resp.status_code == 200:
-            print("[OK] API Merchant: Lettura riuscita")
+            print("[OK] API Merchant: lettura riuscita")
         else:
-            print("[FAIL] API Merchant: Lettura fallita")
+            print("[FAIL] API Merchant: lettura fallita")
+            ok = False
+
+        # Gli endpoint admin devono rifiutare le richieste senza chiave
+        resp = requests.get(f"{base_url}/api/merchant/{m_id}", timeout=10)
+        if resp.status_code == 403:
+            print("[OK] API Merchant: accesso senza chiave admin rifiutato")
+        else:
+            print(f"[FAIL] API Merchant: accesso senza chiave ha risposto {resp.status_code} (atteso 403)")
+            ok = False
 
     except Exception as e:
         print(f"[ERROR] Test API/DB interrotto: {e}")
+        ok = False
     finally:
-        # Pulizia
         if m_id:
             try:
-                requests.delete(f"{base_url}/api/merchant/{m_id}", timeout=10)
+                requests.delete(f"{base_url}/api/merchant/{m_id}", headers=headers, timeout=10)
                 print("[OK] Pulizia merchant di test completata")
-            except:
+            except Exception:
                 print("[WARN] Impossibile eliminare il merchant di test")
 
     print("\n--- Smoke Test Completato ---")
-    return True
+    return ok
+
 
 if __name__ == "__main__":
-    # Carica da argomenti o variabili d'ambiente
     url = sys.argv[1] if len(sys.argv) > 1 else os.getenv("PROD_URL", "http://localhost:8000")
-    key = sys.argv[2] if len(sys.argv) > 2 else os.getenv("ADMIN_SECRET_KEY", "your-admin-secret-key")
-    
+    key = sys.argv[2] if len(sys.argv) > 2 else os.getenv("ADMIN_SECRET_KEY", "")
+
     success = run_smoke_test(url, key)
     sys.exit(0 if success else 1)
