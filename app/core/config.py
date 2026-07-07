@@ -24,23 +24,6 @@ class Settings(BaseSettings):
         if not self.DATABASE_URL and self.DATABASE_PASSWORD:
             self.DATABASE_URL = f"postgresql://neondb_owner:{self.DATABASE_PASSWORD}@ep-morning-credit-alqqrsao-pooler.c-3.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
     
-    # Digital Humani API URLs
-    HUMANI_SANDBOX_URL: str = "https://api.sandbox.digitalhumani.com/v1"
-    HUMANI_URL: str = "https://api.digitalhumani.com/v1"
-    
-    # Digital Humani Credentials (from .env)
-    HUMANI_SANDBOX_API_KEY: str
-    HUMANI_API_KEY: str
-    HUMANI_ENTERPRISE_ID: str
-    
-    # Ecologi API URLs
-    ECOLOGI_URL: str = "https://public.ecologi.com"
-    ECOLOGI_SANDBOX_URL: str = "https://stoplight.io/mocks/ecologi/public-api-docs/7819914"
-    
-    # Ecologi Credentials (from .env)
-    ECOLOGI_SANDBOX_API_KEY: str = ""
-    ECOLOGI_API_KEY: str = ""
-    
     # Sicurezza & Auth
     ENCRYPTION_KEY: str
     JWT_SECRET_KEY: str

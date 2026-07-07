@@ -1,6 +1,6 @@
 """
 Endpoint API dedicati agli esercenti (Merchant).
-Gestisce la gestione dei profili merchant e l'aggiunta punti alle TreeCard.
+Gestisce i profili merchant e l'aggiornamento del cashback sulle Card.
 """
 
 import uuid
@@ -98,15 +98,12 @@ async def create_test_merchant(session: Session = Depends(get_session)):
         "business_name": "Fidelitree Test",
         "phone_number": "+393319910276",
         "password": settings.MERCHANT_PASSWORD,
-        "humami_api_key": settings.HUMANI_SANDBOX_API_KEY,
-        "humami_enterprise_id": settings.HUMANI_ENTERPRISE_ID,
-        "points_to_tree": 10
     }
     return merchant_crud.create_merchant(session, test_data)
 
 
 # ---------------------------------------------------------------------------
-# 2. Aggiunta punti a una card
+# 2. Aggiornamento cashback di una card
 # ---------------------------------------------------------------------------
 
 @router.post("/add-point/{card_id}", response_model=CardResponse)
@@ -116,11 +113,10 @@ async def add_point(
     session: Session = Depends(get_session),
     merchant: Merchant = Depends(get_current_merchant),
 ):
-    """Aggiunge punti alla card e pianta alberi tramite Business Service."""
-    return await card_service.add_points_to_card(
+    """Aggiunge o rimuove credito cashback sulla card del proprio cliente."""
+    return card_service.update_cashback(
         session=session,
         merchant=merchant,
         card_id=card_id,
-        points=body.points,
         cb_points=body.cb_points
     )

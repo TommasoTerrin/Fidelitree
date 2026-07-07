@@ -16,7 +16,7 @@ from sqlmodel import Session
 import uuid
 
 from app.core.dependencies import get_session, get_current_merchant
-from app.models.models import Merchant, TreeCard
+from app.models.models import Merchant, Card
 
 router = APIRouter(prefix="/merchant", tags=["Merchant Views"])
 templates = Jinja2Templates(directory="app/templates")
@@ -45,8 +45,8 @@ async def manage_card_page(
     session: Session = Depends(get_session), 
     merchant: Merchant = Depends(get_current_merchant)
 ):
-    """Serve la pagina per aggiungere punti alla singola Treecard."""
-    card = session.get(TreeCard, card_id)
+    """Serve la pagina per gestire il cashback della singola card."""
+    card = session.get(Card, card_id)
     if not card or card.merchant_id != merchant.id:
         raise HTTPException(status_code=404, detail="Card non trovata o non associata a questo merchant")
     

@@ -59,21 +59,6 @@ async def health_check():
     return {"status": "ok", "app": "Fidelitree"}
 
 
-@app.get("/debug-db")
-async def debug_db():
-    from sqlmodel import Session, select
-    from app.models.models import TreeCard, Merchant
-    with Session(engine) as session:
-        cards_count = session.exec(select(TreeCard)).all()
-        merchants_count = session.exec(select(Merchant)).all()
-        return {
-            "database_url_configured": settings.DATABASE_URL is not None,
-            "cards_in_db": len(cards_count),
-            "merchants_in_db": len(merchants_count),
-            "engine_url": str(engine.url).split("@")[-1] # Mostra solo l'host per sicurezza
-        }
-
-
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host=settings.APP_HOST, port=settings.APP_PORT)

@@ -1,50 +1,21 @@
 """
-Schemi Pydantic per la validazione dell'input e dell'output relativi alle TreeCard.
+Schemi Pydantic per la validazione dell'input e dell'output relativi alle Card.
 """
-#
-# Usati dalle business calls (api.py) per garantire dati corretti
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 import uuid
-import json
 
 
 class AddPointsRequest(BaseModel):
-    """Richiesta di aggiunta punti a una card."""
-    points: int = Field(default=0)
+    """Richiesta di aggiunta/rimozione cashback su una card."""
     cb_points: float = Field(default=0.0)
 
 
-class CardUpdateRequest(BaseModel):
-    """Richiesta per l'aggiornamento diretto dei dati di una TreeCard."""
-    current_points: int | None = None
-    cashback_point: float | None = None
-    trees_planted: int | None = None
-
-
 class CardResponse(BaseModel):
-    """Risposta con i dati di una TreeCard."""
+    """Risposta con i dati di una Card."""
     id: uuid.UUID
     merchant_id: int
-    current_points: int
     cashback_point: float
-    trees_planted: int
-    trees_list: list[str]
-    warnings: list[str] | None = None
-
-    @field_validator("trees_list", "warnings", mode="before")
-    @classmethod
-    def ensure_list(cls, v):
-        """Assicura che i campi di tipo lista siano formattati correttamente partendo da JSON o null."""
-        if v is None:
-            return []
-        if isinstance(v, str):
-            try:
-                decoded = json.loads(v)
-                return decoded if isinstance(decoded, list) else []
-            except:
-                return []
-        return v
 
     class Config:
         from_attributes = True

@@ -1,38 +1,33 @@
 """
 Definizione dei modelli database SQLModel per l'applicazione Fidelitree.
-Include le tabelle Merchant (esercenti) e TreeCard (carte fedeltà).
+Include le tabelle Merchant (esercenti) e Card (carte fedeltà).
 """
 
-import uuid 
+import uuid
 from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship
 from pydantic import field_validator
 
+
 class Merchant(SQLModel, table=True):
     """
     Rappresenta un esercente registrato nel sistema.
-    Contiene le credenziali, le impostazioni della carta fedeltà e le chiavi API 
-    per i servizi di riforestazione.
+    Contiene le credenziali di accesso e il tipo di piano.
     """
-    id: Optional[int] = Field(default=None, primary_key= True) #fattto così perchè sqlmodel lo mette da solo
-    business_name: str #intanto solo questa come info minimal
+    id: Optional[int] = Field(default=None, primary_key=True)
+    business_name: str
     phone_number: str
-    password: str # salvata cifrata via Fernet
-    humami_api_key: str #da criptare
-    humami_enterprise_id: str #da criptare
-    points_to_tree: int = Field(default= 10) #quanti punti per completare
-    type: str = Field(default="test") # 'test', 'free', 'pro'
-    default_card_type: str = Field(default="just_trees") # 'just_trees', 'just_cb_points', 'cards_and_cb_points'
-    cb_points_per_tree: int = Field(default=0)
-    
-    cards: List["TreeCard"] = Relationship(
-        back_populates="merchant", 
+    password: str  # salvata cifrata via Fernet
+    type: str = Field(default="test")  # 'test', 'free', 'pro'
+
+    cards: List["Card"] = Relationship(
+        back_populates="merchant",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"}
-    ) #relazione con le carte del merchant (1:N)
+    )  # relazione con le carte del merchant (1:N)
 
     @field_validator("type")
     @classmethod
-    def validate_type(cls, v: str):
+    def validate_type(cls, v: str) -> str:
         """Valida che il tipo di merchant sia uno tra quelli ammessi."""
         if v not in ('test', 'free', 'pro'):
             raise ValueError("type deve essere 'test', 'free' o 'pro'")
@@ -40,47 +35,26 @@ class Merchant(SQLModel, table=True):
 
     @field_validator("phone_number")
     @classmethod
-    def validate_phone(cls, v:str):
+    def validate_phone(cls, v: str) -> str:
         """Valida il formato del numero di telefono (solo prefisso italiano +39)."""
-        #controllo +39 (per ora solo italia)
         if not v.startswith("+39"):
             raise ValueError("ricorda che devi inserire +39")
 
-        # cifre devono essere 9 o 10
-        digits= v[3:] 
+        digits = v[3:]
         if not digits.isdigit():
             raise ValueError("non sono tutti numeri quelli inseriti")
-        if len(digits) not in (9,10):
+        if len(digits) not in (9, 10):
             raise ValueError("le cifre devono essere 9 o 10")
         return v
 
 
-
-
-from sqlalchemy import Column, JSON
-
-class TreeCard(SQLModel, table=True):
+class Card(SQLModel, table=True):
     """
-    Rappresenta una carta fedeltà digitale associata a un cliente e a un merchant.
-    Tiene traccia dei punti accumulati e degli alberi piantati.
+    Carta fedeltà digitale associata a un cliente e a un merchant.
+    Tiene traccia del credito cashback accumulato.
     """
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    merchant_id: int= Field(foreign_key="merchant.id") #campo per la l'id necessario associazione a merchant
-    current_points: int = Field(default=0)
-    cashback_point: float = Field(default=0.0)
-    #default_points_to_tree: int = Field(default=10)
-    trees_planted: int = Field(default=0) # contatore alberi piantati
-    trees_list: List[str] = Field(default=[], sa_column=Column(JSON)) 
-    type: str = Field(default="just_trees") # 'just_trees', 'just_cb_points', 'cards_and_cb_points'
-    warnings: Optional[List[str]] = Field(default=None, sa_column=Column(JSON))
+    merchant_id: int = Field(foreign_key="merchant.id")
+    cashback_point: float = Field(default=0.0)  # credito in euro
 
     merchant: Merchant = Relationship(back_populates="cards")
-
-    @field_validator("type")
-    @classmethod
-    def validate_type(cls, v: str):
-        """Valida il tipo di carta fedeltà."""
-        allowed = ("just_trees", "just_cb_points", "cards_and_cb_points")
-        if v not in allowed:
-            raise ValueError(f"type deve essere uno tra {allowed}")
-        return v

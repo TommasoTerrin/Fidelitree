@@ -1,107 +1,48 @@
 """
-Servizi per la gestione della logica di business relativa alle TreeCard.
-Coordina le operazioni tra il database e i servizi esterni di riforestazione.
+Servizi per la logica di business relativa alle Card (carte fedeltà).
 """
 
 import uuid
 import logging
-from typing import List, Optional
 from fastapi import HTTPException
 from sqlmodel import Session
 
-from app.models.models import Merchant, TreeCard
-from app.services.humani_service import plant_tree
-from app.core.security import decrypt_key
+from app.models.models import Merchant, Card
 from app.services.db_crud import card_crud, merchant_crud
 
 logger = logging.getLogger(__name__)
 
-async def add_points_to_card(
-    session: Session, 
-    merchant: Merchant, 
-    card_id: uuid.UUID, 
-    points: int,
-    cb_points: float = 0.0
-) -> TreeCard:
+
+def update_cashback(
+    session: Session,
+    merchant: Merchant,
+    card_id: uuid.UUID,
+    cb_points: float
+) -> Card:
     """
-    Logica di business per aggiungere punti a una carta e piantare alberi.
-    Orchestra operazioni su DB e chiamate esterne.
+    Aggiunge (o rimuove, se negativo) credito cashback a una carta.
+    La carta deve appartenere al merchant autenticato e il saldo
+    non può mai scendere sotto zero.
     """
     card = card_crud.get_card_by_id(session, card_id)
     if not card or card.merchant_id != merchant.id:
-        raise HTTPException(status_code=404, detail="TreeCard non valida per questo merchant")
+        raise HTTPException(status_code=404, detail="Card non valida per questo merchant")
 
-    if card.current_points + points < 0:
-        raise HTTPException(status_code=400, detail="Impossibile portare i punti sotto 0")
-    if card.cashback_point + cb_points < -0.001: # Uso tolleranza per float
+    if card.cashback_point + cb_points < -0.001:  # tolleranza per i float
         raise HTTPException(status_code=400, detail="Impossibile portare il cashback sotto 0")
 
-    card.current_points += points
     card.cashback_point += cb_points
-
-    # Decifra credenziali Humani
-    humani_api = decrypt_key(merchant.humami_api_key)
-    humani_enterprise = decrypt_key(merchant.humami_enterprise_id)
-
-    # Nota: card_crud.get_card_by_id pulisce già trees_list
-    current_trees = card.trees_list
-    humani_errors: list[str] = []
-
-    # Logica piantaggio alberi basata sui punti del merchant
-    while card.current_points >= merchant.points_to_tree:
-        try:
-            tree_response = await plant_tree(
-                api_key=humani_api,
-                enterprise_id=humani_enterprise,
-                user=str(card.id),
-                project_id="44117777",
-                tree_count=1,
-            )
-
-            tree_uuid = tree_response.get("uuid")
-            if tree_uuid:
-                current_trees.append(str(tree_uuid))
-                card.trees_planted += 1
-                card.current_points -= merchant.points_to_tree
-                logger.info("Albero piantato per card %s | uuid=%s", card.id, tree_uuid)
-            else:
-                humani_errors.append("Humani API: UUID mancante nella risposta")
-                break
-        except Exception as exc:
-            msg = f"Errore Humani: {exc}"
-            logger.error(msg)
-            humani_errors.append(msg)
-            break
-
-    card.trees_list = current_trees
     session.add(card)
     session.commit()
     session.refresh(card)
-    
-    card.warnings = humani_errors if humani_errors else None
+    logger.info("Cashback aggiornato per card %s: %+.2f", card.id, cb_points)
     return card
 
-def create_card(session: Session, merchant_id: int) -> TreeCard:
-    """Orchestra la creazione della card, delegando al CRUD."""
+
+def create_card(session: Session, merchant_id: int) -> Card:
+    """Crea una carta dopo aver verificato che il merchant esista."""
     merchant = merchant_crud.get_merchant_by_id(session, merchant_id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant non trovato")
 
-    # Logica di assegnazione tipo card basata sul merchant
-    card_type = merchant.default_card_type
-    
-    # Esempio di logica: se pro o test, potresti voler assegnare altro o 
-    # permettere al merchant di scegliere. Per ora lasciamo default e 
-    # aggiungiamo la validazione di coerenza.
-    if merchant.type == "free" and card_type != "just_trees":
-        raise HTTPException(status_code=403, detail="Merchant free può avere solo card 'just_trees'")
-
-    return card_crud.create_card(session, merchant_id, card_type)
-
-def get_card_by_id(session: Session, card_id: uuid.UUID) -> Optional[TreeCard]:
-    """Recupera la card tramite CRUD."""
-    return card_crud.get_card_by_id(session, card_id)
-
-def delete_card(session: Session, card_id: uuid.UUID):
-    """Elimina la card tramite CRUD."""
-    card_crud.delete_card(session, card_id)
+    return card_crud.create_card(session, merchant_id)

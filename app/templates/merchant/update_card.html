@@ -4,19 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestione Punti - Fidelitree</title>
+    <title>Gestione Cashback - Fidelitree</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        /* Nasconde le freccette di default dell'input number per evitare bug grafici */
-        input[type="number"]::-webkit-outer-spin-button,
-        input[type="number"]::-webkit-inner-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
-        input[type="number"] {
-            -moz-appearance: textfield;
-        }
-    </style>
 </head>
 
 <body class="bg-slate-50 min-h-screen p-6 font-sans">
@@ -29,51 +18,17 @@
         {% endif %}
 
         <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
-            <p class="text-xs text-slate-400 font-bold uppercase mb-2">Stato Treecard</p>
+            <p class="text-xs text-slate-400 font-bold uppercase mb-2">Stato Carta</p>
             <div class="flex justify-between items-center">
                 <div>
                     <h3 class="font-black text-xl text-slate-800">Cliente #{{ card.id.hex[:6] }}</h3>
-                    {% if card.type in ['just_trees', 'cards_and_cb_points'] %}
-                    <p class="text-sm text-green-600 font-bold">{{ card.current_points }} / {{ merchant.points_to_tree }} Treepoints</p>
-                    {% endif %}
-                    {% if card.type in ['just_cb_points', 'cards_and_cb_points'] %}
                     <p class="text-sm text-blue-600 font-bold">€ {{ "%.2f"|format(card.cashback_point) }} Cashback</p>
-                    {% endif %}
                 </div>
-                {% if card.type in ['just_trees', 'cards_and_cb_points'] %}
-                <div class="text-right">
-                    <span class="text-3xl">🌳</span>
-                    <p class="text-[10px] font-bold text-slate-400">TOTALI: {{ card.trees_planted }}</p>
-                </div>
-                {% endif %}
             </div>
         </div>
-
-        <!-- ===================== SEZIONE TREEPOINTS ===================== -->
-
-        {% if card.type in ['just_trees', 'cards_and_cb_points'] %}
-        <div class="bg-white p-8 rounded-[2.5rem] shadow-xl text-center border-2 border-green-500">
-            <p class="text-sm font-bold text-green-600 mb-4 uppercase">Modifica Treepoints</p>
-
-            <div class="flex items-center justify-between gap-4 mb-6">
-                <button onclick="changeTreepoints(-1)"
-                    class="w-14 h-14 bg-slate-100 rounded-full text-3xl font-bold text-slate-600 active:bg-slate-200 transition-colors shrink-0">−</button>
-                <span id="points-display"
-                    class="text-5xl font-black text-slate-900 select-none transition-colors">0</span>
-                <button onclick="changeTreepoints(1)"
-                    class="w-14 h-14 bg-green-100 rounded-full text-3xl font-bold text-green-600 active:bg-green-200 transition-colors shrink-0">+</button>
-            </div>
-
-            <button id="btn-treepoints" onclick="prepareTreepointsOperation()"
-                class="w-full bg-green-600 text-white font-black py-4 rounded-2xl text-lg shadow-lg active:scale-95 transition-all">
-                AGGIUNGI TREEPOINTS
-            </button>
-        </div>
-        {% endif %}
 
         <!-- ===================== SEZIONE CASHBACK ===================== -->
 
-        {% if card.type in ['just_cb_points', 'cards_and_cb_points'] %}
         <div class="bg-white p-8 rounded-[2.5rem] shadow-xl text-center border-2 border-blue-500">
             <p class="text-sm font-bold text-blue-600 mb-4 uppercase">Modifica Cashback (€)</p>
 
@@ -85,17 +40,21 @@
                     oninput="sanitizeCashbackInput(this)">
             </div>
 
-            <button id="btn-cashback" onclick="prepareCashbackOperation()"
+            <button id="btn-cashback" onclick="prepareCashbackOperation(1)"
                 class="w-full bg-blue-600 text-white font-black py-4 rounded-2xl text-lg shadow-lg active:scale-95 transition-all">
                 AGGIUNGI CASHBACK
             </button>
 
-            <button id="btn-use-all-cb" onclick="prepareOperation('use_all_cb')"
+            <button id="btn-remove-cashback" onclick="prepareCashbackOperation(-1)"
+                class="w-full bg-red-50 text-red-600 font-bold py-3 rounded-2xl text-base active:scale-95 transition-transform border border-red-100 mt-3">
+                TOGLI CASHBACK
+            </button>
+
+            <button id="btn-use-all-cb" onclick="prepareUseAllCashback()"
                 class="w-full bg-blue-50 text-blue-600 font-bold py-3 rounded-2xl text-base active:scale-95 transition-transform border border-blue-100 mt-3">
                 USA INTERO CASHBACK
             </button>
         </div>
-        {% endif %}
 
     </div>
 
@@ -107,7 +66,7 @@
             <p id="modal-text" class="text-slate-500 mb-8">Stai per procedere con l'aggiornamento.</p>
 
             <div class="space-y-3">
-                <button id="btn-confirm" onclick="submitPoints()"
+                <button id="btn-confirm" onclick="submitCashback()"
                     class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-md">SÌ,
                     CONFERMO</button>
                 <button onclick="hideModal()"
@@ -130,89 +89,14 @@
         const toast = document.getElementById('toast');
         const cardId = "{{ card.id }}";
 
-        // Saldi correnti per validazione
-        const currentTreepoints = {{ card.current_points }};
+        // Saldo corrente per validazione lato client
         const currentCashback = {{ card.cashback_point }};
 
-        // --- Stato interno ---
-        let treepointsValue = 0;
-        let pendingPayload = { points: 0, cb_points: 0.0 };
-
-        // ===================== TREEPOINTS (solo +/-) =====================
-
-        function changeTreepoints(delta) {
-            treepointsValue += delta;
-            // Impedisce di andare sotto -currentTreepoints (non si può togliere più di quanto ha)
-            if (treepointsValue < -currentTreepoints) {
-                treepointsValue = -currentTreepoints;
-            }
-            updateTreepointsUI();
-        }
-
-        function updateTreepointsUI() {
-            const display = document.getElementById('points-display');
-            const btn = document.getElementById('btn-treepoints');
-            if (!display || !btn) return;
-
-            display.textContent = treepointsValue;
-
-            if (treepointsValue < 0) {
-                // Stai togliendo punti → rosso
-                display.className = 'text-5xl font-black text-red-600 select-none transition-colors';
-                btn.textContent = 'TOGLI TREEPOINTS';
-                btn.className = 'w-full bg-red-600 text-white font-black py-4 rounded-2xl text-lg shadow-lg active:scale-95 transition-all';
-            } else if (treepointsValue > 0) {
-                // Stai aggiungendo → verde
-                display.className = 'text-5xl font-black text-green-600 select-none transition-colors';
-                btn.textContent = 'AGGIUNGI TREEPOINTS';
-                btn.className = 'w-full bg-green-600 text-white font-black py-4 rounded-2xl text-lg shadow-lg active:scale-95 transition-all';
-            } else {
-                // Zero → neutro
-                display.className = 'text-5xl font-black text-slate-900 select-none transition-colors';
-                btn.textContent = 'AGGIUNGI TREEPOINTS';
-                btn.className = 'w-full bg-green-600 text-white font-black py-4 rounded-2xl text-lg shadow-lg active:scale-95 transition-all';
-            }
-        }
-
-        function prepareTreepointsOperation() {
-            if (treepointsValue === 0) {
-                showToast('Usa + o − per selezionare i punti', true);
-                return;
-            }
-
-            pendingPayload = { points: treepointsValue, cb_points: 0.0 };
-
-            // Reset stili modal
-            resetModalStyle();
-
-            if (treepointsValue < 0) {
-                // RIMOZIONE — modal rosso ben visibile
-                const removing = Math.abs(treepointsValue);
-                const newBalance = currentTreepoints - removing;
-                modalTitle.innerText = '⚠️ STAI TOGLIENDO TREEPOINTS';
-                modalTitle.className = 'text-xl font-black text-red-600 mb-2';
-                modalText.innerHTML =
-                    `Stai per rimuovere <span class="text-2xl font-black text-red-600">${removing}</span> punti dalla carta.<br><br>` +
-                    `Il saldo passerà da <b>${currentTreepoints}</b> a <b>${newBalance}</b> Treepoints.`;
-                modalBox.className = 'bg-white w-full max-w-xs rounded-[2.5rem] p-8 text-center shadow-2xl transition-all border-4 border-red-500';
-                btnConfirm.textContent = 'SÌ, TOGLI I PUNTI';
-                btnConfirm.className = 'w-full bg-red-600 text-white font-bold py-4 rounded-xl shadow-md';
-            } else {
-                // AGGIUNTA — modal standard
-                modalTitle.innerText = "Confermi l'aggiunta?";
-                modalText.innerHTML = `Stai per aggiungere <span class="text-2xl font-black text-green-600">${treepointsValue}</span> Treepoints alla carta.`;
-                btnConfirm.textContent = 'SÌ, CONFERMO';
-            }
-
-            modal.classList.remove('hidden');
-        }
-
-        // ===================== CASHBACK (input manuale) =====================
+        let pendingPayload = { cb_points: 0.0 };
 
         function sanitizeCashbackInput(el) {
             // Permette solo numeri, virgola e punto
             el.value = el.value.replace(/[^0-9.,]/g, '');
-            // Sostituisce virgola con punto per il parsing
         }
 
         function getCashbackValue() {
@@ -221,38 +105,59 @@
             return parseFloat(input.value.replace(',', '.')) || 0;
         }
 
-        function prepareCashbackOperation() {
+        // sign = 1 per aggiungere, -1 per togliere
+        function prepareCashbackOperation(sign) {
             const cbVal = getCashbackValue();
             if (cbVal === 0) {
                 showToast('Inserisci un importo per procedere', true);
                 return;
             }
 
-            pendingPayload = { points: 0, cb_points: cbVal };
+            const amount = cbVal * sign;
 
+            if (sign < 0 && cbVal > currentCashback) {
+                showToast('Non puoi togliere più del saldo attuale', true);
+                return;
+            }
+
+            pendingPayload = { cb_points: amount };
             resetModalStyle();
-            modalTitle.innerText = "Confermi l'aggiunta?";
-            modalText.innerHTML = `Stai per aggiungere <span class="text-2xl font-black text-blue-600">€ ${cbVal.toFixed(2)}</span> di Cashback alla carta.`;
-            btnConfirm.textContent = 'SÌ, CONFERMO';
+
+            if (sign < 0) {
+                const newBalance = currentCashback - cbVal;
+                modalTitle.innerText = '⚠️ STAI TOGLIENDO CASHBACK';
+                modalTitle.className = 'text-xl font-black text-red-600 mb-2';
+                modalText.innerHTML =
+                    `Stai per rimuovere <span class="text-2xl font-black text-red-600">€ ${cbVal.toFixed(2)}</span> dalla carta.<br><br>` +
+                    `Il saldo passerà da <b>€ ${currentCashback.toFixed(2)}</b> a <b>€ ${newBalance.toFixed(2)}</b>.`;
+                modalBox.className = 'bg-white w-full max-w-xs rounded-[2.5rem] p-8 text-center shadow-2xl transition-all border-4 border-red-500';
+                btnConfirm.textContent = 'SÌ, TOGLI IL CASHBACK';
+                btnConfirm.className = 'w-full bg-red-600 text-white font-bold py-4 rounded-xl shadow-md';
+            } else {
+                modalTitle.innerText = "Confermi l'aggiunta?";
+                modalText.innerHTML = `Stai per aggiungere <span class="text-2xl font-black text-blue-600">€ ${cbVal.toFixed(2)}</span> di Cashback alla carta.`;
+                btnConfirm.textContent = 'SÌ, CONFERMO';
+            }
 
             modal.classList.remove('hidden');
         }
 
-        // ===================== USA INTERO CASHBACK =====================
-
-        function prepareOperation(op) {
-            if (op === 'use_all_cb') {
-                pendingPayload = { points: 0, cb_points: -currentCashback };
-
-                resetModalStyle();
-                modalTitle.innerText = '⚠️ FAI ATTENZIONE';
-                modalTitle.className = 'text-xl font-black text-red-600 mb-2';
-                modalText.innerHTML = `Stai per <b>AZZERARE COMPLETAMENTE</b> il cashback di <br><span class="text-2xl font-black text-slate-900">€ ${currentCashback.toFixed(2)}</span>`;
-                btnConfirm.className = 'w-full bg-red-600 text-white font-bold py-4 rounded-xl shadow-md';
-                btnConfirm.textContent = 'SÌ, CONFERMO';
-
-                modal.classList.remove('hidden');
+        function prepareUseAllCashback() {
+            if (currentCashback <= 0) {
+                showToast('Il saldo cashback è già a zero', true);
+                return;
             }
+
+            pendingPayload = { cb_points: -currentCashback };
+
+            resetModalStyle();
+            modalTitle.innerText = '⚠️ FAI ATTENZIONE';
+            modalTitle.className = 'text-xl font-black text-red-600 mb-2';
+            modalText.innerHTML = `Stai per <b>AZZERARE COMPLETAMENTE</b> il cashback di <br><span class="text-2xl font-black text-slate-900">€ ${currentCashback.toFixed(2)}</span>`;
+            btnConfirm.className = 'w-full bg-red-600 text-white font-bold py-4 rounded-xl shadow-md';
+            btnConfirm.textContent = 'SÌ, CONFERMO';
+
+            modal.classList.remove('hidden');
         }
 
         // ===================== MODAL & UTILITIES =====================
@@ -270,11 +175,12 @@
 
         function showToast(message, isError = false) {
             toast.textContent = message;
+            toast.classList.remove('hidden');
             toast.className = `fixed bottom-6 left-1/2 -translate-x-1/2 px-6 py-3 rounded-2xl text-white font-bold shadow-xl z-50 transition-all ${isError ? 'bg-red-500' : 'bg-green-600'}`;
             setTimeout(() => { toast.classList.add('hidden'); }, 3000);
         }
 
-        async function submitPoints() {
+        async function submitCashback() {
             btnConfirm.disabled = true;
             btnConfirm.textContent = 'Invio in corso...';
 
