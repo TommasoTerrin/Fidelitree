@@ -1,5 +1,7 @@
-# app/routes/merchant/views.py
-# MERCHANT FRONTEND — Restituisce pagine HTML (Jinja2)
+"""
+Route per il frontend lato esercente.
+Gestisce le pagine di login, lo scanner QR e la gestione manuale dei punti.
+"""
 #
 # Endpoint previsti:
 #   GET  /merchant/login      → Pagina di login
@@ -20,11 +22,12 @@ router = APIRouter(prefix="/merchant", tags=["Merchant Views"])
 templates = Jinja2Templates(directory="app/templates")
 
 @router.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request):
+async def login_page(request: Request, telegram_id: str = None):
     """Serve la pagina di login del merchant."""
     return templates.TemplateResponse(
         request=request, 
-        name="merchant/login_merchant.html"
+        name="merchant/login_merchant.html",
+        context={"telegram_id": telegram_id}
     )
 
 @router.get("/scanner", response_class=HTMLResponse)

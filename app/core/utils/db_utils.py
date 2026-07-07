@@ -1,3 +1,7 @@
+"""
+Utility per la gestione e manutenzione del database.
+"""
+
 import logging
 from sqlmodel import Session, create_engine, text
 from app.core.config import settings

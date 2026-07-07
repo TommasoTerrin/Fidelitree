@@ -1,9 +1,19 @@
+"""
+Definizione dei modelli database SQLModel per l'applicazione Fidelitree.
+Include le tabelle Merchant (esercenti) e TreeCard (carte fedeltà).
+"""
+
 import uuid 
 from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship
 from pydantic import field_validator
 
 class Merchant(SQLModel, table=True):
+    """
+    Rappresenta un esercente registrato nel sistema.
+    Contiene le credenziali, le impostazioni della carta fedeltà e le chiavi API 
+    per i servizi di riforestazione.
+    """
     id: Optional[int] = Field(default=None, primary_key= True) #fattto così perchè sqlmodel lo mette da solo
     business_name: str #intanto solo questa come info minimal
     phone_number: str
@@ -24,6 +34,7 @@ class Merchant(SQLModel, table=True):
     @field_validator("type")
     @classmethod
     def validate_type(cls, v: str):
+        """Valida che il tipo di merchant sia uno tra quelli ammessi."""
         if v not in ('test', 'free', 'pro'):
             raise ValueError("type deve essere 'test', 'free' o 'pro'")
         return v
@@ -31,6 +42,7 @@ class Merchant(SQLModel, table=True):
     @field_validator("phone_number")
     @classmethod
     def validate_phone(cls, v:str):
+        """Valida il formato del numero di telefono (solo prefisso italiano +39)."""
         #controllo +39 (per ora solo italia)
         if not v.startswith("+39"):
             raise ValueError("ricorda che devi inserire +39")
@@ -49,6 +61,10 @@ class Merchant(SQLModel, table=True):
 from sqlalchemy import Column, JSON
 
 class TreeCard(SQLModel, table=True):
+    """
+    Rappresenta una carta fedeltà digitale associata a un cliente e a un merchant.
+    Tiene traccia dei punti accumulati e degli alberi piantati.
+    """
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     merchant_id: int= Field(foreign_key="merchant.id") #campo per la l'id necessario associazione a merchant
     current_points: int = Field(default=0)
@@ -64,6 +80,7 @@ class TreeCard(SQLModel, table=True):
     @field_validator("type")
     @classmethod
     def validate_type(cls, v: str):
+        """Valida il tipo di carta fedeltà."""
         allowed = ("just_trees", "just_cb_points", "cards_and_cb_points")
         if v not in allowed:
             raise ValueError(f"type deve essere uno tra {allowed}")

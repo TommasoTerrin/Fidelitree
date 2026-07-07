@@ -1,3 +1,7 @@
+"""
+Operazioni CRUD per la gestione delle TreeCard nel database.
+"""
+
 import uuid
 import logging
 import json

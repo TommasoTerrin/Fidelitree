@@ -18,6 +18,7 @@ python-telegram-bot   # SDK per il bot e la mini app di Telegram
 httpx                 # Client asincrono per chiamare le API di Digital Humani
 #qrcode[pil]           # Per generare i QR code delle Treecard lato server
 python-dotenv         # Per caricare le variabili d'ambiente dal file .env
+requests              # Per lo script di smoke test in produzione
 
 # --- Production ---
 gunicorn              # Process manager per far girare FastAPI su Cloud Run

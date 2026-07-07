@@ -1,7 +1,12 @@
+"""
+Endpoint API dedicati agli esercenti (Merchant).
+Gestisce la gestione dei profili merchant e l'aggiunta punti alle TreeCard.
+"""
+
 import uuid
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlmodel import Session
 
 from app.core.dependencies import get_session, get_current_merchant
@@ -24,9 +29,12 @@ router = APIRouter(prefix="/merchant", tags=["Merchant API"])
 @router.post("/", response_model=MerchantResponse)
 async def create_merchant(
     merchant_in: MerchantCreateRequest,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    x_admin_token: str = Header(None)
 ):
     """Crea un nuovo merchant tramite CRUD service."""
+    if x_admin_token != settings.ADMIN_SECRET_KEY:
+        raise HTTPException(status_code=403, detail="Non autorizzato")
     return merchant_crud.create_merchant(session, merchant_in.model_dump())
 
 

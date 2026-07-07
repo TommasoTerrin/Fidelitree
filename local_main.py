@@ -1,3 +1,7 @@
+"""
+Script di avvio locale per l'applicazione Fidelitree con hot-reload attivo.
+"""
+
 import uvicorn
 from app.core.config import settings
 

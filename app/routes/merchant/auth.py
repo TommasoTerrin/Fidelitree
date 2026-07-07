@@ -1,5 +1,7 @@
-# app/routes/merchant/auth.py
-# MERCHANT AUTH — Login, logout, verifica sessione
+"""
+Gestione dell'autenticazione per gli esercenti.
+Include login, logout e gestione dei cookie di sessione JWT.
+"""
 #
 # Endpoint previsti:
 #   POST /merchant/auth/login     → Verifica password, crea sessione/token

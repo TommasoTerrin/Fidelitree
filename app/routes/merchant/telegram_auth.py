@@ -1,3 +1,8 @@
+"""
+Integrazione specifica per l'autenticazione tramite Telegram.
+Gestisce l'auto-login sicuro dai link forniti dal bot Telegram.
+"""
+
 import hashlib
 import hmac
 import json
@@ -10,7 +15,7 @@ from sqlmodel import Session, select
 from app.core.config import settings
 from app.core.dependencies import get_session
 from app.models.models import Merchant
-from app.core.security import create_jwt_token
+from app.core.security import create_jwt_token, verify_telegram_hash
 
 router = APIRouter(prefix="/merchant/telegram", tags=["Merchant Telegram Auth"])
 templates = Jinja2Templates(directory="app/templates")
@@ -39,46 +44,38 @@ def verify_telegram_webapp_data(init_data: str, bot_token: str) -> dict:
         
     return None
 
-@router.get("/scanner", response_class=HTMLResponse)
-async def telegram_scanner_view(request: Request):
-    """Restituisce la pagina dello scanner configurata per Telegram."""
-    return templates.TemplateResponse("merchant/telegram_scanner.html", {"request": request})
-
-@router.post("/login")
-async def telegram_login(request: Request, session: Session = Depends(get_session)):
-    """Esegue il login del merchant usando i dati della Mini App."""
-    body = await request.json()
-    init_data = body.get("initData")
+@router.get("/auto-login")
+async def telegram_auto_login(
+    tid: str, 
+    h: str, 
+    session: Session = Depends(get_session)
+):
+    """
+    Esegue l'auto-login via link firmato da Telegram.
+    Valida l'hash HMAC, cerca il merchant e imposta il cookie JWT.
+    """
+    if not verify_telegram_hash(tid, h):
+        raise HTTPException(status_code=401, detail="Firma di sicurezza non valida")
     
-    # In ambiente di test locale, se il token è 'test_token', saltiamo la validazione rigorosa dell'hash
-    # se non vogliamo complicarci la vita con ngrok subito, ma per ora la implementiamo correttamente.
-    telegram_data = verify_telegram_webapp_data(init_data, settings.TELEGRAM_BOT_TOKEN)
-    
-    if not telegram_data:
-        # Debug per test locale con 'test_token'
-        if settings.TELEGRAM_BOT_TOKEN == "test_token":
-             # Estraiamo l'id utente senza validazione hash solo per debug locale
-             try:
-                user_data = json.loads(dict(urllib.parse.parse_qsl(init_data)).get("user"))
-                telegram_id = str(user_data.get("id"))
-             except:
-                 raise HTTPException(status_code=401, detail="Dati Telegram non validi")
-        else:
-            raise HTTPException(status_code=401, detail="Firma Telegram non valida")
-    else:
-        user_data = json.loads(telegram_data.get("user"))
-        telegram_id = str(user_data.get("id"))
-
     # Cerca il merchant per id_telegram
-    statement = select(Merchant).where(Merchant.id_telegram == telegram_id)
+    statement = select(Merchant).where(Merchant.id_telegram == tid)
     merchant = session.exec(statement).first()
     
     if not merchant:
-        raise HTTPException(status_code=404, detail="Account non collegato. Usa il bot per autenticarti.")
+        # Se l'hash è valido ma il merchant non c'è, forse è stato rimosso
+        # Rimandiamo al login normale per ri-associarlo
+        return RedirectResponse(url=f"/merchant/login?telegram_id={tid}", status_code=303)
         
     # Crea JWT token
     token = create_jwt_token({"sub": str(merchant.id)})
     
+    # Redirect allo scanner con il cookie impostato
     response = RedirectResponse(url="/merchant/scanner", status_code=303)
-    response.set_cookie("access_token", token, httponly=True, max_age=60*24*7*60)
-    return {"status": "ok", "token": token}
+    response.set_cookie(
+        "access_token", 
+        token, 
+        httponly=True, 
+        max_age=60*24*7*60,
+        samesite="lax"
+    )
+    return response

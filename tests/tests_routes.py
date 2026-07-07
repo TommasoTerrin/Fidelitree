@@ -1,4 +1,6 @@
 """
+Test di integrazione per le rotte API dell'applicazione Fidelitree.
+
 ###############################################################################
 # LISTA TEST ESEGUITI IN QUESTO FILE (tests/tests_routes.py)
 ###############################################################################
@@ -26,6 +28,7 @@ from app.main import app
 from app.core.dependencies import get_current_merchant
 from app.models.models import Merchant
 from app.core.security import encrypt_key
+from app.core.config import settings
 import uuid
 
 client = TestClient(app)
@@ -57,7 +60,11 @@ def test_merchant_lifecycle_api():
         "humami_enterprise_id": "test_ent_id_valid",
         "type": "pro"
     }
-    response = client.post("/api/merchant/", json=payload)
+    response = client.post(
+        "/api/merchant/", 
+        json=payload, 
+        headers={"X-Admin-Token": settings.ADMIN_SECRET_KEY}
+    )
     assert response.status_code == 200
     merchant_data = response.json()
     merchant_id = merchant_data["id"]
@@ -94,7 +101,11 @@ def test_consumer_get_card_api():
         "humami_api_key": "k",
         "humami_enterprise_id": "i"
     }
-    m_resp = client.post("/api/merchant/", json=m_payload)
+    m_resp = client.post(
+        "/api/merchant/", 
+        json=m_payload,
+        headers={"X-Admin-Token": settings.ADMIN_SECRET_KEY}
+    )
     m_id = m_resp.json()["id"]
 
     try:
@@ -135,7 +146,11 @@ def test_add_points_api():
         "humami_api_key": "test_api_key", 
         "humami_enterprise_id": "test_ent_id"
     }
-    m_resp = client.post("/api/merchant/", json=m_payload)
+    m_resp = client.post(
+        "/api/merchant/", 
+        json=m_payload,
+        headers={"X-Admin-Token": settings.ADMIN_SECRET_KEY}
+    )
     m_id = m_resp.json()["id"]
     
     # Recuperiamo il merchant reale dal DB con tutti i campi (anche quelli non in MerchantResponse)

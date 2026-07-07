@@ -1,3 +1,8 @@
+"""
+Script di utilità per generare link di test (view e manage) per tutti i merchant.
+Utile per testare rapidamente l'interfaccia frontend senza passare dallo scanner.
+"""
+
 import uuid
 from sqlmodel import Session, create_engine, select
 from app.models.models import Merchant, TreeCard

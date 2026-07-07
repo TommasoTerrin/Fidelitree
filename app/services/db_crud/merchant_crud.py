@@ -1,3 +1,7 @@
+"""
+Operazioni CRUD per la gestione degli esercenti (Merchant) nel database.
+"""
+
 import logging
 from typing import List, Optional
 from fastapi import HTTPException

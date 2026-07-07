@@ -1,5 +1,6 @@
-# app/schemas/card.py
-# Pydantic schemas per validazione input/output delle TreeCard
+"""
+Schemi Pydantic per la validazione dell'input e dell'output relativi alle TreeCard.
+"""
 #
 # Usati dalle business calls (api.py) per garantire dati corretti
 
@@ -34,6 +35,7 @@ class CardResponse(BaseModel):
     @field_validator("trees_list", "warnings", mode="before")
     @classmethod
     def ensure_list(cls, v):
+        """Assicura che i campi di tipo lista siano formattati correttamente partendo da JSON o null."""
         if v is None:
             return []
         if isinstance(v, str):

@@ -1,3 +1,8 @@
+"""
+Script di utilità per il reset del database e la creazione di un merchant di test.
+DA USARE CON CAUTELA: Elimina tutti i dati esistenti.
+"""
+
 import logging
 import sys
 from app.core.utils.db_utils import reset_db_and_create_test_merchant

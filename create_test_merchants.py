@@ -1,3 +1,8 @@
+"""
+Script per la popolazione del database con merchant di test.
+Crea diversi tipi di merchant (solo alberi, cashback, misto) per facilitare lo sviluppo.
+"""
+
 import logging
 from sqlmodel import Session, create_engine
 from app.models.models import Merchant

@@ -1,5 +1,7 @@
-# app/routes/consumer/api.py
-# CONSUMER BUSINESS CALLS — Restituisce JSON
+"""
+Endpoint API per i consumatori.
+Gestisce la creazione di nuove carte fedeltà e le operazioni CRUD per le TreeCard.
+"""
 
 import logging
 import uuid

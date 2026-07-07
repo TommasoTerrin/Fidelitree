@@ -1,3 +1,7 @@
+"""
+Test unitari e di integrazione per i modelli SQLModel e le operazioni CRUD.
+"""
+
 from app.models.models import Merchant, TreeCard
 from pydantic import ValidationError
 

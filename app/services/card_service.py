@@ -1,3 +1,8 @@
+"""
+Servizi per la gestione della logica di business relativa alle TreeCard.
+Coordina le operazioni tra il database e i servizi esterni di riforestazione.
+"""
+
 import uuid
 import logging
 from typing import List, Optional

@@ -1,5 +1,7 @@
-# app/routes/consumer/views.py
-# CONSUMER FRONTEND — Restituisce pagine HTML (Jinja2)
+"""
+Route per il frontend lato consumatore.
+Gestisce il caricamento dei template Jinja2 per il download e la visualizzazione delle card.
+"""
 
 from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import HTMLResponse

@@ -1,4 +1,7 @@
 """
+Test per le view HTML dell'applicazione.
+Verifica il corretto rendering dei template Jinja2 per consumer e merchant.
+
 ###############################################################################
 # LISTA TEST ESEGUITI IN QUESTO FILE (tests/test_views.py)
 ###############################################################################
