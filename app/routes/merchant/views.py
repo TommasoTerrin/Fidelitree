@@ -5,9 +5,8 @@ Gestisce le pagine di login, lo scanner QR e la gestione manuale dei punti.
 #
 # Endpoint previsti:
 #   GET  /merchant/login      → Pagina di login
-#   GET  /merchant/dashboard   → Dashboard merchant (dopo auth)
 #   GET  /merchant/scanner     → Pagina QR scanner
-#   GET  /merchant/card/{id}/manage → Pagina gestione punti di una card
+#   GET  /merchant/card/{id}/manage → Pagina gestione cashback di una card
 
 from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import HTMLResponse
