@@ -11,7 +11,6 @@ from sqlmodel import SQLModel, create_engine
 from app.core.config import settings
 
 # Import dei router
-from mcp_server.server import mcp_app
 from app.routes.consumer.views import router as consumer_views_router
 from app.routes.consumer.api import router as consumer_api_router
 from app.routes.merchant.api import router as merchant_api_router
@@ -26,14 +25,10 @@ async def lifespan(app: FastAPI):
     Crea le tabelle del database all'avvio se non esistono.
     """
     SQLModel.metadata.create_all(engine)
-
-    # Gestisce il lifespan di MCP se presente
-    async with mcp_app.lifespan(app):
-        yield
+    yield
 
 # --- App ---
 app = FastAPI(title="Fidelitree MVP", lifespan=lifespan, redirect_slashes=False)
-app.mount("/mcp-app", mcp_app)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 

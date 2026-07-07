@@ -1,6 +1,5 @@
 # --- Core Web Server ---
 fastapi[all]          # Include pydantic, uvicorn, jinja2 e starlette
-fastmcp
 python-multipart      # Necessario per gestire i form di login e invio punti
 
 # --- Database ---
