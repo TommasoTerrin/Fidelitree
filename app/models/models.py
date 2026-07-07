@@ -21,7 +21,6 @@ class Merchant(SQLModel, table=True):
     humami_api_key: str #da criptare
     humami_enterprise_id: str #da criptare
     points_to_tree: int = Field(default= 10) #quanti punti per completare
-    id_telegram: str = Field(default="")
     type: str = Field(default="test") # 'test', 'free', 'pro'
     default_card_type: str = Field(default="just_trees") # 'just_trees', 'just_cb_points', 'cards_and_cb_points'
     cb_points_per_tree: int = Field(default=0)

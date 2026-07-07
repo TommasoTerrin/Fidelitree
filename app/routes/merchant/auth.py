@@ -23,9 +23,8 @@ from sqlmodel import select
 
 @router.post("/login")
 async def login(
-    phone_number: str = Form(...), 
-    password: str = Form(...), 
-    telegram_id: str = Form(None), # Campo opzionale per l'associazione
+    phone_number: str = Form(...),
+    password: str = Form(...),
     session: Session = Depends(get_session)
 ):
     """Esegue il login del merchant cercandolo per numero di telefono."""
@@ -43,18 +42,8 @@ async def login(
         print(f"Login error decryption: {e}")
         raise HTTPException(status_code=401, detail="Credenziali non valide")
     
-    # Se abbiamo un telegram_id, lo associamo al merchant
-    if telegram_id:
-        merchant.id_telegram = telegram_id
-        session.add(merchant)
-        session.commit()
-        session.refresh(merchant)
-        
     token = create_jwt_token({"sub": str(merchant.id)})
-    
-    # Se il login avviene da Telegram Mini App, restituiamo il token invece del redirect
-    # (Lo gestiremo nel frontend della Mini App)
-    
+
     # Redirect al frontend dello scanner con il cookie inserito
     response = RedirectResponse(url="/merchant/scanner", status_code=303)
     response.set_cookie("access_token", token, httponly=True, max_age=60*24*7*60)

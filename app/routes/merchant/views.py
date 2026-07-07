@@ -22,12 +22,11 @@ router = APIRouter(prefix="/merchant", tags=["Merchant Views"])
 templates = Jinja2Templates(directory="app/templates")
 
 @router.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request, telegram_id: str = None):
+async def login_page(request: Request):
     """Serve la pagina di login del merchant."""
     return templates.TemplateResponse(
-        request=request, 
-        name="merchant/login_merchant.html",
-        context={"telegram_id": telegram_id}
+        request=request,
+        name="merchant/login_merchant.html"
     )
 
 @router.get("/scanner", response_class=HTMLResponse)

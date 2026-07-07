@@ -22,7 +22,6 @@ def create_merchant(session: Session, merchant_data: dict) -> Merchant:
             humami_api_key=encrypt_key(merchant_data.get("humami_api_key")),
             humami_enterprise_id=encrypt_key(merchant_data.get("humami_enterprise_id")),
             points_to_tree=merchant_data.get("points_to_tree", 10),
-            id_telegram=merchant_data.get("id_telegram", ""),
             type=merchant_data.get("type", "test"),
             cb_points_per_tree=merchant_data.get("cb_points_per_tree", 0)
         )

@@ -1,11 +1,8 @@
 """
-Servizi di sicurezza, crittografia e gestione token JWT.
-Include utility per la validazione di Telegram e crittografia delle chiavi API.
+Servizi di sicurezza: crittografia Fernet e gestione token JWT.
 """
 
 from cryptography.fernet import Fernet
-import hmac
-import hashlib
 from jose import jwt
 from datetime import datetime, timedelta
 from app.core.config import settings
@@ -43,16 +40,3 @@ def decode_jwt_token(token: str) -> dict | None:
         return decoded_token
     except jwt.JWTError:
         return None
-
-def generate_telegram_hash(telegram_id: str) -> str:
-    """Genera un hash HMAC per validare l'ID Telegram."""
-    return hmac.new(
-        settings.TELEGRAM_BOT_TOKEN.encode(),
-        telegram_id.encode(),
-        hashlib.sha256
-    ).hexdigest()
-
-def verify_telegram_hash(telegram_id: str, hash_to_verify: str) -> bool:
-    """Verifica se l'hash HMAC per l'ID Telegram è valido."""
-    expected_hash = generate_telegram_hash(telegram_id)
-    return hmac.compare_digest(expected_hash, hash_to_verify)

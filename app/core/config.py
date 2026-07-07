@@ -47,8 +47,7 @@ class Settings(BaseSettings):
     MERCHANT_PASSWORD: str
     ADMIN_SECRET_KEY: str = "supersecret_fidelitree_2024"
     
-    # Telegram
-    TELEGRAM_BOT_TOKEN: str = "test_token"
+    # URL pubblico dell'app (usato per generare i link delle carte via WhatsApp)
     BASE_URL: str = "http://localhost:8000"
     
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

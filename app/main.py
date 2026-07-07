@@ -9,8 +9,6 @@ from fastapi.staticfiles import StaticFiles
 from sqlmodel import SQLModel, create_engine
 
 from app.core.config import settings
-import asyncio
-from app.services.telegram_bot import run_bot
 
 # Import dei router
 from mcp_server.server import mcp_app
@@ -19,28 +17,19 @@ from app.routes.consumer.api import router as consumer_api_router
 from app.routes.merchant.api import router as merchant_api_router
 from app.routes.merchant.auth import router as merchant_auth_router
 from app.routes.merchant.views import router as merchant_views_router
-from app.routes.merchant.telegram_auth import router as telegram_auth_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Gestisce il ciclo di vita dell'applicazione.
-    Esegue le migrazioni del database all'avvio e inizializza il bot Telegram.
+    Crea le tabelle del database all'avvio se non esistono.
     """
-    # Esegue migrazioni/creazione tabelle
     SQLModel.metadata.create_all(engine)
-    
-    # Avvia il bot Telegram in background
-    bot_task = asyncio.create_task(run_bot())
-    
+
     # Gestisce il lifespan di MCP se presente
     async with mcp_app.lifespan(app):
         yield
-    
-    # Shutdown (opzionale)
-    # Se vuoi cancellare il task del bot alla chiusura:
-    # bot_task.cancel()
 
 # --- App ---
 app = FastAPI(title="Fidelitree MVP", lifespan=lifespan, redirect_slashes=False)
@@ -64,7 +53,6 @@ app.include_router(consumer_api_router, prefix="/api") # POST /api/get-card
 app.include_router(merchant_api_router, prefix="/api") # POST /api/merchant/create
 app.include_router(merchant_auth_router)         # POST /merchant/login, GET /merchant/logout
 app.include_router(merchant_views_router)        # GET /merchant/... pagine HTML
-app.include_router(telegram_auth_router)         # GET /merchant/telegram/...
 
 
 @app.get("/health")
