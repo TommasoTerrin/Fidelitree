@@ -1,7 +1,7 @@
 # app/core/dependencies.py
 # Dipendenze condivise (session DB, autenticazione corrente, ecc.)
 from sqlmodel import Session
-from fastapi import Request, HTTPException, Depends
+from fastapi import Request, HTTPException, Depends, Header
 from app.core.config import settings
 from app.core.security import decode_jwt_token
 
@@ -29,5 +29,10 @@ def get_current_merchant(request: Request, session: Session = Depends(get_sessio
     merchant = session.get(Merchant, int(merchant_id))
     if not merchant:
         raise HTTPException(status_code=401, detail="Merchant non trovato")
-        
+
     return merchant
+
+def require_admin_key(x_admin_key: str = Header(default=None)):
+    """Protegge gli endpoint amministrativi: richiede l'header X-Admin-Key."""
+    if x_admin_key != settings.ADMIN_SECRET_KEY:
+        raise HTTPException(status_code=403, detail="Non autorizzato")
