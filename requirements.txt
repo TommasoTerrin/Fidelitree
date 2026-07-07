@@ -4,8 +4,7 @@ python-multipart      # Necessario per gestire i form di login e invio punti
 
 # --- Database ---
 sqlmodel              # L'unione tra SQLAlchemy e Pydantic
-psycopg2-binary       # Driver per PostgreSQL (necessario per GCP Cloud SQL)
-alembic               # Per gestire le migrazioni del database in produzione
+psycopg2-binary       # Driver PostgreSQL (Neon)
 
 # --- Security & Auth ---
 python-jose[cryptography]  # Per la creazione e validazione dei JWT (token di sessione)
