@@ -4,18 +4,17 @@ python-multipart      # Necessario per gestire i form di login e invio punti
 
 # --- Database ---
 sqlmodel              # L'unione tra SQLAlchemy e Pydantic
-psycopg2-binary       # Driver per PostgreSQL (necessario per GCP Cloud SQL)
-alembic               # Per gestire le migrazioni del database in produzione
+psycopg2-binary       # Driver PostgreSQL (Neon)
 
 # --- Security & Auth ---
-python-jose[cryptography]  # Per la creazione e validazione dei JWT (token di sessione) 
-#passlib[bcrypt]            # Per l'hashing sicuro delle password dei merchant
-cryptography               # Per criptare le API Key di Digital Humani nel DB
+python-jose[cryptography]  # Per la creazione e validazione dei JWT (token di sessione)
+cryptography               # Per cifrare le password dei merchant nel DB (Fernet)
 
-# --- Integration & Utility ---
-httpx                 # Client asincrono per chiamare le API di Digital Humani
-#qrcode[pil]           # Per generare i QR code delle Treecard lato server
-python-dotenv         # Per caricare le variabili d'ambiente dal file .env
+# --- Utility ---
+requests              # Per lo script di smoke test in produzione
+
+# --- Test ---
+pytest                # Test suite (gira su SQLite in-memory, non tocca Neon)
 
 # --- Production ---
 gunicorn              # Process manager per far girare FastAPI su Cloud Run

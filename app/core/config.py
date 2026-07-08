@@ -1,33 +1,35 @@
+"""
+Modulo di configurazione globale dell'applicazione.
+Carica le variabili d'ambiente da .env (in locale) o dall'ambiente (in produzione).
+Tutte le variabili senza default sono obbligatorie: l'app non parte se mancano.
+"""
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
+
 class Settings(BaseSettings):
     """Configurazione App Fidelitree"""
-    # Server App
+    # Server App (solo per l'avvio locale via local_main.py)
     APP_HOST: str = "127.0.0.1"
-    APP_PORT: int = 8000
-    
-    # Database (Default SQLite locale)
-    DATABASE_URL: str = "sqlite:///./fidelitree.db"
-    
-    # Digital Humani API URLs
-    HUMANI_SANDBOX_URL: str = "https://api.sandbox.digitalhumani.com/v1"
-    HUMANI_URL: str = "https://api.digitalhumani.com/v1"
-    
-    # Digital Humani Credentials (from .env)
-    HUMANI_SANDBOX_API_KEY: str
-    HUMANI_API_KEY: str
-    HUMANI_ENTERPRISE_ID: str
-    
+    APP_PORT: int = 8001
+
+    # Database — URL Postgres completo (Neon in produzione)
+    DATABASE_URL: str
+
     # Sicurezza & Auth
-    ENCRYPTION_KEY: str
-    JWT_SECRET_KEY: str
-    MERCHANT_PASSWORD: str
-    
+    ENCRYPTION_KEY: str      # chiave Fernet per cifrare le password dei merchant
+    JWT_SECRET_KEY: str      # firma dei token di sessione merchant
+    MERCHANT_PASSWORD: str   # password del merchant di test creato via seed
+    ADMIN_SECRET_KEY: str    # protegge gli endpoint amministrativi /api/merchant
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
 
 @lru_cache()
 def get_settings() -> Settings:
+    """Ritorna un'istanza singleton delle impostazioni."""
     return Settings()
+
 
 settings = get_settings()

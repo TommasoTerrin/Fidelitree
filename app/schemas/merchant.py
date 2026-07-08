@@ -1,19 +1,33 @@
-# app/schemas/merchant.py
-# Pydantic schemas per validazione input/output dei Merchant
+"""
+Schemi Pydantic per la gestione degli esercenti (Merchant).
+"""
 
 from pydantic import BaseModel
+from typing import Optional, Literal
 
 
 class MerchantCreateRequest(BaseModel):
-    """Dati per creare un nuovo merchant."""
+    """Richiesta di creazione di un nuovo merchant."""
     business_name: str
     phone_number: str
     password: str
-    humami_api_key: str
-    humami_enterprise_id: str
-    points_to_tree: int = 10
+    type: Literal['test', 'free', 'pro'] = 'test'
 
 
-class LoginRequest(BaseModel):
-    """Richiesta di login merchant."""
-    password: str
+class MerchantUpdateRequest(BaseModel):
+    """Richiesta di aggiornamento parziale dei dati di un merchant."""
+    business_name: Optional[str] = None
+    phone_number: Optional[str] = None
+    password: Optional[str] = None
+    type: Optional[Literal['test', 'free', 'pro']] = None
+
+
+class MerchantResponse(BaseModel):
+    """Schema di risposta per i dati di un merchant (esclude la password)."""
+    id: int
+    business_name: str
+    phone_number: str
+    type: str
+
+    class Config:
+        from_attributes = True

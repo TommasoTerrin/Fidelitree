@@ -15,18 +15,22 @@
                 <img src="/static/logo_light.jpg" alt="Logo" class="h-12 w-12">
             </div>
             <h1 class="text-2xl font-black text-slate-800 tracking-tight">Accesso Partner</h1>
-            <p class="text-slate-500 text-sm mt-2">Inserisci la tua password per gestire le Treecard</p>
+            <p class="text-slate-500 text-sm mt-2">Inserisci la tua password per gestire le carte fedeltà</p>
         </div>
 
         <form action="/merchant/login" method="POST" class="space-y-4">
-            <div class="relative">
+            <div class="space-y-4">
+                <input type="text" name="phone_number" required
+                    class="w-full p-4 bg-white border-2 border-slate-100 rounded-2xl text-center text-lg focus:border-green-500 focus:outline-none transition-all shadow-sm"
+                    placeholder="+39...">
+                
                 <input type="password" name="password" required
-                    class="w-full p-5 bg-white border-2 border-slate-100 rounded-2xl text-center text-2xl tracking-widest focus:border-green-500 focus:outline-none transition-all shadow-sm"
+                    class="w-full p-4 bg-white border-2 border-slate-100 rounded-2xl text-center text-2xl tracking-widest focus:border-green-500 focus:outline-none transition-all shadow-sm"
                     placeholder="••••••••">
             </div>
             <button type="submit"
                 class="w-full bg-slate-900 text-white font-bold py-5 rounded-2xl shadow-lg active:scale-95 transition-transform text-lg">
-                ENTRA NELLA DASHBOARD
+                ACCEDI
             </button>
         </form>
 
