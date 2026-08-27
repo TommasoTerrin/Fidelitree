@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     MERCHANT_PASSWORD: str   # password del merchant di test creato via seed
     ADMIN_SECRET_KEY: str    # protegge gli endpoint amministrativi /api/merchant
 
+    # Ecologi (piantumazione alberi) — la chiave API è per-merchant, nel DB
+    ECOLOGI_BASE_URL: str = "https://public.ecologi.com"
+    ECOLOGI_TEST_MODE: bool = True  # True: nessun addebito reale; mettere False SOLO in produzione
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

@@ -15,10 +15,15 @@ from sqlmodel import Session
 from app.core.dependencies import get_session, get_current_merchant, require_admin_key
 from app.models.models import Merchant
 from app.core.config import settings
-from app.services import card_service
+from app.services import card_service, tree_service, ecologi_service
 from app.services.db_crud import card_crud, merchant_crud
-from app.schemas.card import AddPointsRequest, CardResponse
-from app.schemas.merchant import MerchantCreateRequest, MerchantUpdateRequest, MerchantResponse
+from app.schemas.card import AddPointsRequest, AddTreePointsRequest, CardResponse, TreePointsResponse
+from app.schemas.merchant import (
+    MerchantCreateRequest,
+    MerchantUpdateRequest,
+    MerchantSettingsRequest,
+    MerchantResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +50,41 @@ async def read_merchants(
 ):
     """Restituisce la lista di tutti i merchant."""
     return merchant_crud.get_all_merchants(session, skip, limit)
+
+
+# ---------------------------------------------------------------------------
+# 1b. Profilo e impostazioni del merchant autenticato (cookie JWT).
+# NB: dichiarati prima di /{merchant_id} perché "me" non è un int.
+# ---------------------------------------------------------------------------
+
+@router.get("/me", response_model=MerchantResponse)
+async def read_own_profile(merchant: Merchant = Depends(get_current_merchant)):
+    """Restituisce il profilo del merchant autenticato (senza segreti)."""
+    return merchant
+
+
+@router.put("/me/settings", response_model=MerchantResponse)
+async def update_own_settings(
+    body: MerchantSettingsRequest,
+    session: Session = Depends(get_session),
+    merchant: Merchant = Depends(get_current_merchant),
+):
+    """
+    Aggiorna le impostazioni tree points del merchant autenticato.
+    Se viene fornita una nuova chiave Ecologi, viene validata prima di salvarla.
+    """
+    update_data = body.model_dump(exclude_unset=True, exclude_none=True)
+
+    new_key = update_data.get("ecologi_api_key")
+    if new_key:
+        try:
+            valid = await ecologi_service.validate_api_key(new_key)
+        except ecologi_service.EcologiError:
+            raise HTTPException(status_code=503, detail="Ecologi non raggiungibile, riprova tra poco")
+        if not valid:
+            raise HTTPException(status_code=400, detail="Chiave Ecologi non valida")
+
+    return merchant_crud.update_merchant(session, merchant, update_data)
 
 
 @router.get("/{merchant_id}", response_model=MerchantResponse, dependencies=[Depends(require_admin_key)])
@@ -115,6 +155,27 @@ async def add_point(
         card_id=card_id,
         cb_points=body.cb_points
     )
+
+
+@router.post("/add-tree-points/{card_id}", response_model=TreePointsResponse)
+async def add_tree_points(
+    card_id: uuid.UUID,
+    body: AddTreePointsRequest,
+    session: Session = Depends(get_session),
+    merchant: Merchant = Depends(get_current_merchant),
+):
+    """
+    Aggiunge o rimuove tree points sulla card del proprio cliente.
+    Al raggiungimento della soglia gli alberi vengono piantati via Ecologi
+    (rispettando il cap mensile del merchant).
+    """
+    card, planted_now, warning = await tree_service.update_tree_points(
+        session=session,
+        merchant=merchant,
+        card_id=card_id,
+        points=body.tree_points,
+    )
+    return TreePointsResponse(card=card, planted_now=planted_now, warning=warning)
 
 
 @router.delete("/card/{card_id}")

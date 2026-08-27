@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registrazione Partner - Fidelitree</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-slate-50 flex items-center justify-center min-h-screen p-6">
+    <div class="max-w-sm w-full space-y-6">
+        <div class="text-center">
+            <div class="inline-block p-4 bg-white rounded-3xl shadow-sm mb-4">
+                <img src="/static/logo_light.jpg" alt="Logo" class="h-12 w-12">
+            </div>
+            <h1 class="text-2xl font-black text-slate-800 tracking-tight">Diventa Partner 🌳</h1>
+            <p class="text-slate-500 text-sm mt-2">Carte fedeltà che piantano alberi veri per i tuoi clienti</p>
+        </div>
+
+        <form id="register-form" class="space-y-4">
+            <input type="text" id="business_name" required
+                class="w-full p-4 bg-white border-2 border-slate-100 rounded-2xl text-center focus:border-green-500 focus:outline-none transition-all shadow-sm"
+                placeholder="Nome attività (es. Bar Rossi)">
+
+            <input type="tel" id="phone_number" required
+                class="w-full p-4 bg-white border-2 border-slate-100 rounded-2xl text-center focus:border-green-500 focus:outline-none transition-all shadow-sm"
+                placeholder="+39...">
+
+            <input type="password" id="password" required minlength="8"
+                class="w-full p-4 bg-white border-2 border-slate-100 rounded-2xl text-center tracking-widest focus:border-green-500 focus:outline-none transition-all shadow-sm"
+                placeholder="Password (min 8 caratteri)">
+
+            <div class="bg-green-50 border border-green-200 rounded-2xl p-4 space-y-3">
+                <p class="text-xs font-bold text-green-700 uppercase tracking-wider">Chiave API Ecologi</p>
+                <input type="text" id="ecologi_api_key" required
+                    class="w-full p-3 bg-white border-2 border-green-100 rounded-xl text-center text-sm focus:border-green-500 focus:outline-none transition-all"
+                    placeholder="Incolla qui la tua chiave">
+                <p class="text-xs text-green-700">
+                    Gli alberi vengono piantati sul <b>tuo</b> account Ecologi (~0,80 € l'uno).
+                    Non hai un account? <a href="https://ecologi.com/pay-as-you-go" target="_blank"
+                        class="underline font-bold">Crealo in 5 minuti</a>, poi copia la chiave dalla sezione
+                    "Impact API" della dashboard.
+                </p>
+            </div>
+
+            <div class="bg-white border-2 border-slate-100 rounded-2xl p-4 space-y-3 text-left">
+                <p class="text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Come vuoi premiare i clienti?</p>
+                <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="radio" name="mode" value="trees_cashback" checked class="mt-1 accent-green-600">
+                    <span class="text-sm text-slate-700"><b>Tree points + Cashback</b><br>
+                        <span class="text-slate-400 text-xs">Punti albero e credito in euro sulla stessa carta</span></span>
+                </label>
+                <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="radio" name="mode" value="trees" class="mt-1 accent-green-600">
+                    <span class="text-sm text-slate-700"><b>Solo Tree points</b><br>
+                        <span class="text-slate-400 text-xs">Niente cashback: ogni punto avvicina un albero</span></span>
+                </label>
+            </div>
+
+            <button type="submit" id="btn-submit"
+                class="w-full bg-green-600 text-white font-bold py-5 rounded-2xl shadow-lg active:scale-95 transition-transform text-lg">
+                REGISTRATI
+            </button>
+
+            <div id="error-box" class="hidden bg-red-50 border border-red-200 text-red-600 text-sm font-bold p-4 rounded-2xl text-center"></div>
+        </form>
+
+        <p class="text-center text-sm text-slate-400">
+            Hai già un account? <a href="/merchant/login" class="text-green-600 font-bold underline">Accedi</a>
+        </p>
+    </div>
+
+    <script>
+        const form = document.getElementById('register-form');
+        const btn = document.getElementById('btn-submit');
+        const errorBox = document.getElementById('error-box');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            errorBox.classList.add('hidden');
+            btn.disabled = true;
+            btn.textContent = 'Verifica della chiave Ecologi...';
+
+            const payload = {
+                business_name: document.getElementById('business_name').value.trim(),
+                phone_number: document.getElementById('phone_number').value.trim(),
+                password: document.getElementById('password').value,
+                ecologi_api_key: document.getElementById('ecologi_api_key').value.trim(),
+                mode: document.querySelector('input[name="mode"]:checked').value,
+            };
+
+            try {
+                const res = await fetch('/merchant/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    const detail = typeof err.detail === 'string'
+                        ? err.detail
+                        : 'Dati non validi, ricontrolla i campi';
+                    throw new Error(detail);
+                }
+
+                // Registrazione ok: il cookie di sessione è già impostato
+                window.location.href = '/merchant/scanner';
+            } catch (err) {
+                errorBox.textContent = err.message;
+                errorBox.classList.remove('hidden');
+                btn.disabled = false;
+                btn.textContent = 'REGISTRATI';
+            }
+        });
+    </script>
+</body>
+
+</html>

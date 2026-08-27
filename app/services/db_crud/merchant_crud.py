@@ -14,8 +14,9 @@ logger = logging.getLogger(__name__)
 
 
 def create_merchant(session: Session, merchant_data: dict) -> Merchant:
-    """Crea un nuovo merchant. La password viene cifrata prima del salvataggio."""
+    """Crea un nuovo merchant. Password e chiave Ecologi vengono cifrate prima del salvataggio."""
     try:
+        ecologi_api_key = merchant_data.get("ecologi_api_key")
         # model_validate è necessario: con table=True i validatori
         # non girano sul costruttore diretto
         new_merchant = Merchant.model_validate({
@@ -23,6 +24,10 @@ def create_merchant(session: Session, merchant_data: dict) -> Merchant:
             "phone_number": merchant_data.get("phone_number"),
             "password": encrypt_key(merchant_data.get("password")),
             "type": merchant_data.get("type", "test"),
+            "mode": merchant_data.get("mode", "trees_cashback"),
+            "ecologi_api_key": encrypt_key(ecologi_api_key) if ecologi_api_key else None,
+            "tree_threshold": merchant_data.get("tree_threshold", 10),
+            "monthly_tree_cap": merchant_data.get("monthly_tree_cap", 50),
         })
         session.add(new_merchant)
         session.commit()
@@ -40,6 +45,12 @@ def get_merchant_by_id(session: Session, merchant_id: int) -> Optional[Merchant]
     return session.get(Merchant, merchant_id)
 
 
+def get_merchant_by_phone(session: Session, phone_number: str) -> Optional[Merchant]:
+    """Recupera un merchant per numero di telefono (unico)."""
+    statement = select(Merchant).where(Merchant.phone_number == phone_number)
+    return session.exec(statement).first()
+
+
 def get_all_merchants(session: Session, skip: int = 0, limit: int = 100) -> List[Merchant]:
     """Restituisce la lista di tutti i merchant."""
     statement = select(Merchant).offset(skip).limit(limit)
@@ -50,7 +61,7 @@ def update_merchant(session: Session, merchant: Merchant, update_data: dict) -> 
     """Aggiorna i dati di un merchant esistente."""
     try:
         for key, value in update_data.items():
-            if key == "password" and value:
+            if key in ("password", "ecologi_api_key") and value:
                 setattr(merchant, key, encrypt_key(value))
             else:
                 setattr(merchant, key, value)

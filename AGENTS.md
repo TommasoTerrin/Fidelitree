@@ -5,13 +5,14 @@
 
 ## Cos'è Fidelitree
 
-Micro-SaaS di **carte fedeltà digitali con cashback** per commercianti.
+Micro-SaaS di **carte fedeltà digitali che piantano alberi veri** (tree points via Ecologi), con cashback opzionale, per commercianti.
 
-Flusso: il cliente ottiene la carta da `/download_card` → la salva via WhatsApp → apre il link della carta (QR code univoco) → il merchant fa login, scannerizza il QR e aggiunge/rimuove credito cashback.
+Flusso: il cliente ottiene la carta da `/download_card` → la salva via WhatsApp → apre il link della carta (QR code univoco) → il merchant fa login, scannerizza il QR e aggiunge/rimuove tree points (e cashback, se in modalità `trees_cashback`). A soglia raggiunta, un albero viene piantato sull'account Ecologi del merchant.
 
 - Il **cliente finale NON si autentica**: l'UUID della carta funge da capability URL.
-- Il **merchant** si autentica con telefono+password (JWT in cookie httpOnly).
+- Il **merchant** si autentica con telefono+password (JWT in cookie httpOnly) e si registra self-service da `/merchant/register`: la **chiave API Ecologi è obbligatoria** e validata (fa da gate anti-spam, niente verifica telefonica).
 - Gli endpoint amministrativi (`/api/merchant` CRUD) richiedono l'header `X-Admin-Key`.
+- **Tree points**: ogni merchant configura soglia (punti→albero) e **cap mensile** (spend cap di sicurezza: gli alberi si pagano sulla SUA carta Ecologi, ~0,80 €/albero). `ECOLOGI_TEST_MODE=true` (default) usa il flag test di Ecologi: nessun addebito.
 
 ## Stack
 
@@ -53,10 +54,12 @@ app/
     security.py         # Fernet (password) + JWT (sessione merchant)
     dependencies.py     # get_session, get_current_merchant, require_admin_key
     utils/whatsapp_utils.py  # link wa.me pre-compilato
-  models/models.py      # Merchant, Card (SQLModel)
+  models/models.py      # Merchant, Card, TreePlanting (SQLModel)
   schemas/              # Pydantic request/response
   services/
     card_service.py     # business logic (creazione carta, update cashback)
+    tree_service.py     # tree points: soglia→albero, cap mensile, log TreePlanting
+    ecologi_service.py  # client Impact API Ecologi (purchase_trees, validate_api_key)
     db_crud/            # accesso DB puro (merchant_crud, card_crud)
   routes/
     consumer/           # api + pagine pubbliche (download, vista carta)
@@ -81,7 +84,8 @@ tests/                  # pytest + conftest (fixture SQLite in-memory)
 
 - **Password merchant cifrate con Fernet** (reversibili), non hashate: scelta consapevole finché non esiste un flusso di recupero password. Nel roadmap.
 - **Niente Alembic**: lo schema è gestito da `create_all()` all'avvio; il DB si resetta con gli script. Alembic tornerà quando i dati di produzione andranno preservati.
-- **Tree Points rimossi dalla release 1**: la logica storica di piantumazione alberi (Digital Humani/Ecologi) vive nel branch di archivio `feature/trees` e andrà **re-implementata** sopra il nuovo `develop`, non mergiata.
+- **Tree Points: solo Ecologi, account per-merchant** (decisione 2026-07-09): ogni merchant usa la PROPRIA chiave API Ecologi (salvata cifrata con Fernet) e paga i propri alberi — Fidelitree non tocca soldi. DigitalHumani scartato (USD, fatture da ONG extra-UE, progetto in semi-manutenzione). Il vecchio prototipo in `feature/trees` è archivio, non mergiare.
+- **Gli errori Ecologi non bloccano mai lo scan**: se la piantumazione fallisce (rete, chiave, cap), i punti restano sulla carta e si ritenta all'aggiornamento successivo. Non trasformarlo in errore HTTP.
 
 ## Approfondimenti
 

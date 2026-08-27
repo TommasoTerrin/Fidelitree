@@ -5,8 +5,10 @@ Gestisce le pagine di login, lo scanner QR e la gestione manuale dei punti.
 #
 # Endpoint previsti:
 #   GET  /merchant/login      → Pagina di login
+#   GET  /merchant/register   → Pagina di registrazione self-service
+#   GET  /merchant/settings   → Pagina impostazioni tree points
 #   GET  /merchant/scanner     → Pagina QR scanner
-#   GET  /merchant/card/{id}/manage → Pagina gestione cashback di una card
+#   GET  /merchant/card/{id}/manage → Pagina gestione punti di una card
 
 from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import HTMLResponse
@@ -26,6 +28,23 @@ async def login_page(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="merchant/login_merchant.html"
+    )
+
+@router.get("/register", response_class=HTMLResponse)
+async def register_page(request: Request):
+    """Serve la pagina di registrazione self-service del merchant."""
+    return templates.TemplateResponse(
+        request=request,
+        name="merchant/register_merchant.html"
+    )
+
+@router.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request, merchant: Merchant = Depends(get_current_merchant)):
+    """Serve la pagina impostazioni tree points del merchant."""
+    return templates.TemplateResponse(
+        request=request,
+        name="merchant/settings.html",
+        context={"merchant": merchant}
     )
 
 @router.get("/scanner", response_class=HTMLResponse)

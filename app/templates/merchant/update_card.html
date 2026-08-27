@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestione Cashback - Fidelitree</title>
+    <title>Gestione Carta - Fidelitree</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
@@ -22,11 +22,40 @@
             <div class="flex justify-between items-center">
                 <div>
                     <h3 class="font-black text-xl text-slate-800">Cliente #{{ card.id.hex[:6] }}</h3>
+                    <p class="text-sm text-green-600 font-bold">🌳 {{ card.tree_points }}/{{ merchant.tree_threshold }} tree points · {{ card.trees_planted }} alberi piantati</p>
+                    {% if merchant.mode == 'trees_cashback' %}
                     <p class="text-sm text-blue-600 font-bold">€ {{ "%.2f"|format(card.cashback_point) }} Cashback</p>
+                    {% endif %}
                 </div>
             </div>
         </div>
 
+        <!-- ===================== SEZIONE TREE POINTS ===================== -->
+
+        <div class="bg-white p-8 rounded-[2.5rem] shadow-xl text-center border-2 border-green-500">
+            <p class="text-sm font-bold text-green-600 mb-4 uppercase">Tree Points 🌳</p>
+
+            <div class="flex items-center justify-center gap-2 mb-6">
+                <input type="text" id="tp-input" value="" placeholder="0"
+                    inputmode="numeric" pattern="[0-9]*"
+                    class="w-40 text-5xl font-black text-center text-slate-900 bg-transparent focus:outline-none border-b-2 border-slate-200 focus:border-green-500 transition-colors"
+                    oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+            </div>
+
+            <button onclick="prepareTreeOperation(1)"
+                class="w-full bg-green-600 text-white font-black py-4 rounded-2xl text-lg shadow-lg active:scale-95 transition-all">
+                AGGIUNGI TREE POINTS
+            </button>
+
+            <button onclick="prepareTreeOperation(-1)"
+                class="w-full bg-red-50 text-red-600 font-bold py-3 rounded-2xl text-base active:scale-95 transition-transform border border-red-100 mt-3">
+                TOGLI TREE POINTS
+            </button>
+
+            <p class="mt-4 text-xs text-slate-400">Ogni {{ merchant.tree_threshold }} punti viene piantato 1 albero vero</p>
+        </div>
+
+        {% if merchant.mode == 'trees_cashback' %}
         <!-- ===================== SEZIONE CASHBACK ===================== -->
 
         <div class="bg-white p-8 rounded-[2.5rem] shadow-xl text-center border-2 border-blue-500">
@@ -55,6 +84,7 @@
                 USA INTERO CASHBACK
             </button>
         </div>
+        {% endif %}
 
     </div>
 
@@ -66,7 +96,7 @@
             <p id="modal-text" class="text-slate-500 mb-8">Stai per procedere con l'aggiornamento.</p>
 
             <div class="space-y-3">
-                <button id="btn-confirm" onclick="submitCashback()"
+                <button id="btn-confirm" onclick="submitPending()"
                     class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-md">SÌ,
                     CONFERMO</button>
                 <button onclick="hideModal()"
@@ -89,10 +119,58 @@
         const toast = document.getElementById('toast');
         const cardId = "{{ card.id }}";
 
-        // Saldo corrente per validazione lato client
+        // Saldi correnti per validazione lato client
         const currentCashback = {{ card.cashback_point }};
+        const currentTreePoints = {{ card.tree_points }};
 
-        let pendingPayload = { cb_points: 0.0 };
+        // Operazione in attesa di conferma: {url, payload}
+        let pendingAction = null;
+
+        // ===================== TREE POINTS =====================
+
+        function getTreePointsValue() {
+            const input = document.getElementById('tp-input');
+            return parseInt(input.value, 10) || 0;
+        }
+
+        // sign = 1 per aggiungere, -1 per togliere
+        function prepareTreeOperation(sign) {
+            const tpVal = getTreePointsValue();
+            if (tpVal === 0) {
+                showToast('Inserisci un numero di punti per procedere', true);
+                return;
+            }
+
+            if (sign < 0 && tpVal > currentTreePoints) {
+                showToast('Non puoi togliere più punti del saldo attuale', true);
+                return;
+            }
+
+            pendingAction = {
+                url: `/api/merchant/add-tree-points/${cardId}`,
+                payload: { tree_points: tpVal * sign },
+            };
+            resetModalStyle();
+
+            if (sign < 0) {
+                modalTitle.innerText = '⚠️ STAI TOGLIENDO TREE POINTS';
+                modalTitle.className = 'text-xl font-black text-red-600 mb-2';
+                modalText.innerHTML =
+                    `Stai per rimuovere <span class="text-2xl font-black text-red-600">${tpVal}</span> tree points.<br><br>` +
+                    `Il saldo passerà da <b>${currentTreePoints}</b> a <b>${currentTreePoints - tpVal}</b>.`;
+                modalBox.className = 'bg-white w-full max-w-xs rounded-[2.5rem] p-8 text-center shadow-2xl transition-all border-4 border-red-500';
+                btnConfirm.textContent = 'SÌ, TOGLI I PUNTI';
+                btnConfirm.className = 'w-full bg-red-600 text-white font-bold py-4 rounded-xl shadow-md';
+            } else {
+                modalTitle.innerText = "Confermi l'aggiunta?";
+                modalText.innerHTML = `Stai per aggiungere <span class="text-2xl font-black text-green-600">${tpVal}</span> tree points alla carta. 🌳`;
+                btnConfirm.textContent = 'SÌ, CONFERMO';
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        // ===================== CASHBACK =====================
 
         function sanitizeCashbackInput(el) {
             // Permette solo numeri, virgola e punto
@@ -113,14 +191,15 @@
                 return;
             }
 
-            const amount = cbVal * sign;
-
             if (sign < 0 && cbVal > currentCashback) {
                 showToast('Non puoi togliere più del saldo attuale', true);
                 return;
             }
 
-            pendingPayload = { cb_points: amount };
+            pendingAction = {
+                url: `/api/merchant/add-point/${cardId}`,
+                payload: { cb_points: cbVal * sign },
+            };
             resetModalStyle();
 
             if (sign < 0) {
@@ -148,7 +227,10 @@
                 return;
             }
 
-            pendingPayload = { cb_points: -currentCashback };
+            pendingAction = {
+                url: `/api/merchant/add-point/${cardId}`,
+                payload: { cb_points: -currentCashback },
+            };
 
             resetModalStyle();
             modalTitle.innerText = '⚠️ FAI ATTENZIONE';
@@ -173,22 +255,23 @@
             modal.classList.add('hidden');
         }
 
-        function showToast(message, isError = false) {
+        function showToast(message, isError = false, durationMs = 3000) {
             toast.textContent = message;
             toast.classList.remove('hidden');
             toast.className = `fixed bottom-6 left-1/2 -translate-x-1/2 px-6 py-3 rounded-2xl text-white font-bold shadow-xl z-50 transition-all ${isError ? 'bg-red-500' : 'bg-green-600'}`;
-            setTimeout(() => { toast.classList.add('hidden'); }, 3000);
+            setTimeout(() => { toast.classList.add('hidden'); }, durationMs);
         }
 
-        async function submitCashback() {
+        async function submitPending() {
+            if (!pendingAction) return;
             btnConfirm.disabled = true;
             btnConfirm.textContent = 'Invio in corso...';
 
             try {
-                const res = await fetch(`/api/merchant/add-point/${cardId}`, {
+                const res = await fetch(pendingAction.url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(pendingPayload)
+                    body: JSON.stringify(pendingAction.payload)
                 });
 
                 if (!res.ok) {
@@ -196,9 +279,22 @@
                     throw new Error(err.detail || 'Errore server');
                 }
 
-                showToast('Card aggiornata! ✅');
+                const data = await res.json();
                 hideModal();
-                setTimeout(() => { window.location.reload(); }, 800);
+
+                // Feedback piantumazione (solo per l'endpoint tree points)
+                let reloadDelay = 800;
+                if (data.planted_now && data.planted_now > 0) {
+                    showToast(`🌳 Piantat${data.planted_now === 1 ? 'o 1 albero' : 'i ' + data.planted_now + ' alberi'}! Grazie!`, false, 2500);
+                    reloadDelay = 2500;
+                } else if (data.warning) {
+                    showToast(data.warning, true, 4000);
+                    reloadDelay = 4000;
+                } else {
+                    showToast('Card aggiornata! ✅');
+                }
+
+                setTimeout(() => { window.location.reload(); }, reloadDelay);
 
             } catch (e) {
                 showToast(e.message, true);

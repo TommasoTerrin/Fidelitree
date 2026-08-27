@@ -12,6 +12,7 @@ cryptography               # Per cifrare le password dei merchant nel DB (Fernet
 
 # --- Utility ---
 requests              # Per lo script di smoke test in produzione
+httpx                 # Client async per l'API Ecologi (piantumazione alberi)
 
 # --- Test ---
 pytest                # Test suite (gira su SQLite in-memory, non tocca Neon)

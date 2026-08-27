@@ -6,8 +6,8 @@ import uvicorn
 from app.core.config import settings
 
 if __name__ == "__main__":
-    print(f"🚀 Avvio Fidelitree in locale su http://{settings.APP_HOST}:{settings.APP_PORT}")
-    print("💡 Il reload automatico è ATTIVO. Salva i file per aggiornare l'app.")
+    print(f">> Avvio Fidelitree in locale su http://{settings.APP_HOST}:{settings.APP_PORT}")
+    print(">> Il reload automatico è ATTIVO. Salva i file per aggiornare l'app.")
     
     uvicorn.run(
         "app.main:app",  # Carica l'oggetto 'app' dal modulo 'app.main'

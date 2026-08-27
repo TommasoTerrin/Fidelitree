@@ -24,6 +24,9 @@ def update_cashback(
     La carta deve appartenere al merchant autenticato e il saldo
     non può mai scendere sotto zero.
     """
+    if merchant.mode != "trees_cashback":
+        raise HTTPException(status_code=400, detail="Questo merchant usa solo tree points, non il cashback")
+
     card = card_crud.get_card_by_id(session, card_id)
     if not card or card.merchant_id != merchant.id:
         raise HTTPException(status_code=404, detail="Card non valida per questo merchant")
