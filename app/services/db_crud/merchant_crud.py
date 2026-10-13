@@ -8,27 +8,25 @@ from fastapi import HTTPException
 from sqlmodel import Session, select
 
 from app.models.models import Merchant
-from app.core.security import encrypt_key
 
 logger = logging.getLogger(__name__)
 
+# Campi impostabili alla creazione (il chiamante decide cosa passare: l'API admin non espone auth_user_id)
+_CREATE_FIELDS = (
+    "business_name", "email", "auth_user_id", "contact_phone", "type", "is_approved",
+    "conversion_enabled", "conversion_threshold", "conversion_value_cents",
+    "bronze_threshold", "silver_threshold", "gold_threshold",
+)
+
 
 def create_merchant(session: Session, merchant_data: dict) -> Merchant:
-    """Crea un nuovo merchant. Password e chiave Ecologi vengono cifrate prima del salvataggio."""
+    """Crea un nuovo merchant; i campi non indicati prendono i default del modello."""
     try:
-        ecologi_api_key = merchant_data.get("ecologi_api_key")
         # model_validate è necessario: con table=True i validatori
         # non girano sul costruttore diretto
-        new_merchant = Merchant.model_validate({
-            "business_name": merchant_data.get("business_name"),
-            "phone_number": merchant_data.get("phone_number"),
-            "password": encrypt_key(merchant_data.get("password")),
-            "type": merchant_data.get("type", "test"),
-            "mode": merchant_data.get("mode", "trees_cashback"),
-            "ecologi_api_key": encrypt_key(ecologi_api_key) if ecologi_api_key else None,
-            "tree_threshold": merchant_data.get("tree_threshold", 10),
-            "monthly_tree_cap": merchant_data.get("monthly_tree_cap", 50),
-        })
+        new_merchant = Merchant.model_validate(
+            {k: merchant_data[k] for k in _CREATE_FIELDS if k in merchant_data}
+        )
         session.add(new_merchant)
         session.commit()
         session.refresh(new_merchant)
@@ -45,9 +43,15 @@ def get_merchant_by_id(session: Session, merchant_id: int) -> Optional[Merchant]
     return session.get(Merchant, merchant_id)
 
 
-def get_merchant_by_phone(session: Session, phone_number: str) -> Optional[Merchant]:
-    """Recupera un merchant per numero di telefono (unico)."""
-    statement = select(Merchant).where(Merchant.phone_number == phone_number)
+def get_merchant_by_auth_user_id(session: Session, auth_user_id: str) -> Optional[Merchant]:
+    """Recupera il merchant collegato a un'identità del provider di autenticazione."""
+    statement = select(Merchant).where(Merchant.auth_user_id == auth_user_id)
+    return session.exec(statement).first()
+
+
+def get_merchant_by_email(session: Session, email: str) -> Optional[Merchant]:
+    """Recupera un merchant per email (unica, confronto in minuscolo)."""
+    statement = select(Merchant).where(Merchant.email == email.strip().lower())
     return session.exec(statement).first()
 
 
@@ -58,16 +62,15 @@ def get_all_merchants(session: Session, skip: int = 0, limit: int = 100) -> List
 
 
 def update_merchant(session: Session, merchant: Merchant, update_data: dict) -> Merchant:
-    """Aggiorna i dati di un merchant esistente."""
+    """Aggiorna i dati di un merchant esistente (rivalidando il risultato)."""
     try:
-        for key, value in update_data.items():
-            if key in ("password", "ecologi_api_key") and value:
-                setattr(merchant, key, encrypt_key(value))
-            else:
-                setattr(merchant, key, value)
-
-        # Rivalida i dati aggiornati (i validatori non girano su setattr)
-        Merchant.model_validate(merchant.model_dump())
+        # Valida su una copia: se fallisce il merchant in sessione resta intatto
+        # (i validatori non girano su setattr)
+        # getattr (non model_dump): ricarica l'istanza se la sessione l'ha scaduta dopo un commit
+        current = {name: getattr(merchant, name) for name in Merchant.model_fields}
+        validated = Merchant.model_validate({**current, **update_data})
+        for key in update_data:
+            setattr(merchant, key, getattr(validated, key))
 
         session.add(merchant)
         session.commit()
@@ -81,7 +84,7 @@ def update_merchant(session: Session, merchant: Merchant, update_data: dict) -> 
 
 
 def delete_merchant(session: Session, merchant_id: int):
-    """Elimina un merchant (le sue carte vengono eliminate in cascata)."""
+    """Elimina un merchant (carte, movimenti, pool e piantumazioni vanno in cascata)."""
     merchant = session.get(Merchant, merchant_id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant non trovato")

@@ -1,21 +1,23 @@
 # --- Core Web Server ---
-fastapi[all]          # Include pydantic, uvicorn, jinja2 e starlette
+fastapi               # Framework web (include starlette e pydantic)
+uvicorn               # Server ASGI (avvio locale e Docker)
+jinja2                # Template HTML (Jinja2Templates)
 python-multipart      # Necessario per gestire i form di login e invio punti
+pydantic-settings     # Configurazione da .env
 
 # --- Database ---
 sqlmodel              # L'unione tra SQLAlchemy e Pydantic
-psycopg2-binary       # Driver PostgreSQL (Neon)
+psycopg2-binary       # Driver PostgreSQL (Neon/Supabase)
 
 # --- Security & Auth ---
-python-jose[cryptography]  # Per la creazione e validazione dei JWT (token di sessione)
-cryptography               # Per cifrare le password dei merchant nel DB (Fernet)
+python-jose           # Per la creazione e validazione dei JWT (HS256, backend Python puro)
 
 # --- Utility ---
 requests              # Per lo script di smoke test in produzione
-httpx                 # Client async per l'API Ecologi (piantumazione alberi)
+httpx                 # Client async per l'API Ecologi + TestClient dei test
 
 # --- Test ---
-pytest                # Test suite (gira su SQLite in-memory, non tocca Neon)
+pytest                # Test suite (gira su SQLite in-memory, non tocca il DB reale)
 
 # --- Production ---
-gunicorn              # Process manager per far girare FastAPI su Cloud Run
+gunicorn              # Process manager per far girare FastAPI in produzione

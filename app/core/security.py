@@ -1,31 +1,23 @@
 """
-Servizi di sicurezza: crittografia Fernet e gestione token JWT.
+Servizi di sicurezza: gestione dei token JWT di sessione.
 """
 
-from cryptography.fernet import Fernet
-from jose import jwt
-from datetime import datetime, timedelta
-from app.core.config import settings
+from datetime import timedelta
 
-cipher_suite = Fernet(settings.ENCRYPTION_KEY.encode() if isinstance(settings.ENCRYPTION_KEY, str) else settings.ENCRYPTION_KEY)
+from jose import jwt
+
+from app.core.clock import utc_now
+from app.core.config import settings
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7 # 7 giorni
-
-def encrypt_key(api_key: str) -> str:
-    """Cripta una stringa (es. API Key) utilizzando Fernet."""
-    return cipher_suite.encrypt(api_key.encode()).decode()
-
-def decrypt_key(encrypted_key: str) -> str:
-    """Decripta una stringa precedentemente criptata con Fernet."""
-    return cipher_suite.decrypt(encrypted_key.encode()).decode()
 
 def create_jwt_token(data: dict) -> str:
     """
     Crea un token JWT con una data di scadenza definita.
     """
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = utc_now() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt

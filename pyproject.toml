@@ -1,0 +1,8 @@
+# Le dipendenze restano in requirements.txt (usato dal Dockerfile).
+# Questo file contiene solo metadati e la versione dell'app (fonte unica).
+
+[project]
+name = "fidelitree"
+version = "0.2.0"
+description = "Carte fedeltà digitali che piantano alberi veri per i piccoli negozi"
+requires-python = ">=3.12"

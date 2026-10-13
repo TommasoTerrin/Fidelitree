@@ -4,25 +4,31 @@
 
 Login merchant, carte fedeltà con QR, aggiunta/rimozione cashback, WhatsApp share.
 
-## Release 2 — Tree Points 🌳 (in corso su `feature/tree-points`)
+## v0.2.0 — Pool del negozio, auth, wallet cliente (branch `rinascimento`, pronta al merge)
 
-Re-implementazione pulita (decisioni advisory 2026-07-09):
-- **Solo Ecologi** (€0,80/albero, EUR, test mode nativo); DigitalHumani scartato.
-- **Account Ecologi per-merchant**: il merchant paga i propri alberi, chiave cifrata nel DB.
-- **Alberi obbligatori**: modalità merchant `trees` o `trees_cashback` (niente solo-cashback).
-- **Registrazione self-service** `/merchant/register` gated dalla chiave Ecologi valida.
-- Soglia punti→albero e **cap mensile** (spend cap) configurabili da `/merchant/settings`.
-- `ECOLOGI_TEST_MODE` env: default true, false solo in produzione.
-
-Fase 2 (dopo il lancio): pagina pubblica contatore alberi + guida onboarding Ecologi.
-
-### Test con chiave Ecologi reale (fine release 2)
-Completare i 3 test API rimasti: registrazione con validazione chiave,
-cambio chiave da settings, piantumazione reale al superamento soglia.
-Serve account pay-as-you-go su Ecologi (gratuito), tenere `ECOLOGI_TEST_MODE=true`.
-Vedi [current.md](.agents/planner/current.md) "⏭️ PROSSIMO".
+Assorbe la vecchia "Release 2 — Tree Points per-merchant", **mai andata in produzione** (alberi per carta,
+chiave Ecologi del merchant, `mode`): sostituita da un **pool mensile per negozio pagato dal founder** (chiave
+Ecologi unica di piattaforma), iscrizione cliente con OTP + wallet PWA, auth merchant per email dietro
+un'interfaccia pronta per Supabase. Regole e decisioni: AGENTS.md; dettaglio dei ticket: `.agents/tickets/v0.2.0/`.
 
 ## Backlog (in ordine di priorità indicativa)
+
+### Collegare Supabase (prossimo passo dopo v0.2.0)
+Progetto Supabase, migrazione del DB da Neon, `SupabaseAuthProvider` reale al posto del provider `dev`
+(email+password per i merchant, OTP email per i clienti, recupero password), env `AUTH_PROVIDER=supabase`.
+Supabase Auth sostituisce anche le voci "Sicurezza password" e "Integrazione Clerk" (superate).
+Da risolvere in quell'occasione: **collegare un merchant creato dall'admin** (senza `auth_user_id`) al suo
+account al primo accesso, solo con email verificata (oggi la sua email non si può registrare: 409).
+
+### Endpoint admin/cron per `close_period`
+Quando i negozi superano i 10-20, riusando lo stesso core di `scripts.close_period` (anteprima, idempotenza, cap).
+
+### Ripartizione automatica del cap globale
+Oggi, se la chiusura supera `ECOLOGI_GLOBAL_MONTHLY_CAP`, lo script si blocca e chiede al founder.
+In futuro: ripartire in modo proporzionale/equo tra i negozi.
+
+### Icona PWA vera
+L'icona (`app/static/icon.svg`, `apple-touch-icon.png`) è provvisoria, generata a codice: sostituirla col logo.
 
 ### Fallback scanner: codice numerico
 Se il QR code fallisce (camera assente, problemi HTTPS, mancanza permessi),
@@ -35,8 +41,6 @@ Oggi l'app ritorna 401 a chi non è loggato. Migliorare UX: redirect a
 se nuovo. Vale per `/merchant/settings`, `/merchant/scanner`, `/merchant/card/.../manage`.
 
 ### Contatore alberi pubblico
-
-### Contatore alberi pubblico
 Pagina che mostra il totale alberi piantati (da `TreePlanting`, esclusi i test)
 con link ai profili Ecologi pubblici dei merchant. Chiave per il build-in-public.
 
@@ -45,16 +49,8 @@ Pagina post-login con elenco carte, saldi e statistiche di base.
 Oggi lo scanner è l'unica destinazione dopo il login (il vecchio bottone
 "dashboard" puntava a una pagina inesistente ed è stato rimosso).
 
-### Sicurezza password
-Passare da Fernet (reversibile) a hashing bcrypt richiede prima un flusso di
-recupero/reset password (decisione presa il 2026-07-07: Fernet finché non
-esiste il recovery).
-
-### Integrazione Clerk (Autenticazione Esterna)
-Valutare l'integrazione di Clerk per l'autenticazione dei merchant. Questo delegherebbe la sicurezza delle password e fornirebbe il recupero password/email out-of-the-box (tramite il dominio/mail di default di Clerk), evitando di dover configurare server SMTP proprietari o flussi di reset manuali.
-
 ### Verifica del numero di telefono
-La registrazione self-service esiste (release 2, gated dalla chiave Ecologi).
+La registrazione self-service del merchant esiste (v0.2.0, con approvazione manuale; il telefono è facoltativo).
 La verifica SMS/WhatsApp del numero resta un rafforzamento futuro.
 
 ### Alembic (migrazioni DB)
@@ -76,6 +72,12 @@ ruff (lint) + mypy (type check) in pre-commit locale (vedi CI/CD sopra per il li
 
 ## Changelog
 
+- **2026-10-13** — **v0.2.0** pronta (branch `rinascimento`, 11 ticket): pool mensile per negozio con livelli
+  bronzo/argento/oro, tree points → cashback automatico, registro movimenti + contatore `MerchantPool`,
+  `scripts.close_period` (anteprima, idempotente, cap globale) con Ecologi a chiave unica di piattaforma,
+  iscrizione cliente (OTP) e wallet PWA, auth merchant per email con approvazione manuale, interfaccia
+  `AuthProvider` (provider `dev`, Supabase in arrivo), denaro in centesimi e tempo UTC, seed/smoke test
+  riallineati. La "Release 2 per-merchant" (chiave Ecologi del merchant, `mode`) è assorbita e mai rilasciata.
 - **2026-07-09** — Feature Tree Points implementata su `feature/tree-points`:
   integrazione Ecologi (chiave per-merchant cifrata), soglia punti→albero,
   cap mensile, registrazione self-service con validazione chiave, pagina

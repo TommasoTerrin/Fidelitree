@@ -1,0 +1,16 @@
+{
+  "name": "Fidelitree",
+  "short_name": "Fidelitree",
+  "description": "Le tue carte fedeltà che piantano alberi veri",
+  "start_url": "/wallet",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#16a34a",
+  "lang": "it",
+  "icons": [
+    { "src": "/static/icon.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/static/icon.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/static/icon.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

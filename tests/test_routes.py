@@ -5,7 +5,7 @@ Copre autenticazione, protezione admin e flusso cashback completo.
 
 import uuid
 
-from tests.conftest import TEST_PASSWORD
+from app.models.models import Card
 
 
 def test_health(client):
@@ -29,14 +29,15 @@ def test_merchant_crud_ciclo_completo(client, admin_headers):
     # Crea
     resp = client.post("/api/merchant/", headers=admin_headers, json={
         "business_name": "Bar API",
-        "phone_number": "+393337654321",
-        "password": "segreta",
+        "email": "Bar@Api.it",
     })
     assert resp.status_code == 200
     data = resp.json()
     merchant_id = data["id"]
     assert data["business_name"] == "Bar API"
-    assert "password" not in data  # la risposta non espone la password
+    assert data["email"] == "bar@api.it"  # normalizzata
+    assert data["is_approved"] is False
+    assert "password" not in data
 
     # Leggi
     resp = client.get(f"/api/merchant/{merchant_id}", headers=admin_headers)
@@ -54,69 +55,27 @@ def test_merchant_crud_ciclo_completo(client, admin_headers):
     assert client.get(f"/api/merchant/{merchant_id}", headers=admin_headers).status_code == 404
 
 
-def test_merchant_telefono_non_valido(client, admin_headers):
+def test_admin_crea_merchant_gia_approvato(client, admin_headers):
+    resp = client.post("/api/merchant/", headers=admin_headers, json={
+        "business_name": "Bar Approvato",
+        "email": "approvato@bar.it",
+        "is_approved": True,
+    })
+    assert resp.status_code == 200
+    assert resp.json()["is_approved"] is True
+
+
+def test_merchant_contact_phone_non_valido(client, admin_headers):
     resp = client.post("/api/merchant/", headers=admin_headers, json={
         "business_name": "Bar Sbagliato",
-        "phone_number": "12345",
-        "password": "segreta",
+        "email": "sbagliato@bar.it",
+        "contact_phone": "12345",
     })
     assert resp.status_code == 400
 
 
-# ---------------------------------------------------------------------------
-# Creazione card lato consumer
-# ---------------------------------------------------------------------------
-
-def test_get_card_crea_carta_e_link_whatsapp(client, merchant):
-    resp = client.post("/api/get-card", json={"merchant_id": merchant.id})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["status"] == "success"
-    assert data["card_path"] == f"/card/{data['card_id']}"
-    assert data["whatsapp_link_template"].startswith("https://wa.me/")
-
-
-def test_get_card_merchant_inesistente(client):
-    resp = client.post("/api/get-card", json={"merchant_id": 99999})
-    assert resp.status_code == 404
-
-
-def test_lettura_card_pubblica(client, card):
-    resp = client.get(f"/api/card/{card.id}")
-    assert resp.status_code == 200
-    assert resp.json()["cashback_point"] == 0.0
-
-    assert client.get(f"/api/card/{uuid.uuid4()}").status_code == 404
-
-
-# ---------------------------------------------------------------------------
-# Login merchant (form + cookie JWT)
-# ---------------------------------------------------------------------------
-
-def test_login_corretto_setta_cookie(client, merchant):
-    resp = client.post("/merchant/login", data={
-        "phone_number": merchant.phone_number,
-        "password": TEST_PASSWORD,
-    }, follow_redirects=False)
-    assert resp.status_code == 303
-    assert resp.headers["location"] == "/merchant/scanner"
-    assert "access_token" in resp.cookies
-
-
-def test_login_password_errata(client, merchant):
-    resp = client.post("/merchant/login", data={
-        "phone_number": merchant.phone_number,
-        "password": "sbagliata",
-    })
-    assert resp.status_code == 401
-
-
-def test_login_merchant_inesistente(client):
-    resp = client.post("/merchant/login", data={
-        "phone_number": "+393339999999",
-        "password": "qualsiasi",
-    })
-    assert resp.status_code == 404
+# Registrazione e login merchant: vedi tests/test_merchant_auth.py
+# Iscrizione cliente, wallet e proprietà della carta: vedi tests/test_customer.py
 
 
 # ---------------------------------------------------------------------------
@@ -144,10 +103,10 @@ def test_flusso_cashback_completo(auth_client, card):
     assert resp.status_code == 400
 
 
-def test_delete_card_solo_del_proprio_merchant(auth_client, card):
+def test_delete_card_solo_del_proprio_merchant(auth_client, session, card):
     resp = auth_client.delete(f"/api/merchant/card/{uuid.uuid4()}")
     assert resp.status_code == 404
 
     resp = auth_client.delete(f"/api/merchant/card/{card.id}")
     assert resp.status_code == 200
-    assert auth_client.get(f"/api/card/{card.id}").status_code == 404
+    assert session.get(Card, card.id) is None

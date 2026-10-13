@@ -1,63 +1,82 @@
 """
 Schemi Pydantic per la gestione degli esercenti (Merchant).
+Gli importi escono ed entrano in euro; in DB sono centesimi interi.
 """
 
-from pydantic import BaseModel, Field
-from typing import Optional, Literal
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, computed_field
+from typing import Annotated, Optional, Literal
+
+from app.core.money import cents_to_euro
+from app.services.tree_service import LevelThresholds
+
+NonBlankStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
+
+class RegisterRequest(BaseModel):
+    """Registrazione self-service di un merchant (la validazione di dominio è in `merchant_service`)."""
+    business_name: str
+    email: str
+    password: str
+    contact_phone: Optional[str] = None
 
 
 class MerchantCreateRequest(BaseModel):
     """Richiesta di creazione di un nuovo merchant (endpoint admin)."""
     business_name: str
-    phone_number: str
-    password: str
+    email: str
+    contact_phone: Optional[str] = None
     type: Literal['test', 'free', 'pro'] = 'test'
-    mode: Literal['trees', 'trees_cashback'] = 'trees_cashback'
-    ecologi_api_key: Optional[str] = None  # opzionale solo via admin (test/seed)
-    tree_threshold: int = Field(default=10, ge=1)
-    monthly_tree_cap: int = Field(default=50, ge=0)
-
-
-class MerchantRegisterRequest(BaseModel):
-    """Registrazione self-service: la chiave Ecologi è obbligatoria e viene validata."""
-    business_name: str
-    phone_number: str
-    password: str = Field(min_length=8)
-    ecologi_api_key: str = Field(min_length=1)
-    mode: Literal['trees', 'trees_cashback'] = 'trees_cashback'
-    tree_threshold: int = Field(default=10, ge=1)
-    monthly_tree_cap: int = Field(default=50, ge=0)
+    is_approved: bool = False
 
 
 class MerchantUpdateRequest(BaseModel):
     """Richiesta di aggiornamento parziale dei dati di un merchant (endpoint admin)."""
     business_name: Optional[str] = None
-    phone_number: Optional[str] = None
-    password: Optional[str] = None
+    email: Optional[str] = None
+    contact_phone: Optional[str] = None
     type: Optional[Literal['test', 'free', 'pro']] = None
-    mode: Optional[Literal['trees', 'trees_cashback']] = None
-    ecologi_api_key: Optional[str] = None
-    tree_threshold: Optional[int] = Field(default=None, ge=1)
-    monthly_tree_cap: Optional[int] = Field(default=None, ge=0)
+    is_approved: Optional[bool] = None
+    bronze_threshold: Optional[int] = Field(default=None, ge=1)
+    silver_threshold: Optional[int] = Field(default=None, ge=1)
+    gold_threshold: Optional[int] = Field(default=None, ge=1)
 
 
 class MerchantSettingsRequest(BaseModel):
-    """Impostazioni modificabili dal merchant autenticato (pagina settings)."""
-    mode: Optional[Literal['trees', 'trees_cashback']] = None
-    ecologi_api_key: Optional[str] = None  # se presente viene validata e sostituita
-    tree_threshold: Optional[int] = Field(default=None, ge=1)
-    monthly_tree_cap: Optional[int] = Field(default=None, ge=0)
+    """
+    Impostazioni modificabili dal merchant autenticato. Gli altri campi inviati (approvazione,
+    tipo, soglie dei livelli...) vengono ignorati: li gestisce solo l'admin.
+    """
+    business_name: Optional[NonBlankStr] = None
+    contact_phone: Optional[str] = None
+    conversion_enabled: Optional[bool] = None
+    conversion_threshold: Optional[int] = Field(default=None, ge=1)
+    conversion_value_eur: Optional[float] = Field(default=None, gt=0)
 
 
 class MerchantResponse(BaseModel):
-    """Schema di risposta per i dati di un merchant (esclude password e chiave Ecologi)."""
+    """Schema di risposta per i dati di un merchant."""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     business_name: str
-    phone_number: str
+    email: str
+    contact_phone: Optional[str] = None
     type: str
-    mode: str
-    tree_threshold: int
-    monthly_tree_cap: int
+    is_approved: bool
+    conversion_enabled: bool
+    conversion_threshold: int
+    conversion_value_cents: int = Field(exclude=True)
+    bronze_threshold: Optional[int] = None
+    silver_threshold: Optional[int] = None
+    gold_threshold: Optional[int] = None
 
-    class Config:
-        from_attributes = True
+    @computed_field
+    @property
+    def conversion_value_eur(self) -> float:
+        """Valore in euro di una conversione, derivato da `conversion_value_cents`."""
+        return cents_to_euro(self.conversion_value_cents)
+
+
+class MerchantProfileResponse(MerchantResponse):
+    """Profilo del merchant autenticato: in più le soglie EFFETTIVE dei livelli (default + override)."""
+    effective_thresholds: LevelThresholds

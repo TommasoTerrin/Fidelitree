@@ -1,3 +1,4 @@
+{% from 'partials/levels.html' import level_name, level_medal, trees_phrase %}
 <!DOCTYPE html>
 <html lang="it">
 
@@ -7,6 +8,7 @@
     <title>La tua carta fedeltà - Fidelitree</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    {% include 'partials/pwa.html' %}
 </head>
 
 <body class="bg-gray-50 flex justify-center items-center min-h-screen p-4">
@@ -24,39 +26,65 @@
         </div>
 
         <div class="px-8 py-2 space-y-3">
-            <div class="bg-green-50 rounded-2xl p-6 border border-green-100">
+            <!-- Saldo personale -->
+            <div id="personal-box" class="bg-green-50 rounded-2xl p-6 border border-green-100">
                 <div class="flex justify-between items-center mb-3">
-                    <span class="text-sm text-green-700 font-bold uppercase tracking-wider">Tree Points</span>
-                    <span class="text-3xl font-black text-green-900">🌳 {{ card.tree_points }}/{{ merchant.tree_threshold }}</span>
+                    <span class="text-sm text-green-700 font-bold uppercase tracking-wider">I tuoi Tree Points</span>
+                    <span class="text-3xl font-black text-green-900">🌳 {{ card.tree_points }}</span>
                 </div>
+                {% if conversion %}
                 <div class="w-full bg-green-100 rounded-full h-2.5">
-                    <div class="bg-green-600 h-2.5 rounded-full transition-all"
-                        style="width: {{ (card.tree_points / merchant.tree_threshold * 100) | round | int if card.tree_points < merchant.tree_threshold else 100 }}%"></div>
+                    <div class="bg-green-600 h-2.5 rounded-full transition-all" style="width: {{ conversion.percent }}%"></div>
                 </div>
-                {% if card.trees_planted > 0 %}
-                <p class="mt-3 text-sm text-green-700 font-bold text-center">
-                    Hai già piantato {{ card.trees_planted }} alber{{ 'o' if card.trees_planted == 1 else 'i' }} ver{{ 'o' if card.trees_planted == 1 else 'i' }}! 🎉
-                </p>
-                {% else %}
-                <p class="mt-3 text-xs text-green-600 text-center">
-                    A {{ merchant.tree_threshold }} punti pianti un albero vero
+                <p id="conversion-note" class="mt-3 text-xs text-green-600 text-center">
+                    Ancora {{ conversion.points_to_next }} punti per € {{ "%.2f"|format(merchant.conversion_value_cents / 100) }} di cashback
                 </p>
                 {% endif %}
             </div>
 
-            {% if merchant.mode == 'trees_cashback' %}
+            <!-- Cashback sempre visibile -->
             <div class="bg-blue-50 rounded-2xl p-6 border border-blue-100">
                 <div class="flex justify-between items-center mb-2">
                     <span class="text-sm text-blue-700 font-bold uppercase tracking-wider">Cashback</span>
-                    <span class="text-3xl font-black text-blue-900">€ {{ "%.2f"|format(card.cashback_point) }}</span>
+                    <span class="text-3xl font-black text-blue-900">€ {{ "%.2f"|format(card.cashback_cents / 100) }}</span>
                 </div>
             </div>
-            {% endif %}
+
+            <!-- Progetto collettivo del negozio -->
+            <div id="pool-box" class="bg-amber-50 rounded-2xl p-6 border border-amber-100">
+                <p class="text-sm text-amber-700 font-bold uppercase tracking-wider mb-3">Il progetto del negozio</p>
+                <div class="flex justify-between items-center mb-3">
+                    <div>
+                        <p class="text-xl font-black text-amber-900">
+                            {{ level_medal(pool.level) }} {{ level_name(pool.level) }}
+                        </p>
+                        <p class="text-sm text-amber-700">{{ pool.points }} punti questo mese</p>
+                    </div>
+                </div>
+                <div class="w-full bg-amber-100 rounded-full h-2.5">
+                    <div class="bg-amber-500 h-2.5 rounded-full transition-all" style="width: {{ pool.percent_to_next }}%"></div>
+                </div>
+                {% if pool.next_level %}
+                <p class="mt-2 text-xs text-amber-700 text-center">
+                    Ancora {{ pool.points_to_next }} punti al livello {{ level_name(pool.next_level) }}
+                </p>
+                {% else %}
+                <p class="mt-2 text-xs text-amber-700 text-center font-bold">Livello massimo raggiunto!</p>
+                {% endif %}
+                <p class="mt-3 text-sm font-bold text-green-700 text-center">
+                    {% if pool.trees_at_month_end > 0 %}
+                    Insieme questo mese stiamo piantando {{ trees_phrase(pool.trees_at_month_end) }} 🌳
+                    {% else %}
+                    Raggiungete il livello Bronzo per far piantare il primo albero 🌱
+                    {% endif %}
+                </p>
+            </div>
         </div>
 
         <div class="p-8 flex flex-col items-center">
             <div id="qrcode" class="p-4 bg-white border-2 border-slate-200 rounded-3xl shadow-inner"></div>
             <p class="mt-4 text-xs text-gray-400 font-medium text-center uppercase tracking-widest">Mostra allo scanner</p>
+            <a href="/wallet" class="mt-6 text-xs text-gray-400 font-bold uppercase tracking-widest">← Le tue carte</a>
         </div>
     </div>
 

@@ -13,12 +13,9 @@ from sqlmodel import SQLModel, Session, create_engine
 
 from app.main import app
 from app.core.dependencies import get_session, get_current_merchant
-from app.models.models import Merchant, Card
+from app.models.models import Merchant, Customer, Card
 from app.services import ecologi_service
-from app.services.db_crud import merchant_crud
-
-TEST_PASSWORD = "password-di-test"
-VALID_ECOLOGI_KEY = "ecologi-valid-key"
+from app.services.db_crud import merchant_crud, customer_crud
 
 
 @pytest.fixture()
@@ -49,18 +46,25 @@ def client(session):
 
 @pytest.fixture()
 def merchant(session) -> Merchant:
-    """Merchant di test con password cifrata (come in produzione)."""
+    """Merchant di test (email, approvato)."""
     return merchant_crud.create_merchant(session, {
         "business_name": "Test Merchant",
-        "phone_number": "+393331234567",
-        "password": TEST_PASSWORD,
+        "email": "merchant@test.it",
+        "contact_phone": "+393331234567",
+        "is_approved": True,
     })
 
 
 @pytest.fixture()
-def card(session, merchant) -> Card:
-    """Card di test associata al merchant di test."""
-    new_card = Card(merchant_id=merchant.id)
+def customer(session) -> Customer:
+    """Cliente di test."""
+    return customer_crud.create_customer(session, "cliente@test.it")
+
+
+@pytest.fixture()
+def card(session, merchant, customer) -> Card:
+    """Card di test del cliente di test presso il merchant di test."""
+    new_card = Card(merchant_id=merchant.id, customer_id=customer.id)
     session.add(new_card)
     session.commit()
     session.refresh(new_card)
@@ -76,6 +80,30 @@ def auth_client(client, merchant):
 
 
 @pytest.fixture()
+def auth_provider():
+    """Provider `dev` con lo stato in memoria azzerato prima e dopo ogni test."""
+    from app.core.auth import get_auth_provider
+    provider = get_auth_provider()
+    provider.reset()
+    yield provider
+    provider.reset()
+
+
+def login_as(client, identity, provider=None) -> str:
+    """Autentica il client come `identity` (cookie `access_token`); ritorna il token."""
+    from app.core.auth import get_auth_provider
+    token = (provider or get_auth_provider()).issue_token(identity)
+    client.cookies.set("access_token", token)
+    return token
+
+
+def identity_for(email: str):
+    """Identità del provider dev per `email` (stesso `user_id` che darebbe il login vero)."""
+    from app.core.auth import AuthIdentity, dev_user_id
+    return AuthIdentity(user_id=dev_user_id(email), email=email)
+
+
+@pytest.fixture()
 def admin_headers():
     """Header con la chiave admin corretta (letta dalle settings)."""
     from app.core.config import settings
@@ -83,56 +111,54 @@ def admin_headers():
 
 
 # ---------------------------------------------------------------------------
-# Tree points: merchant con chiave Ecologi + mock del servizio (niente rete)
+# Ecologi: mock del servizio (niente rete), chiave di piattaforma
 # ---------------------------------------------------------------------------
-
-@pytest.fixture()
-def tree_merchant(session) -> Merchant:
-    """Merchant con chiave Ecologi configurata, soglia 5 e cap mensile 3."""
-    return merchant_crud.create_merchant(session, {
-        "business_name": "Green Merchant",
-        "phone_number": "+393339876543",
-        "password": TEST_PASSWORD,
-        "ecologi_api_key": VALID_ECOLOGI_KEY,
-        "tree_threshold": 5,
-        "monthly_tree_cap": 3,
-        "mode": "trees_cashback",
-    })
-
-
-@pytest.fixture()
-def tree_card(session, tree_merchant) -> Card:
-    """Card di test associata al merchant con chiave Ecologi."""
-    new_card = Card(merchant_id=tree_merchant.id)
-    session.add(new_card)
-    session.commit()
-    session.refresh(new_card)
-    return new_card
-
-
-@pytest.fixture()
-def tree_auth_client(client, tree_merchant):
-    """TestClient autenticato come tree_merchant."""
-    app.dependency_overrides[get_current_merchant] = lambda: tree_merchant
-    yield client
-    app.dependency_overrides.pop(get_current_merchant, None)
-
 
 @pytest.fixture()
 def mock_ecologi(monkeypatch):
     """
     Sostituisce le chiamate a Ecologi: nessuna rete nei test.
-    Ritorna la lista delle piantumazioni simulate (per le assertion).
+    Ritorna la lista delle piantumazioni simulate (per le assertion); ogni acquisto
+    restituisce un `id` progressivo ("purchase-N") usato come `ecologi_ref`.
     """
     calls = []
 
-    async def fake_purchase(api_key, number=1, name=None):
-        calls.append({"api_key": api_key, "number": number, "name": name})
-        return {"number": number, "test": True}
-
-    async def fake_validate(api_key):
-        return api_key == VALID_ECOLOGI_KEY
+    async def fake_purchase(number, name=None, idempotency_key=None):
+        calls.append({"number": number, "name": name, "idempotency_key": idempotency_key})
+        return {"id": f"purchase-{len(calls)}", "number": number}
 
     monkeypatch.setattr(ecologi_service, "purchase_trees", fake_purchase)
-    monkeypatch.setattr(ecologi_service, "validate_api_key", fake_validate)
     return calls
+
+
+@pytest.fixture()
+def approved_merchants(session):
+    """
+    Crea merchant approvati con pool reali prodotti da scan veri (contatore e registro
+    coincidono). Uso: `approved_merchants({"A": 700, "B": 350})` → lista di Merchant.
+    Il pool è del mese di `POOL_NOW` (2026-10).
+    """
+    from datetime import datetime, timezone
+    from app.services import card_service
+
+    def _make(points_by_name: dict, conversion_enabled: bool = False):
+        merchants = []
+        for i, (name, points) in enumerate(points_by_name.items(), start=1):
+            m = merchant_crud.create_merchant(session, {
+                "business_name": name, "email": f"m{i}-{name.lower()}@test.it",
+                "is_approved": True, "conversion_enabled": conversion_enabled,
+            })
+            if points:
+                c = customer_crud.create_customer(session, f"c{i}-{name.lower()}@test.it")
+                cd = Card(merchant_id=m.id, customer_id=c.id)
+                session.add(cd)
+                session.commit()
+                session.refresh(cd)
+                card_service.add_tree_points(
+                    session, m, cd.id, points,
+                    now=datetime(2026, 10, 12, 10, 0, tzinfo=timezone.utc),
+                )
+            merchants.append(m)
+        return merchants
+
+    return _make

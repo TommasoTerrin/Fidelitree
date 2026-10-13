@@ -4,15 +4,19 @@ Configura l'istanza FastAPI, il database, i middleware e include tutti i router.
 """
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import SQLModel, create_engine
 
 from app.core.config import settings
+from app.core.errors import AuthError, ConflictError, DomainError, ForbiddenError, NotFoundError
+from app.version import get_version
 
 # Import dei router
 from app.routes.consumer.views import router as consumer_views_router
 from app.routes.consumer.api import router as consumer_api_router
+from app.routes.consumer.auth import router as consumer_auth_router
 from app.routes.merchant.api import router as merchant_api_router
 from app.routes.merchant.auth import router as merchant_auth_router
 from app.routes.merchant.views import router as merchant_views_router
@@ -32,6 +36,26 @@ app = FastAPI(title="Fidelitree MVP", lifespan=lifespan, redirect_slashes=False)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 
+@app.exception_handler(DomainError)
+async def domain_error_handler(request: Request, exc: DomainError) -> JSONResponse:
+    """
+    Traduce gli errori di dominio del core in risposte HTTP `{"detail": ...}`:
+    AuthError → 401, NotFoundError → 404, ForbiddenError → 403, ConflictError → 409,
+    tutti gli altri → 400.
+    """
+    if isinstance(exc, AuthError):
+        status = 401
+    elif isinstance(exc, NotFoundError):
+        status = 404
+    elif isinstance(exc, ForbiddenError):
+        status = 403
+    elif isinstance(exc, ConflictError):
+        status = 409
+    else:
+        status = 400
+    return JSONResponse(status_code=status, content={"detail": str(exc)})
+
+
 # --- Database ---
 engine = create_engine(
     url=settings.DATABASE_URL,
@@ -43,11 +67,25 @@ engine = create_engine(
 
 
 # --- Router ---
-app.include_router(consumer_views_router)        # GET /download_card, GET /card/{id}
-app.include_router(consumer_api_router, prefix="/api") # POST /api/get-card
+app.include_router(consumer_views_router)        # GET /join/{id}, /wallet, /card/{id}, /customer/login
+app.include_router(consumer_api_router, prefix="/api") # POST /api/customer/join/{id}, GET /api/customer/wallet
+app.include_router(consumer_auth_router)         # POST /api/customer/otp/..., GET /customer/logout
 app.include_router(merchant_api_router, prefix="/api") # POST /api/merchant/create
 app.include_router(merchant_auth_router)         # POST /merchant/login, GET /merchant/logout
 app.include_router(merchant_views_router)        # GET /merchant/... pagine HTML
+
+
+@app.get("/sw.js", include_in_schema=False)
+async def service_worker() -> FileResponse:
+    """
+    Service worker della PWA servito dalla radice, così ha scope `/` (da `/static/` avrebbe
+    scope `/static/`). `Cache-Control: no-cache` fa arrivare subito le nuove versioni.
+    """
+    return FileResponse(
+        "app/static/sw.js",
+        media_type="application/javascript",
+        headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"},
+    )
 
 
 @app.get("/health")
@@ -55,8 +93,9 @@ async def health_check():
     """
     Endpoint per il controllo dello stato dell'applicazione.
     Utilizzato per monitoraggio e check di disponibilità.
+    Include la versione dell'app (da pyproject.toml).
     """
-    return {"status": "ok", "app": "Fidelitree"}
+    return {"status": "ok", "app": "Fidelitree", "version": get_version()}
 
 
 if __name__ == "__main__":

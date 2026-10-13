@@ -4,6 +4,8 @@ Carica le variabili d'ambiente da .env (in locale) o dall'ambiente (in produzion
 Tutte le variabili senza default sono obbligatorie: l'app non parte se mancano.
 """
 
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
@@ -18,14 +20,27 @@ class Settings(BaseSettings):
     DATABASE_URL: str
 
     # Sicurezza & Auth
-    ENCRYPTION_KEY: str      # chiave Fernet per cifrare le password dei merchant
     JWT_SECRET_KEY: str      # firma dei token di sessione merchant
-    MERCHANT_PASSWORD: str   # password del merchant di test creato via seed
     ADMIN_SECRET_KEY: str    # protegge gli endpoint amministrativi /api/merchant
+    AUTH_PROVIDER: Literal["dev", "supabase"] = "dev"  # "dev": solo locale/test
+    ENVIRONMENT: str = "development"  # "production" in produzione
+    # Solo provider dev: password accettata per ogni email non registrata in memoria (il seed gira
+    # in un altro processo del server). Vuota = nessun fallback. Non è un segreto: mai in produzione.
+    DEV_AUTH_PASSWORD: str = "dev-password"
 
-    # Ecologi (piantumazione alberi) — la chiave API è per-merchant, nel DB
+    # Ecologi (piantumazione alberi) — chiave unica di piattaforma, paga il founder
     ECOLOGI_BASE_URL: str = "https://public.ecologi.com"
-    ECOLOGI_TEST_MODE: bool = True  # True: nessun addebito reale; mettere False SOLO in produzione
+    ECOLOGI_API_KEY: str = ""  # chiave REALE (addebita): vuota consentita in dev/test
+    # Ambiente di prova messo a disposizione da Ecologi: chiave e URL distinti da quelli reali
+    ECOLOGI_TEST_BASE_URL: str = ""
+    ECOLOGI_TEST_API_KEY: str = ""
+    ECOLOGI_TEST_MODE: bool = True  # True: usa chiave/URL di test (nessun addebito); False SOLO in produzione
+    ECOLOGI_GLOBAL_MONTHLY_CAP: int = 20  # max alberi piantati in una chiusura mensile
+
+    # Soglie di default dei livelli del pool (punti del mese); override per negozio nel DB
+    TIER_BRONZE_POINTS: int = 100
+    TIER_SILVER_POINTS: int = 300
+    TIER_GOLD_POINTS: int = 600
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

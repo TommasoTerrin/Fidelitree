@@ -1,69 +1,55 @@
 """
-Endpoint API per i consumatori.
-Gestisce la creazione di nuove carte fedeltà e la loro consultazione.
+Endpoint API per i clienti.
+Gestisce l'iscrizione a un negozio, il wallet e la consultazione delle proprie carte.
+Tutti gli endpoint richiedono la sessione del cliente (cookie `access_token` o Bearer).
 """
 
 import logging
 import uuid
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
-from app.core.dependencies import get_session
-from app.core.utils.whatsapp_utils import create_whatsapp_link
-from app.services import card_service
-from app.services.db_crud import card_crud, merchant_crud
-from app.schemas.card import CardResponse
+from app.core.dependencies import get_current_customer, get_session
+from app.models.models import Customer
+from app.schemas.card import CardResponse, JoinResponse, WalletEntryResponse
+from app.services import customer_service
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Consumer API"])
 
 
-class GetCardRequest(BaseModel):
-    """Dati per creare una nuova Card."""
-    merchant_id: int = 1  # default al merchant di test
-
-
-@router.post("/get-card")
-async def create_new_card(
-    body: GetCardRequest,
+@router.post("/customer/join/{merchant_id}", response_model=JoinResponse)
+async def join_merchant(
+    merchant_id: int,
+    customer: Customer = Depends(get_current_customer),
     session: Session = Depends(get_session),
 ):
-    """Crea una nuova Card e restituisce il link WhatsApp per salvarla."""
-    new_card = card_service.create_card(session, body.merchant_id)
+    """
+    Iscrive il cliente al negozio: crea la carta o riapre quella esistente (`created=False`).
+    Errori: 401 non autenticato, 404 negozio inesistente.
+    """
+    card, created = customer_service.join_merchant(session, customer, merchant_id)
+    return JoinResponse(card_id=card.id, created=created)
 
-    # Recupera il merchant per costruire il link WhatsApp
-    merchant = merchant_crud.get_merchant_by_id(session, body.merchant_id)
 
-    card_path = f"/card/{new_card.id}"
-    message = (
-        "Ciao! La creazione della mia carta fedeltà è andata a buon fine.\n\n"
-        "Premi invio per salvarla nella chat, "
-        "la troverai al seguente link:\n"
-        "{card_url}"
-    )
-
-    whatsapp_link = create_whatsapp_link(
-        chat_phone_number=merchant.phone_number,
-        message=message,
-    )
-
-    return {
-        "status": "success",
-        "card_id": str(new_card.id),
-        "card_path": card_path,
-        "whatsapp_link_template": whatsapp_link,
-    }
+@router.get("/customer/wallet", response_model=list[WalletEntryResponse])
+async def get_wallet(
+    customer: Customer = Depends(get_current_customer),
+    session: Session = Depends(get_session),
+):
+    """Le carte del cliente, ordinate per negozio, con il livello del pool del mese di ciascuno."""
+    return customer_service.list_wallet(session, customer)
 
 
 @router.get("/card/{card_id}", response_model=CardResponse)
 async def get_card(
     card_id: uuid.UUID,
-    session: Session = Depends(get_session)
+    customer: Customer = Depends(get_current_customer),
+    session: Session = Depends(get_session),
 ):
-    """Restituisce una card specifica (l'UUID della carta funge da capability URL)."""
-    card = card_crud.get_card_by_id(session, card_id)
-    if not card:
-        raise HTTPException(status_code=404, detail="Card non trovata")
-    return card
+    """
+    Restituisce una carta solo al suo proprietario. Errori: 401 non autenticato,
+    404 se la carta non esiste o è di un altro cliente (stesso messaggio).
+    """
+    return customer_service.get_owned_card(session, customer, card_id)
