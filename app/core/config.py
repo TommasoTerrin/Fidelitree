@@ -31,10 +31,9 @@ class Settings(BaseSettings):
     # Ecologi (piantumazione alberi) — chiave unica di piattaforma, paga il founder
     ECOLOGI_BASE_URL: str = "https://public.ecologi.com"
     ECOLOGI_API_KEY: str = ""  # chiave REALE (addebita): vuota consentita in dev/test
-    # Ambiente di prova messo a disposizione da Ecologi: chiave e URL distinti da quelli reali
-    ECOLOGI_TEST_BASE_URL: str = ""
+    # Chiave di PROVA: stesso URL della reale, la richiesta porta il flag "test": true (nessun addebito)
     ECOLOGI_TEST_API_KEY: str = ""
-    ECOLOGI_TEST_MODE: bool = True  # True: usa chiave/URL di test (nessun addebito); False SOLO in produzione
+    ECOLOGI_TEST_MODE: bool = True  # True: usa la chiave di test + flag test (nessun addebito); False SOLO in produzione
     ECOLOGI_GLOBAL_MONTHLY_CAP: int = 20  # max alberi piantati in una chiusura mensile
 
     # Soglie di default dei livelli del pool (punti del mese); override per negozio nel DB

@@ -119,13 +119,13 @@ def mock_ecologi(monkeypatch):
     """
     Sostituisce le chiamate a Ecologi: nessuna rete nei test.
     Ritorna la lista delle piantumazioni simulate (per le assertion); ogni acquisto
-    restituisce un `id` progressivo ("purchase-N") usato come `ecologi_ref`.
+    restituisce un `treeUrl` progressivo ("https://ecologi.test/tree-N") usato come `ecologi_ref`.
     """
     calls = []
 
-    async def fake_purchase(number, name=None, idempotency_key=None):
+    async def fake_purchase(number, name=None, idempotency_key=None, *, force_test=False):
         calls.append({"number": number, "name": name, "idempotency_key": idempotency_key})
-        return {"id": f"purchase-{len(calls)}", "number": number}
+        return {"treeUrl": f"https://ecologi.test/tree-{len(calls)}", "number": number}
 
     monkeypatch.setattr(ecologi_service, "purchase_trees", fake_purchase)
     return calls

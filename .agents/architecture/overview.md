@@ -100,4 +100,4 @@ Tutto passa da `AuthProvider` (`app/core/auth.py`); nel DB non ci sono password,
 - **`get_session`** importa l'engine lazy da `app.main` (evita import circolari); nei test viene sostituita da SQLite in-memory (`tests/conftest.py`).
 - **QR code** generato client-side (niente dipendenze server).
 - **Lifespan**: esegue solo `SQLModel.metadata.create_all(engine)` (niente Alembic: il DB si resetta con `scripts.reset_db`).
-- **Ecologi**: `ECOLOGI_TEST_MODE=true` usa chiave/URL di **test** distinti da quelli reali (nessun addebito).
+- **Ecologi**: un solo URL (`ECOLOGI_BASE_URL`), due chiavi scelte da `ECOLOGI_TEST_MODE` (`ECOLOGI_TEST_API_KEY` / `ECOLOGI_API_KEY`, nessun fallback). Con `true` la richiesta porta `"test": true` (nessun addebito). Il `name` inviato è `<negozio> · <mese> <anno>` (`tree_service.planting_name`) e compare nella foresta pubblica; `TreePlanting.ecologi_ref` = `treeUrl` della risposta (non c'è un `id`).

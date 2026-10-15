@@ -25,7 +25,7 @@ from datetime import date, datetime, timezone
 from pydantic import BaseModel, model_validator
 
 from app.core.enums import Level
-from app.core.errors import InvalidThresholdsError
+from app.core.errors import InvalidInputError, InvalidThresholdsError
 
 # --- Core puro ---
 
@@ -151,6 +151,32 @@ def previous_period(today: date) -> tuple[int, int]:
     if today.month == 1:
         return today.year - 1, 12
     return today.year, today.month - 1
+
+
+_MONTHS_IT = (
+    "gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
+    "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre",
+)
+_DEFAULT_PLANTING_NAME = "Negozio Fidelitree"
+_MAX_PLANTING_NAME_LEN = 60  # la doc Ecologi non dà un limite: scelta prudente
+
+
+def planting_name(business_name: str, period: str) -> str:
+    """
+    Etichetta della tessera sulla foresta Ecologi: "Bar Demo · ottobre 2026".
+    Il nome del negozio ha spazi normalizzati, è troncato a 60 caratteri e, se vuoto,
+    diventa "Negozio Fidelitree". `InvalidInputError` se `period` non è 'YYYY-MM' valido.
+    """
+    try:
+        year_text, month_text = period.split("-")
+        year, month = int(year_text), int(month_text)
+        valid = len(year_text) == 4 and len(month_text) == 2 and 1 <= month <= 12
+    except ValueError:
+        valid = False
+    if not valid:
+        raise InvalidInputError(f"Periodo non valido: {period!r} (atteso AAAA-MM)")
+    name = " ".join(business_name.split())[:_MAX_PLANTING_NAME_LEN].rstrip() or _DEFAULT_PLANTING_NAME
+    return f"{name} · {_MONTHS_IT[month - 1]} {year}"
 
 
 class PoolInput(BaseModel):
@@ -426,7 +452,7 @@ async def close_period(
         try:
             response = await ecologi_service.purchase_trees(
                 line.trees,
-                name=f"Fidelitree {period} negozio {line.merchant_id}",
+                name=planting_name(line.business_name, period),
                 idempotency_key=idempotency_key(line.merchant_id, period, test),
             )
             ref = ecologi_service.extract_ref(response)

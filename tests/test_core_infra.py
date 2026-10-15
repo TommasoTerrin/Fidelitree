@@ -61,7 +61,7 @@ def test_handler_errori_di_dominio(error_routes, path, status):
 
 
 def test_settings_default_nuovi(monkeypatch):
-    for var in ("ECOLOGI_API_KEY", "ECOLOGI_TEST_API_KEY", "ECOLOGI_TEST_BASE_URL",
+    for var in ("ECOLOGI_API_KEY", "ECOLOGI_TEST_API_KEY",
                 "ECOLOGI_GLOBAL_MONTHLY_CAP", "TIER_BRONZE_POINTS",
                 "TIER_SILVER_POINTS", "TIER_GOLD_POINTS", "AUTH_PROVIDER", "ENVIRONMENT"):
         monkeypatch.delenv(var, raising=False)
@@ -71,7 +71,8 @@ def test_settings_default_nuovi(monkeypatch):
 
     s = Settings(_env_file=None)
     assert s.ECOLOGI_API_KEY == ""
-    assert (s.ECOLOGI_TEST_API_KEY, s.ECOLOGI_TEST_BASE_URL) == ("", "")
+    assert s.ECOLOGI_TEST_API_KEY == ""
+    assert not hasattr(s, "ECOLOGI_TEST_BASE_URL")  # il test è il flag "test", stesso URL
     assert s.ECOLOGI_GLOBAL_MONTHLY_CAP == 20
     assert (s.TIER_BRONZE_POINTS, s.TIER_SILVER_POINTS, s.TIER_GOLD_POINTS) == (100, 300, 600)
     assert s.AUTH_PROVIDER == "dev"

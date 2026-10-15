@@ -3,8 +3,10 @@ Test degli script di supporto: seed del DB, smoke test, reset del DB.
 Tutto su SQLite in-memory (fixture `session`/`client`), senza rete e senza Ecologi.
 """
 
+import json
 from datetime import datetime, timezone
 
+import httpx
 import pytest
 from sqlalchemy import inspect
 from sqlalchemy.pool import StaticPool
@@ -13,9 +15,9 @@ from sqlmodel import Session, SQLModel, create_engine, select
 from app.core.config import settings
 from app.core.enums import Level
 from app.models.models import Card, Customer, Merchant, MerchantPool, PointTransaction
-from app.services import tree_service
+from app.services import ecologi_service, tree_service
 from app.services.db_crud import customer_crud
-from scripts import reset_db, seed_db
+from scripts import ecologi_check, reset_db, seed_db
 from scripts.smoke_test_prod import run_smoke_test
 
 NOW = datetime(2026, 10, 12, 10, 0, tzinfo=timezone.utc)
@@ -146,3 +148,83 @@ def test_reset_db_ricrea_lo_schema_vuoto(monkeypatch):
     with engine.connect() as conn:
         assert conn.exec_driver_sql("SELECT COUNT(*) FROM customer").scalar() == 0
     engine.dispose()
+
+
+# --- ecologi_check ---
+
+@pytest.fixture()
+def eco_http(monkeypatch):
+    """Chiavi finte e httpx mockato: ritorna la lista delle richieste viste da Ecologi."""
+    monkeypatch.setattr(settings, "ECOLOGI_BASE_URL", "https://eco.real")
+    monkeypatch.setattr(settings, "ECOLOGI_API_KEY", "real-key-9999")
+    monkeypatch.setattr(settings, "ECOLOGI_TEST_API_KEY", "test-key-1234")
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        return httpx.Response(201, json={
+            "amount": 0.8, "currency": "EUR", "treeUrl": "https://ecologi.com/x?tree=1",
+            "projectDetails": [{"name": "Progetto Uno"}],
+        })
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(
+        ecologi_service.httpx, "AsyncClient",
+        lambda **kw: real(transport=httpx.MockTransport(handler), **kw),
+    )
+    return seen
+
+
+def test_ecologi_check_in_test_mode(eco_http, monkeypatch, capsys):
+    monkeypatch.setattr(settings, "ECOLOGI_TEST_MODE", True)
+    month = tree_service.period_for(datetime.now(timezone.utc))
+    assert ecologi_check.main([]) == 0
+    assert len(eco_http) == 1
+    req = eco_http[0]
+    assert req.headers["Authorization"] == "Bearer test-key-1234"
+    body = json.loads(req.read())
+    assert body == {"number": 1, "name": tree_service.planting_name("Negozio di prova", month), "test": True}
+    out = capsys.readouterr().out
+    assert "https://ecologi.com/x?tree=1" in out and "Progetto Uno" in out
+    assert "di test" in out and "test-key-1234" not in out
+
+
+def test_ecologi_check_con_chiave_reale_manda_comunque_test(eco_http, monkeypatch, capsys):
+    monkeypatch.setattr(settings, "ECOLOGI_TEST_MODE", False)
+    assert ecologi_check.main([]) == 0
+    assert eco_http[0].headers["Authorization"] == "Bearer real-key-9999"
+    assert json.loads(eco_http[0].read())["test"] is True
+    out = capsys.readouterr().out
+    assert "REALE" in out and "real-key-9999" not in out and "…9999" in out
+
+
+def test_ecologi_check_argomenti(eco_http, monkeypatch):
+    monkeypatch.setattr(settings, "ECOLOGI_TEST_MODE", True)
+    assert ecologi_check.main(["--trees", "3", "--merchant-name", "Bar Demo", "--month", "2026-10"]) == 0
+    assert json.loads(eco_http[0].read()) == {"number": 3, "name": "Bar Demo · ottobre 2026", "test": True}
+
+
+def test_ecologi_check_chiave_mancante(eco_http, monkeypatch, capsys):
+    monkeypatch.setattr(settings, "ECOLOGI_TEST_MODE", True)
+    monkeypatch.setattr(settings, "ECOLOGI_TEST_API_KEY", "")
+    assert ecologi_check.main([]) == 1
+    assert eco_http == []
+    assert "Chiave Ecologi di test non configurata" in capsys.readouterr().err
+
+
+def test_ecologi_check_http_401(monkeypatch, capsys):
+    monkeypatch.setattr(settings, "ECOLOGI_TEST_MODE", True)
+    monkeypatch.setattr(settings, "ECOLOGI_TEST_API_KEY", "test-key-1234")
+    real = httpx.AsyncClient
+    monkeypatch.setattr(
+        ecologi_service.httpx, "AsyncClient",
+        lambda **kw: real(transport=httpx.MockTransport(lambda r: httpx.Response(401, text="no")), **kw),
+    )
+    assert ecologi_check.main([]) == 1
+    assert "HTTP 401" in capsys.readouterr().err
+
+
+def test_ecologi_check_non_apre_sessioni_db(eco_http, monkeypatch, session):
+    monkeypatch.setattr(settings, "ECOLOGI_TEST_MODE", True)
+    assert ecologi_check.main([]) == 0
+    assert _count(session, tree_service.TreePlanting) == 0

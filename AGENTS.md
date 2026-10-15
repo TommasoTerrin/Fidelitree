@@ -78,6 +78,9 @@ python -m scripts.seed_db       # 2 merchant, 2 clienti, carte e scan di prova (
 # Chiusura mensile: pianta gli alberi del pool (anteprima, conferma, idempotente)
 python -m scripts.close_period [--month AAAA-MM] [--cap N] [--yes]
 
+# Verifica la chiave Ecologi: chiamata reale con test=true, nessun addebito
+python -m scripts.ecologi_check [--trees N] [--merchant-name NOME] [--month AAAA-MM]
+
 # Smoke test post-deploy (non pianta alberi)
 python scripts/smoke_test_prod.py https://<app>.ondigitalocean.app <ADMIN_SECRET_KEY>
 ```
@@ -107,7 +110,7 @@ app/
     merchant/           # api + auth + pagine merchant
   templates/            # Jinja2 (consumer/, merchant/, partials/ condivisi: pwa, toast, levels)
   static/               # PWA: manifest.webmanifest, sw.js (servito anche da GET /sw.js), icone
-scripts/                # reset_db, seed_db, close_period, smoke_test_prod
+scripts/                # reset_db, seed_db, close_period, ecologi_check, smoke_test_prod
 tests/                  # pytest + conftest (SQLite in-memory); tests/unit/ = core puro senza DB
 ```
 
@@ -132,6 +135,7 @@ tests/                  # pytest + conftest (SQLite in-memory); tests/unit/ = co
 ## Vincoli e trade-off accettati (non "sistemarli" senza chiedere)
 
 - **Chiave Ecologi unica di piattaforma** (decisione 2026-10-09, sostituisce quella per-merchant del 2026-07-09): sta in env (`ECOLOGI_API_KEY`), il founder paga tutti gli alberi. I merchant non hanno account Ecologi.
+- **Ecologi: due chiavi, un solo URL, nome del negozio pubblico** (2026-10-14): non esiste un sandbox, la prova è il flag `"test": true` sullo stesso `ECOLOGI_BASE_URL`; `ECOLOGI_TEST_MODE` sceglie tra `ECOLOGI_TEST_API_KEY` e `ECOLOGI_API_KEY` (nessun fallback, nessun blocco legato a `ENVIRONMENT`). Il `name` mandato a Ecologi è `<negozio> · <mese> <anno>` e compare nella foresta pubblica **senza gestione del consenso** (i merchant sono pochi e informati a voce). Si salva solo `treeUrl` in `TreePlanting.ecologi_ref`.
 - **Piantumazione solo a fine periodo, lanciata a mano** (2026-10-09): `scripts/close_period` con anteprima, conferma e idempotenza (un negozio non può essere chiuso due volte per lo stesso mese). Il cron/endpoint admin arriverà più avanti riusando lo stesso core.
 - **Cap globale sforato → blocco, non ripartizione** (2026-10-09): lo script mostra lo sforamento e chiede al founder se procedere.
 - **Gli errori Ecologi non bloccano mai lo scan**: lo scan non chiama più Ecologi. Durante la chiusura, un errore su un negozio non blocca gli altri; il negozio resta non chiuso e si ritenta.

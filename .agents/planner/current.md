@@ -58,8 +58,20 @@
   overview con diagramma del pool, deploy con `close_period` e collaudo locale, pre-release, roadmap, README);
   `tests/test_scripts.py`; 339 test verdi. Provato a mano su SQLite + uvicorn: reset, seed (rilanciato), login merchant da
   processo diverso, OTP cliente, scan, registrazione non approvata, smoke test, anteprima `close_period`.
-  **v0.2.0 pronta al merge.** Tutto il lavoro dei ticket 01–11 è in un unico commit su `rinascimento`.
-  **⏭️ PROSSIMO (a mano, in ordine):**
+  Tutto il lavoro dei ticket 01–11 è in un unico commit su `rinascimento`.
+  **2026-10-14: aggiunti i ticket 12–13 (Ecologi)** dopo il confronto con la documentazione ufficiale: in test mode il codice
+  richiede `ECOLOGI_TEST_BASE_URL`, che Ecologi non prevede (il test è il flag `"test": true` sullo stesso URL), quindi
+  oggi la chiusura in test fallisce; inoltre il `name` mandato a Ecologi diventa `<negozio> · <mese> <anno>` e
+  `ecologi_ref` = `treeUrl`. Il merge aspetta 12–13.
+  Ticket **12 (Ecologi: ambienti e nome del negozio) completato il 2026-10-14**: `ECOLOGI_TEST_BASE_URL` rimosso,
+  un solo URL e due chiavi scelte da `ECOLOGI_TEST_MODE` (nessun fallback), `purchase_trees(..., force_test=)`,
+  `extract_ref` = `treeUrl`, core `tree_service.planting_name` ("Bar Demo · ottobre 2026") usato da `close_period`;
+  `tests/unit/test_planting_name.py`; 354 test verdi. Il `.env` locale ha ancora la vecchia `ECOLOGI_TEST_BASE_URL` (ignorata, da togliere a mano).
+  Ticket **13 (script `ecologi_check`) completato il 2026-10-14**: `scripts/ecologi_check.py` (chiamata sempre con
+  `test=true`, mostra nome, `treeUrl`, importo, progetti, chiave solo con ultimi 4 caratteri), test in `tests/test_scripts.py`,
+  AGENTS.md/deploy.md/pre-release aggiornati; 360 test verdi. **Resta il collaudo manuale con le chiavi vere (a cura del founder).**
+  **⏭️ PROSSIMO (in ordine):**
+  0. Collaudo manuale `ecologi_check` (chiave di test e reale) e `close_period` in test mode con `treeUrl` salvato.
   1. Collaudo manuale della checklist `pre-release.md` (inclusa la **PWA su telefono**: installazione in Home e apertura standalone; serve HTTPS o un tunnel).
   2. Se esiste il logo vero, sostituire l'icona provvisoria (`app/static/icon.svg`, `apple-touch-icon.png`).
   3. Merge su `main` + tag `v0.2.0` secondo `pre-release.md` (il push su `main` deploya in produzione); prima `reset_db` del DB (i dati v0.1.0 non si migrano).

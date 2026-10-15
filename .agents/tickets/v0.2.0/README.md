@@ -23,6 +23,10 @@ Ogni ticket contiene: contesto, dipendenze, modifiche, file coinvolti, test da s
 | 09 | [Frontend merchant](09-frontend-merchant.md) | 04, 07 |
 | 10 | [Frontend cliente e PWA](10-frontend-cliente-pwa.md) | 08 |
 | 11 | [Seed, smoke test, documentazione, release](11-seed-docs-release.md) | tutti |
+| 12 | [Ecologi: ambienti test/produzione e nome del negozio](12-ecologi-ambienti-nome-negozio.md) | 05 |
+| 13 | [Script `ecologi_check`: verifica reale delle chiavi](13-script-ecologi-check.md) | 12 |
+
+I ticket 12–13 sono stati aggiunti il 2026-10-14, dopo la chiusura di 01–11 e prima del merge: allineano l'integrazione Ecologi alla documentazione ufficiale (URL unico, flag `test`, nome del negozio nella foresta).
 
 I ticket 03–05 (logica alberi) e 06–07 (auth) sono indipendenti tra loro: si possono invertire, ma tenere l'ordine numerico evita conflitti nei file condivisi (`models.py`, `conftest.py`).
 

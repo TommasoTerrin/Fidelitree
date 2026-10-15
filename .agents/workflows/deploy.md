@@ -24,11 +24,10 @@ Variabili **opzionali** (hanno un default), introdotte con v0.2.0:
 | `ENVIRONMENT` | `development` | mettere `production` in produzione (il login `dev` si rifiuta) |
 | `AUTH_PROVIDER` | `dev` | `dev` (solo locale/test) o `supabase` |
 | `DEV_AUTH_PASSWORD` | `dev-password` | **solo locale** (provider `dev`): password dei merchant creati dal seed. **Non impostarla in produzione** |
-| `ECOLOGI_API_KEY` | vuota | chiave Ecologi **di piattaforma** (paga il founder); necessaria per `close_period` |
-| `ECOLOGI_BASE_URL` | `https://public.ecologi.com` | URL dell'API Ecologi **reale** (usato con `ECOLOGI_TEST_MODE=false`) |
-| `ECOLOGI_TEST_API_KEY` | vuota | chiave dell'ambiente di **prova** di Ecologi (usata con `ECOLOGI_TEST_MODE=true`) |
-| `ECOLOGI_TEST_BASE_URL` | vuota | URL dell'ambiente di **prova** di Ecologi (usato con `ECOLOGI_TEST_MODE=true`) |
-| `ECOLOGI_TEST_MODE` | `true` | `true` = chiave/URL di test, nessun addebito reale; `false` SOLO in produzione (chiave/URL reali) |
+| `ECOLOGI_BASE_URL` | `https://public.ecologi.com` | URL dell'API Ecologi, **unico** per test e produzione (non esiste un sandbox: la prova è il flag `"test": true`) |
+| `ECOLOGI_API_KEY` | vuota | chiave Ecologi **reale** di piattaforma (paga il founder); usata con `ECOLOGI_TEST_MODE=false` |
+| `ECOLOGI_TEST_API_KEY` | vuota | chiave Ecologi **di prova**; usata con `ECOLOGI_TEST_MODE=true`. Nessun fallback tra le due chiavi |
+| `ECOLOGI_TEST_MODE` | `true` | `true` = chiave di test + flag `test` (nessun addebito, nulla sul profilo Ecologi); `false` SOLO in produzione. In produzione: `ECOLOGI_TEST_MODE=false` + `ECOLOGI_API_KEY`; in locale: `true` + `ECOLOGI_TEST_API_KEY` |
 | `ECOLOGI_GLOBAL_MONTHLY_CAP` | `20` | massimo alberi piantati in una chiusura mensile |
 | `TIER_BRONZE_POINTS` / `TIER_SILVER_POINTS` / `TIER_GOLD_POINTS` | `100` / `300` / `600` | soglie di default dei livelli del pool (override per negozio nel DB) |
 
@@ -63,7 +62,8 @@ python -m scripts.close_period --cap 30         # autorizza un cap diverso per q
 python -m scripts.close_period --yes            # salta la conferma (NON il blocco cap)
 ```
 
-- **Prima volta in assoluto**: prova con `ECOLOGI_TEST_MODE=true` (chiave/URL di test, nessun addebito). Per la chiusura vera serve `ECOLOGI_TEST_MODE=false` e `ECOLOGI_API_KEY` reale.
+- **Prima volta in assoluto**: prova con `ECOLOGI_TEST_MODE=true` (chiave di test + flag `test`, nessun addebito). Per la chiusura vera serve `ECOLOGI_TEST_MODE=false` e `ECOLOGI_API_KEY` reale.
+- **Verifica della chiave reale prima della prima chiusura**: `ECOLOGI_TEST_MODE=false python -m scripts.ecologi_check` (console DigitalOcean, oppure in locale con la chiave reale nel `.env`). Fa una chiamata vera con `"test": true`: nessun addebito, nulla sul profilo Ecologi. Mostra il nome che comparirà nella foresta e il `treeUrl`; senza `ECOLOGI_TEST_MODE=false` prova invece la chiave di test.
 - Considera solo i negozi **approvati** (`is_approved`). È **idempotente**: rilanciarlo non pianta due volte lo stesso negozio.
 - Codici di uscita: `0` ok · `1` divergenze contatore/registro o cap sforato non autorizzato · `2` annullato · `3` almeno un negozio fallito (si ritenta rilanciando).
 - Lo scan del merchant non pianta mai alberi: la piantumazione avviene solo qui.

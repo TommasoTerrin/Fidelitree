@@ -27,7 +27,6 @@ def _platform_key(monkeypatch):
     monkeypatch.setattr(settings, "ECOLOGI_API_KEY", "platform-key")
     monkeypatch.setattr(settings, "ECOLOGI_BASE_URL", "https://eco.real")
     monkeypatch.setattr(settings, "ECOLOGI_TEST_API_KEY", "test-key")
-    monkeypatch.setattr(settings, "ECOLOGI_TEST_BASE_URL", "https://eco.sandbox")
     monkeypatch.setattr(settings, "ECOLOGI_TEST_MODE", False)
 
 
@@ -60,24 +59,38 @@ def _patch_http(monkeypatch, handler):
 
 
 def test_purchase_trees_invia_chiave_payload_e_idempotency(monkeypatch):
-    seen = _patch_http(monkeypatch, lambda r: httpx.Response(201, json={"id": "x1"}))
+    seen = _patch_http(monkeypatch, lambda r: httpx.Response(201, json={"treeUrl": "x1"}))
     result = asyncio.run(ecologi_service.purchase_trees(5, idempotency_key="chiave-1"))
     req = seen[0]
-    assert result == {"id": "x1"}
+    assert result == {"treeUrl": "x1"}
     assert str(req.url) == "https://eco.real/impact/trees"
     assert req.headers["Authorization"] == "Bearer platform-key"
     assert req.headers["Idempotency-Key"] == "chiave-1"
     assert req.read() == b'{"number":5}'
 
 
-def test_purchase_trees_test_mode_usa_chiave_e_url_di_test(monkeypatch):
+def test_purchase_trees_test_mode_usa_chiave_di_test_e_stesso_url(monkeypatch):
     monkeypatch.setattr(settings, "ECOLOGI_TEST_MODE", True)
     seen = _patch_http(monkeypatch, lambda r: httpx.Response(200, json={}))
     asyncio.run(ecologi_service.purchase_trees(2))
-    assert str(seen[0].url) == "https://eco.sandbox/impact/trees"
+    assert str(seen[0].url) == "https://eco.real/impact/trees"
     assert seen[0].headers["Authorization"] == "Bearer test-key"
     assert b'"test":true' in seen[0].read()
     assert len(seen[0].headers["Idempotency-Key"]) == 36  # uuid casuale
+
+
+def test_purchase_trees_modalita_reale_senza_flag_test(monkeypatch):
+    seen = _patch_http(monkeypatch, lambda r: httpx.Response(201, json={}))
+    asyncio.run(ecologi_service.purchase_trees(2, name="Bar Demo · ottobre 2026"))
+    assert seen[0].headers["Authorization"] == "Bearer platform-key"
+    assert b"test" not in seen[0].read()
+
+
+def test_purchase_trees_force_test_con_chiave_reale(monkeypatch):
+    seen = _patch_http(monkeypatch, lambda r: httpx.Response(201, json={}))
+    asyncio.run(ecologi_service.purchase_trees(1, force_test=True))
+    assert seen[0].headers["Authorization"] == "Bearer platform-key"
+    assert b'"test":true' in seen[0].read()
 
 
 def test_purchase_trees_chiave_vuota(monkeypatch):
@@ -86,14 +99,16 @@ def test_purchase_trees_chiave_vuota(monkeypatch):
         asyncio.run(ecologi_service.purchase_trees(1))
 
 
-def test_purchase_trees_test_mode_senza_chiave_o_url_di_test(monkeypatch):
+def test_purchase_trees_test_mode_senza_chiave_di_test_nessun_fallback(monkeypatch):
     monkeypatch.setattr(settings, "ECOLOGI_TEST_MODE", True)
-    monkeypatch.setattr(settings, "ECOLOGI_TEST_API_KEY", "")
+    monkeypatch.setattr(settings, "ECOLOGI_TEST_API_KEY", "")  # la chiave reale resta valorizzata
     with pytest.raises(EcologiError, match="Chiave Ecologi di test non configurata"):
         asyncio.run(ecologi_service.purchase_trees(1))
-    monkeypatch.setattr(settings, "ECOLOGI_TEST_API_KEY", "test-key")
-    monkeypatch.setattr(settings, "ECOLOGI_TEST_BASE_URL", "")
-    with pytest.raises(EcologiError, match="URL Ecologi di test non configurato"):
+
+
+def test_purchase_trees_modalita_reale_senza_chiave_reale_nessun_fallback(monkeypatch):
+    monkeypatch.setattr(settings, "ECOLOGI_API_KEY", "")  # la chiave di test resta valorizzata
+    with pytest.raises(EcologiError, match="Chiave Ecologi di piattaforma non configurata"):
         asyncio.run(ecologi_service.purchase_trees(1))
 
 
@@ -113,8 +128,10 @@ def test_purchase_trees_errore_di_rete(monkeypatch):
 
 
 def test_extract_ref():
-    assert ecologi_service.extract_ref({"id": 7}) == "7"
-    assert ecologi_service.extract_ref({"treeUrl": "u"}) == "u"
+    assert ecologi_service.extract_ref(
+        {"treeUrl": "https://ecologi.com/x?tree=1", "amount": 1.8}
+    ) == "https://ecologi.com/x?tree=1"
+    assert ecologi_service.extract_ref({"id": 7}) is None  # l'id non è documentato
     assert ecologi_service.extract_ref({"number": 1}) is None
 
 
@@ -126,14 +143,15 @@ def test_chiusura_pianta_per_livello(session, approved_merchants, mock_ecologi):
 
     assert [c["number"] for c in mock_ecologi] == [5, 3]
     assert len(mock_ecologi) == 2  # C è sotto il bronzo: nessuna chiamata
+    assert [c["name"] for c in mock_ecologi] == ["A · ottobre 2026", "B · ottobre 2026"]
     assert [c["idempotency_key"] for c in mock_ecologi] == [
         f"fidelitree-{ms[0].id}-{PERIOD}", f"fidelitree-{ms[1].id}-{PERIOD}",
     ]
     rows = _plantings(session)
     assert [(r.merchant_id, r.period, r.level, r.tree_count, r.pool_points, r.ecologi_ref, r.test)
             for r in rows] == [
-        (ms[0].id, PERIOD, Level.GOLD, 5, 700, "purchase-1", False),
-        (ms[1].id, PERIOD, Level.SILVER, 3, 350, "purchase-2", False),
+        (ms[0].id, PERIOD, Level.GOLD, 5, 700, "https://ecologi.test/tree-1", False),
+        (ms[1].id, PERIOD, Level.SILVER, 3, 350, "https://ecologi.test/tree-2", False),
     ]
     assert [e.status for e in report.entries] == ["planted", "planted", "skipped"]
 
@@ -222,11 +240,11 @@ def test_errore_ecologi_su_un_negozio_non_blocca_gli_altri(session, approved_mer
     calls = []
     fail = {"on": True}
 
-    async def fake(number, name=None, idempotency_key=None):
+    async def fake(number, name=None, idempotency_key=None, *, force_test=False):
         calls.append(idempotency_key)
         if fail["on"] and idempotency_key.startswith(f"fidelitree-{ms[1].id}-"):
             raise EcologiError("rifiutato")
-        return {"id": "ok"}
+        return {"treeUrl": "https://ecologi.test/ok"}
 
     monkeypatch.setattr(ecologi_service, "purchase_trees", fake)
     report = _close(session)
