@@ -27,9 +27,6 @@ Quando i negozi superano i 10-20, riusando lo stesso core di `scripts.close_peri
 Oggi, se la chiusura supera `ECOLOGI_GLOBAL_MONTHLY_CAP`, lo script si blocca e chiede al founder.
 In futuro: ripartire in modo proporzionale/equo tra i negozi.
 
-### Icona PWA vera
-L'icona (`app/static/icon.svg`, `apple-touch-icon.png`) è provvisoria, generata a codice: sostituirla col logo.
-
 ### Fallback scanner: codice numerico
 Se il QR code fallisce (camera assente, problemi HTTPS, mancanza permessi),
 il merchant deve poter inserire manualmente un codice numerico (shortcode o

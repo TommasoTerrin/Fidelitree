@@ -24,3 +24,5 @@ Thumbs.db
 
 #appunti miei
 appunti_agente.txt
+# Cartelle di sistema (OneDrive/Windows)
+desktop.ini

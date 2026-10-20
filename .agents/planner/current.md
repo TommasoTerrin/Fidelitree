@@ -73,8 +73,8 @@
   **⏭️ PROSSIMO (in ordine):**
   0. Collaudo manuale `ecologi_check` (chiave di test e reale) e `close_period` in test mode con `treeUrl` salvato.
   1. Collaudo manuale della checklist `pre-release.md` (inclusa la **PWA su telefono**: installazione in Home e apertura standalone; serve HTTPS o un tunnel).
-  2. Se esiste il logo vero, sostituire l'icona provvisoria (`app/static/icon.svg`, `apple-touch-icon.png`).
-  3. Merge su `main` + tag `v0.2.0` secondo `pre-release.md` (il push su `main` deploya in produzione); prima `reset_db` del DB (i dati v0.1.0 non si migrano).
+  2. ~~Logo vero~~ **fatto il 2026-10-20** (`feature/logo`, mergiato su `develop`): loghi in `app/static/loghi/`, versioni leggere `logo_*.jpg` nei template, icone PWA `icon-192.png`/`icon-512.png`/`apple-touch-icon.png`; versione **0.2.1**.
+  3. Merge su `main` + tag **`v0.2.1`** (`v0.2.0` non è mai stato taggato né rilasciato) secondo `pre-release.md` (il push su `main` deploya in produzione); prima `reset_db` del DB (i dati v0.1.0 non si migrano).
   **Debito noto:**
   - un merchant creato dall'admin non ha `auth_user_id` e la sua email non si può registrare (409): si risolve col collegamento Supabase (roadmap);
   - DB esistenti: `create_all()` non migra, serve `scripts.reset_db`;

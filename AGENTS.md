@@ -3,7 +3,7 @@
 > **Punto di ingresso unico** per qualsiasi coding agent (Claude Code, Codex, Gemini CLI, OpenCode, ...).
 > Leggi questo file prima di toccare il codice. Approfondimenti in [`.agents/`](.agents/).
 
-> **Versione corrente: v0.2.0** (pool del negozio, auth, wallet cliente), sviluppata sul branch `rinascimento`.
+> **Versione corrente: v0.2.1** (pool del negozio, auth, wallet cliente + logo e icone PWA), su `develop`: non ancora su `main` né in produzione.
 > I ticket con cui è stata costruita sono archiviati in [`.agents/tickets/v0.2.0/`](.agents/tickets/v0.2.0/README.md)
 > (storia e decisioni, non lavoro aperto). Lo stato del lavoro è in [`.agents/planner/current.md`](.agents/planner/current.md).
 
