@@ -18,7 +18,7 @@ def _versione_da_pyproject() -> str:
 
 
 def test_get_version_coincide_con_pyproject():
-    assert version.get_version() == "0.2.0"
+    assert version.get_version() == "0.2.1"
     assert version.get_version() == _versione_da_pyproject()
 
 
@@ -36,4 +36,4 @@ def test_health_espone_versione(client):
     body = resp.json()
     assert body["status"] == "ok"
     assert body["app"] == "Fidelitree"
-    assert body["version"] == "0.2.0"
+    assert body["version"] == "0.2.1"
