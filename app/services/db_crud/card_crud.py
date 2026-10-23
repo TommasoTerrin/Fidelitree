@@ -23,6 +23,24 @@ def create_card(session: Session, merchant_id: int, customer_id: int) -> Card:
     return new_card
 
 
+def add_card(session: Session, card: Card) -> Card:
+    """
+    Salva una carta già costruita (nuovo flusso Instagram: `igsid_hash` e `link_token_hash` li
+    calcola il service). Solleva `IntegrityError` se esiste già la carta per `(merchant_id, igsid_hash)`.
+    """
+    session.add(card)
+    session.commit()
+    session.refresh(card)
+    logger.info("Nuova Card creata: %s (merchant=%s)", card.id, card.merchant_id)
+    return card
+
+
+def get_card_by_igsid_hash(session: Session, merchant_id: int, igsid_hash: str) -> Optional[Card]:
+    """Recupera la carta di un cliente Instagram presso un negozio, dall'indice cieco dell'IGSID."""
+    statement = select(Card).where(Card.merchant_id == merchant_id, Card.igsid_hash == igsid_hash)
+    return session.exec(statement).first()
+
+
 def get_card_by_id(session: Session, card_id: uuid.UUID) -> Optional[Card]:
     """Recupera una carta per ID."""
     return session.get(Card, card_id)

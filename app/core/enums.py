@@ -31,6 +31,7 @@ class WebhookOutcome(str, Enum):
     STANDBY = "standby"                # conversazione di un'altra app: nessuna risposta
     SEND_FAILED = "send_failed"        # invio fallito
     OUT_OF_WINDOW = "out_of_window"    # oltre le 24 h dal messaggio del cliente
+    FOLLOW_REQUESTED = "follow_requested"  # il cliente non segue il negozio: solo l'invito a seguire, nessuna carta
 
 
 class Level(str, Enum):

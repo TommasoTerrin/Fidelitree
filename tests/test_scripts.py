@@ -4,7 +4,7 @@ Tutto su SQLite in-memory (fixture `session`/`client`), senza rete e senza Ecolo
 """
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 import pytest
@@ -13,12 +13,16 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.core.config import settings
-from app.core.enums import Level
-from app.models.models import Card, Customer, Merchant, MerchantPool, PointTransaction
+from app.core.clock import utc_now
+from app.core.enums import Level, WebhookOutcome
+from app.models.models import (
+    Card, Customer, Merchant, MerchantPool, PointTransaction, ProcessedWebhookEvent,
+)
 from app.services import ecologi_service, instagram_service, tree_service, zernio_service
 from app.services.db_crud import customer_crud
-from scripts import ecologi_check, reset_db, seed_db, zernio_check
+from scripts import ecologi_check, replay_webhook, reset_db, seed_db, zernio_check
 from scripts.smoke_test_prod import run_smoke_test
+from tests.conftest import WEBHOOK_TEST_SECRET, ZERNIO_TEST_KEY
 
 NOW = datetime(2026, 10, 12, 10, 0, tzinfo=timezone.utc)
 PERIOD = "2026-10"
@@ -363,3 +367,188 @@ def test_zernio_check_url_non_https_non_chiama_zernio(zernio_http, capsys):
 def test_zernio_check_non_apre_sessioni_db(zernio_http, session):
     assert zernio_check.main(["accounts"]) == 0
     assert _count(session, Merchant) == 0
+
+
+# --- replay_webhook ---
+
+class _FakeServer:
+    """Server finto per `replay_webhook`: registra le richieste; `outcome` (se dato) scrive la riga dell'evento."""
+
+    def __init__(self, session=None, merchant_id=None, outcome=None, status=200):
+        self.requests = []
+        self.session, self.merchant_id, self.outcome, self.status = session, merchant_id, outcome, status
+        self.client = httpx.Client(transport=httpx.MockTransport(self._handle))
+
+    def _handle(self, request):
+        self.requests.append(request)
+        if self.outcome:
+            self.session.add(ProcessedWebhookEvent(
+                event_id=request.headers["X-Zernio-Event-Id"], merchant_id=self.merchant_id,
+                received_at=utc_now(), outcome=self.outcome,
+            ))
+            self.session.commit()
+        return httpx.Response(self.status, json={"status": "ok"})
+
+    def event_message(self):
+        """Evento `message.received` ricevuto, riletto con il core dopo aver verificato la firma."""
+        request = self.requests[0]
+        raw = request.read()
+        assert instagram_service.verify_signature(WEBHOOK_TEST_SECRET, raw, request.headers["X-Zernio-Signature"])
+        return instagram_service.parse_message_received(json.loads(raw), request.headers["X-Zernio-Event-Id"])
+
+
+def _replay(session, merchant, server, *extra):
+    argv = ["--merchant-id", str(merchant.id), "--conversation-id", "conv-9", *extra]
+    return replay_webhook.main(argv, session=session, http=server.client)
+
+
+def test_replay_webhook_invia_un_corpo_firmato_che_il_core_verifica(session, instagram_merchant):
+    server = _FakeServer()
+
+    assert _replay(session, instagram_merchant, server, "--text", "CARTA") == 0
+
+    assert len(server.requests) == 1
+    request = server.requests[0]
+    assert request.method == "POST"
+    assert request.url.path == f"/webhooks/zernio/{instagram_merchant.webhook_hook_id}"
+    assert request.headers["X-Zernio-Event-Id"]
+    msg = server.event_message()
+    assert (msg.source, msg.text, msg.conversation_id) == ("dm_text", "CARTA", "conv-9")
+    assert msg.account_id == instagram_merchant.zernio_account_id
+    assert msg.direction == "incoming"
+    assert msg.standby is False and msg.is_follower is None
+    assert abs(msg.sent_at - utc_now()) < timedelta(minutes=1)
+    assert instagram_service.detect_trigger(msg, settings.INSTAGRAM_CARD_KEYWORD) is not None
+
+
+def test_replay_webhook_ogni_esecuzione_ha_un_event_id_nuovo(session, instagram_merchant):
+    first, second = _FakeServer(), _FakeServer()
+    _replay(session, instagram_merchant, first)
+    _replay(session, instagram_merchant, second)
+    assert first.requests[0].headers["X-Zernio-Event-Id"] != second.requests[0].headers["X-Zernio-Event-Id"]
+
+
+def test_replay_webhook_testo_di_default_e_la_parola_chiave(session, instagram_merchant):
+    server = _FakeServer()
+    _replay(session, instagram_merchant, server)
+    assert server.event_message().text == settings.INSTAGRAM_CARD_KEYWORD
+
+
+def test_replay_webhook_postback(session, instagram_merchant):
+    server = _FakeServer()
+    _replay(session, instagram_merchant, server, "--postback")
+    msg = server.event_message()
+    assert msg.source == "dm_postback"
+    assert msg.postback_payload == instagram_service.CARD_POSTBACK_PAYLOAD
+
+
+def test_replay_webhook_standby_sender_ore_e_follower(session, instagram_merchant):
+    server = _FakeServer()
+    _replay(session, instagram_merchant, server, "--standby", "--sender-id", "igsid-finto-5", "--hours-ago", "5",
+            "--follower", "no")
+    msg = server.event_message()
+    assert msg.standby is True
+    assert msg.sender_id == "igsid-finto-5"
+    assert msg.is_follower is False
+    assert abs((utc_now() - msg.sent_at) - timedelta(hours=5)) < timedelta(minutes=1)
+
+
+def test_replay_webhook_follower_si(session, instagram_merchant):
+    server = _FakeServer()
+    _replay(session, instagram_merchant, server, "--follower", "si")
+    assert server.event_message().is_follower is True
+
+
+def test_replay_webhook_stampa_status_ed_esito_e_avvisa_dell_invio_vero(session, instagram_merchant, capsys):
+    server = _FakeServer(session, instagram_merchant.id, outcome=WebhookOutcome.SENT)
+
+    assert _replay(session, instagram_merchant, server) == 0
+
+    out = capsys.readouterr().out
+    assert "VERO" in out
+    assert "200" in out
+    assert "sent" in out
+
+
+def test_replay_webhook_non_stampa_ne_segreti_ne_conversazione(session, instagram_merchant, capsys):
+    server = _FakeServer(session, instagram_merchant.id, outcome=WebhookOutcome.SENT)
+    _replay(session, instagram_merchant, server)
+
+    captured = capsys.readouterr()
+    shown = captured.out + captured.err
+    for secret in (WEBHOOK_TEST_SECRET, ZERNIO_TEST_KEY, "conv-9", "igsid-finto", instagram_merchant.webhook_hook_id):
+        assert secret not in shown
+
+
+def test_replay_webhook_senza_riga_dell_evento_lo_dice(session, instagram_merchant, capsys):
+    server = _FakeServer()
+    assert _replay(session, instagram_merchant, server) == 0
+    assert "non trovato" in capsys.readouterr().out
+
+
+def test_replay_webhook_risposta_non_2xx_esce_con_errore(session, instagram_merchant, capsys):
+    server = _FakeServer(status=401)
+    assert _replay(session, instagram_merchant, server) == 1
+    assert "401" in capsys.readouterr().out
+
+
+def test_replay_webhook_server_non_raggiungibile(session, instagram_merchant, capsys):
+    def refuse(request):
+        raise httpx.ConnectError("rifiutata")
+
+    http = httpx.Client(transport=httpx.MockTransport(refuse))
+    code = replay_webhook.main(
+        ["--merchant-id", str(instagram_merchant.id), "--conversation-id", "c"], session=session, http=http,
+    )
+    assert code == 1
+    assert "ERRORE" in capsys.readouterr().err
+
+
+def test_replay_webhook_merchant_inesistente(session, capsys):
+    http = httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(200)))
+    code = replay_webhook.main(["--merchant-id", "999", "--conversation-id", "c"], session=session, http=http)
+    assert code == 1
+    assert "ERRORE" in capsys.readouterr().err
+
+
+def test_replay_webhook_merchant_senza_webhook(session, merchant, capsys):
+    http = httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(200)))
+    code = replay_webhook.main(
+        ["--merchant-id", str(merchant.id), "--conversation-id", "c"], session=session, http=http,
+    )
+    assert code == 1
+    assert "ERRORE" in capsys.readouterr().err
+
+
+def test_replay_webhook_text_e_postback_si_escludono(session):
+    with pytest.raises(SystemExit):
+        replay_webhook.main(
+            ["--merchant-id", "1", "--conversation-id", "c", "--text", "x", "--postback"], session=session,
+        )
+
+
+def test_replay_webhook_help_non_richiede_il_db(capsys):
+    with pytest.raises(SystemExit) as exit_info:
+        replay_webhook.main(["--help"])
+    assert exit_info.value.code == 0
+    assert "--conversation-id" in capsys.readouterr().out
+
+
+def test_replay_webhook_contro_l_app_vera_crea_la_carta(client, session, instagram_merchant, zernio_mock):
+    """Giro completo: il corpo firmato dallo script è accettato dal vero webhook."""
+
+    def forward(request):
+        response = client.post(
+            request.url.path, content=request.read(),
+            headers={k: v for k, v in request.headers.items() if k.lower().startswith("x-zernio")},
+        )
+        return httpx.Response(response.status_code, json=response.json())
+
+    http = httpx.Client(transport=httpx.MockTransport(forward))
+    code = replay_webhook.main(
+        ["--merchant-id", str(instagram_merchant.id), "--conversation-id", "conv-9"], session=session, http=http,
+    )
+
+    assert code == 0
+    assert _count(session, Card) == 1
+    assert len(zernio_mock.requests) == 1

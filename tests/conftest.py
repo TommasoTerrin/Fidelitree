@@ -169,3 +169,121 @@ def approved_merchants(session):
         return merchants
 
     return _make
+
+
+# ---------------------------------------------------------------------------
+# Instagram / Zernio (v0.3.0): negozio collegato, Zernio finto, webhook firmato
+# ---------------------------------------------------------------------------
+
+ZERNIO_TEST_KEY = "sk_" + "ef56" * 16
+WEBHOOK_TEST_SECRET = "whsec-di-prova-0123456789"
+TEST_PUBLIC_BASE_URL = "https://fidelitree.example"
+INSTAGRAM_ACCOUNT_ID = "acc-1"
+INSTAGRAM_HOOK_ID = "hook-opaco-123"
+
+
+@pytest.fixture()
+def instagram_merchant(session, monkeypatch) -> Merchant:
+    """
+    Merchant con Instagram collegato (stato `ACTIVE`): chiave Zernio e secret del webhook cifrati,
+    `zernio_account_id` e `webhook_hook_id` valorizzati. Imposta anche un `PUBLIC_BASE_URL` https
+    (la card accetta solo link https).
+    """
+    from app.core.config import settings
+    from app.core.crypto import encrypt_secret
+    from app.core.enums import InstagramStatus
+
+    monkeypatch.setattr(settings, "PUBLIC_BASE_URL", TEST_PUBLIC_BASE_URL)
+    created = merchant_crud.create_merchant(session, {
+        "business_name": "Bar Demo", "email": "bar@test.it", "is_approved": True,
+    })
+    created.zernio_api_key_enc = encrypt_secret(ZERNIO_TEST_KEY)
+    created.zernio_account_id = INSTAGRAM_ACCOUNT_ID
+    created.zernio_profile_id = "prof-1"
+    created.instagram_username = "bar_demo"
+    created.webhook_hook_id = INSTAGRAM_HOOK_ID
+    created.webhook_secret_enc = encrypt_secret(WEBHOOK_TEST_SECRET)
+    created.instagram_status = InstagramStatus.ACTIVE
+    session.add(created)
+    session.commit()
+    session.refresh(created)
+    return created
+
+
+class ZernioMock:
+    """
+    Zernio finto: registra le richieste e risponde con 200 (`messageId` progressivo) salvo diversa
+    indicazione. `queue(...)` accoda risposte (`httpx.Response`) o eccezioni httpx da sollevare,
+    consumate una per richiesta nell'ordine.
+    """
+
+    def __init__(self):
+        import httpx
+        self._httpx = httpx
+        self.requests: list = []
+        self._queue: list = []
+
+    def queue(self, *items) -> "ZernioMock":
+        """Accoda risposte o eccezioni per le prossime richieste."""
+        self._queue.extend(items)
+        return self
+
+    def handler(self, request):
+        """Handler del `MockTransport`."""
+        self.requests.append(request)
+        if self._queue:
+            item = self._queue.pop(0)
+            if isinstance(item, Exception):
+                raise item
+            return item
+        return self._httpx.Response(200, json={"success": True, "data": {"messageId": f"m_{len(self.requests)}"}})
+
+    def bodies(self) -> list:
+        """Corpi JSON delle richieste viste, nell'ordine."""
+        import json
+        return [json.loads(r.read()) for r in self.requests]
+
+
+@pytest.fixture()
+def zernio_mock(client):
+    """
+    `ZernioMock` installato con `dependency_overrides[get_zernio_http]`: il webhook parla con questo
+    e non con la rete. Dipende da `client`, che azzera gli override a fine test.
+    """
+    import httpx
+    from app.services.zernio_service import get_zernio_http
+
+    mock = ZernioMock()
+
+    async def override():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(mock.handler)) as http:
+            yield http
+
+    app.dependency_overrides[get_zernio_http] = override
+    return mock
+
+
+def sign_body(raw: bytes, secret: str = WEBHOOK_TEST_SECRET) -> str:
+    """Firma `X-Zernio-Signature`: HMAC-SHA256 esadecimale del corpo grezzo."""
+    import hashlib
+    import hmac
+    return hmac.new(secret.encode("utf-8"), raw, hashlib.sha256).hexdigest()
+
+
+def signed_webhook(client, merchant, payload, event_id=None, *, signature=None, secret=WEBHOOK_TEST_SECRET,
+                   hook_id=None, raw: bytes = None):
+    """
+    Invia un webhook Zernio al negozio: serializza `payload` (o usa `raw`), lo firma con `secret` (o con
+    `signature`, `""` = header assente) e lo manda con `X-Zernio-Event-Id` = `event_id` (default:
+    `payload["id"]`; `""` = header assente). Ritorna la risposta.
+    """
+    import json
+    body = raw if raw is not None else json.dumps(payload).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    event_id = payload.get("id") if event_id is None and isinstance(payload, dict) else event_id
+    if event_id:
+        headers["X-Zernio-Event-Id"] = event_id
+    sig = sign_body(body, secret) if signature is None else signature
+    if sig:
+        headers["X-Zernio-Signature"] = sig
+    return client.post(f"/webhooks/zernio/{hook_id or merchant.webhook_hook_id}", content=body, headers=headers)

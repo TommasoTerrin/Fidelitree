@@ -24,7 +24,7 @@ Contesto di riferimento: decisioni in [AGENTS.md](../../AGENTS.md), vincoli Zern
 | 03 | Cifratura AES-GCM, indice cieco IGSID, token del link | ✅ `161850d` (414 test) |
 | 04 | Core dei messaggi: trigger, card, finestra 24 h, quota | ✅ 2026-10-23 `f4bb1b3` (459 test) |
 | 05 | Client Zernio, `zernio_check`, **collaudo anticipato** | 🟡 codice fatto 2026-10-23 (549 test), in attesa del collaudo manuale del founder |
-| 06 | Webhook: dalla parola chiave alla card | |
+| 06 | Webhook: dalla parola chiave alla card | ✅ 2026-10-23 (644 test) |
 | 07 | Onboarding Instagram del merchant | |
 | 08 | Pagina carta, QR, scan e PWA merchant | |
 | 09 | Rimozione del vecchio flusso cliente (OTP, wallet, `/join`, `Customer`) | |
@@ -48,16 +48,26 @@ Note sui ticket fatti:
   `get_team_identity` → `None` (quota `account:<id>`). Dettagli in `zernio-notes.md`. Lo script ha bisogno di
   `ENCRYPTION_KEY`, `IGSID_HMAC_KEY`, `CARD_LINK_KEY` nell'ambiente (importa le settings).
 
+- **06**: `instagram_service` ha ora anche la shell: `get_or_create_card`, `card_link_url`, `handle_webhook` (negozio da
+  `hook_id` → firma → JSON → riga dell'evento per prima → pulizia a 7 giorni → trigger → `isFollower` → carta → invio),
+  route `POST /webhooks/zernio/{hook_id}` in `app/routes/webhooks.py` e `scripts/replay_webhook` (`--follower si|no`
+  in più rispetto al ticket). Esito nuovo `FOLLOW_REQUESTED`. Scelte non previste dal ticket:
+  `build_follow_prompt_text` ha un terzo parametro `keyword` (il core non legge le settings); anche l'invito a seguire
+  rispetta la finestra di 24 ore, conta per la quota e attiva un negozio `AWAITING_TEST_DM` (come card e ripiego);
+  la mappatura degli errori è una sola per card, ripiego e invito (`AUTH` → `KEY_INVALID`, `NOT_THREAD_OWNER` → standby);
+  un negozio con `hook_id` ma senza chiave/account risponde 404, senza secret 401; un errore di costruzione del
+  messaggio (link non https, nome > 80 caratteri) dà `SEND_FAILED` e 200, non un 400 che farebbe ritentare Zernio.
+
 ### Prossimo passo
 
 1. ~~Ticket 05~~ codice fatto; **chiuderlo** dopo il collaudo.
-2. **Ticket 06** (con risposte finte), poi **collaudo manuale anticipato del 05, a cura del founder** (passi 1-2 almeno;
-   ticket 05 → "Collaudo manuale anticipato"), **prima** di scrivere il 07. Se ManyChat risulta ancora collegato
-   all'account, scollegarlo.
+2. ~~Ticket 06~~ fatto. Ora il **collaudo manuale anticipato del 05, a cura del founder** (passi 1-2 almeno; ticket 05 →
+   "Collaudo manuale anticipato", ora con `replay_webhook` per provare il webhook in locale), **prima** di scrivere il
+   07. Se ManyChat risulta ancora collegato all'account, scollegarlo.
    Verifica i rischi più grossi: Meta accetta la card a chi non segue il negozio? Il webhook arriva per i DM in
    Requests? Come si comporta ManyChat come app di default? Quale base URL Zernio vale? Se l'esito contraddice le
    ipotesi di `zernio-notes.md`: **fermarsi e chiedere**.
-3. Poi 06 → 11 in ordine.
+3. Poi 07 → 11 in ordine.
 
 ### Decisione del 2026-10-23: carta solo a chi segue
 Il webhook (06) manda la card solo se `isFollower` è `true` o `null`; se `false` solo un testo di invito a seguire, senza

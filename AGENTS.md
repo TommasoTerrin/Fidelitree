@@ -91,7 +91,7 @@ python -m scripts.ecologi_check [--trees N] [--merchant-name NOME] [--month AAAA
 python -m scripts.zernio_check accounts | conversations | send-card | send-text [--merchant-id N]
 
 # Collaudo locale del webhook: evento message.received firmato verso il server (che invia DAVVERO a Zernio)
-python -m scripts.replay_webhook --merchant-id N --conversation-id ID [--text CARTA | --postback] [--standby]
+python -m scripts.replay_webhook --merchant-id N --conversation-id ID [--text CARTA | --postback] [--standby] [--follower si|no]
 
 # Tunnel https per ricevere i webhook in locale (PUBLIC_BASE_URL = URL stampato)
 cloudflared tunnel --url http://127.0.0.1:8001

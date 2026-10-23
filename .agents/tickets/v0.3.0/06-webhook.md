@@ -27,8 +27,9 @@ Decisioni del 2026-10-22, vincoli in [zernio-notes.md](../../architecture/zernio
 
 - **Carta solo a chi segue** (decisione 2026-10-23, vedi AGENTS.md): `InboundMessage.is_follower` (da
   `message.sender.instagramProfile.isFollower`, `None` se assente). `False` → nessuna carta, solo il testo di invito
-  (`build_follow_prompt_text(business_name, instagram_username)` nel core, con `instagram_username` facoltativo: senza
-  handle si cita il nome del negozio) e esito nuovo `WebhookOutcome.FOLLOW_REQUESTED` (aggiungerlo all'enum e al
+  (`build_follow_prompt_text(business_name, instagram_username, keyword)` nel core, con `instagram_username`
+  facoltativo: senza handle si cita il nome del negozio; `keyword` lo passa la shell da `INSTAGRAM_CARD_KEYWORD`, il
+  core non legge le settings) e esito nuovo `WebhookOutcome.FOLLOW_REQUESTED` (aggiungerlo all'enum e al
   modello dati del README). `True` e `None` → card (`None` da rivedere nel collaudo finale). Il controllo sta dopo
   `detect_trigger` e **prima** di `get_or_create_card`; l'invito conta come invio per la quota. Se anche l'invio del
   testo fallisce → `SEND_FAILED`. Test: follower, non follower (nessuna carta, un POST di testo), `null` (card), invito

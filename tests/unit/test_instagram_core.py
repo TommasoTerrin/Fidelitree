@@ -269,3 +269,59 @@ def test_quota_avviso_ed_esaurimento():
 def test_quota_limite_zero_non_divide():
     status = quota_status(5, 0, 75)
     assert (status.percent, status.warning, status.exhausted) == (0, False, False)
+
+
+# --- is_follower e invito a seguire (decisione 2026-10-23) ---
+
+def _with_follower(value):
+    payload = _payload()
+    payload["message"]["sender"]["instagramProfile"] = {"isFollower": value}
+    return payload
+
+
+@pytest.mark.parametrize("raw, expected", [(True, True), (False, False), (None, None)])
+def test_parse_is_follower(raw, expected):
+    assert parse_message_received(_with_follower(raw), "evt-1").is_follower is expected
+
+
+def test_parse_is_follower_assente_vale_none():
+    assert parse_message_received(_payload(), "evt-1").is_follower is None
+
+
+@pytest.mark.parametrize("profile", ["si", 1, ["x"], {"isFollower": "true"}, {"isFollower": 0}, {}])
+def test_parse_is_follower_non_booleano_vale_none(profile):
+    payload = _payload()
+    payload["message"]["sender"]["instagramProfile"] = profile
+    assert parse_message_received(payload, "evt-1").is_follower is None
+
+
+def test_invito_a_seguire_con_handle():
+    text = ig.build_follow_prompt_text("Bar Demo", "bar_demo", "CARTA")
+    assert text == "Per avere la carta fedeltà di Bar Demo segui @bar_demo su Instagram, poi riscrivi CARTA."
+
+
+def test_invito_a_seguire_toglie_la_chiocciola_dell_handle():
+    assert "@bar_demo " in ig.build_follow_prompt_text("Bar Demo", "@bar_demo", "CARTA")
+    assert "@@" not in ig.build_follow_prompt_text("Bar Demo", "@bar_demo", "CARTA")
+
+
+@pytest.mark.parametrize("handle", [None, "", "  ", "@"])
+def test_invito_a_seguire_senza_handle_cita_il_nome_del_negozio(handle):
+    text = ig.build_follow_prompt_text("Bar Demo", handle, "CARTA")
+    assert "@" not in text
+    assert text.count("Bar Demo") == 2
+    assert text.endswith("poi riscrivi CARTA.")
+
+
+def test_invito_a_seguire_usa_la_parola_chiave_data():
+    assert ig.build_follow_prompt_text("Bar", "bar", "TESSERA").endswith("poi riscrivi TESSERA.")
+
+
+def test_invito_a_seguire_nome_vuoto():
+    with pytest.raises(InvalidInputError):
+        ig.build_follow_prompt_text("  ", "bar", "CARTA")
+
+
+def test_invito_a_seguire_troppo_lungo():
+    with pytest.raises(MessageTooLongError):
+        ig.build_follow_prompt_text("x" * 700, "bar", "CARTA")

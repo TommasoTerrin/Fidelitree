@@ -99,7 +99,7 @@ Card          id UUID (è anche il contenuto del QR per lo scan), merchant_id, c
               UNIQUE(merchant_id, igsid_hash)   # una carta per coppia (negozio, IGSID)
 
 ProcessedWebhookEvent  event_id str PK (X-Zernio-Event-Id), merchant_id (FK CASCADE), received_at (UTC, index),
-              outcome str  # received (iniziale) | sent | fallback_sent | ignored | standby | send_failed | out_of_window
+              outcome str  # received (iniziale) | sent | fallback_sent | follow_requested | ignored | standby | send_failed | out_of_window
               # dedup dei retry Zernio (at-least-once, ~51 h di retry): conservazione 7 giorni
 
 ZernioSendCounter  quota_scope str + period 'YYYY-MM' (PK composta), sent int
