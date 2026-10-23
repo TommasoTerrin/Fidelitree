@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlmodel import SQLModel, create_engine
 
 from app.core.config import settings
+from app.core.crypto import validate_keys
 from app.core.errors import AuthError, ConflictError, DomainError, ForbiddenError, NotFoundError
 from app.version import get_version
 
@@ -26,8 +27,10 @@ from app.routes.merchant.views import router as merchant_views_router
 async def lifespan(app: FastAPI):
     """
     Gestisce il ciclo di vita dell'applicazione.
-    Crea le tabelle del database all'avvio se non esistono.
+    Verifica le chiavi di cifratura (l'app non parte se non valide) e crea le
+    tabelle del database all'avvio se non esistono.
     """
+    validate_keys()
     SQLModel.metadata.create_all(engine)
     yield
 

@@ -10,8 +10,8 @@ import os
 
 # Chiavi obbligatorie senza default: i valori di test vanno impostati PRIMA di importare l'app.
 os.environ.setdefault("ENCRYPTION_KEY", "dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcy0hISE=")  # 32 byte base64 urlsafe
-os.environ.setdefault("IGSID_HMAC_KEY", "test-igsid-hmac-key")
-os.environ.setdefault("CARD_LINK_KEY", "test-card-link-key")
+os.environ.setdefault("IGSID_HMAC_KEY", "test-igsid-hmac-key-0123456789-abcdef")
+os.environ.setdefault("CARD_LINK_KEY", "test-card-link-key-0123456789-abcdefg")
 
 import pytest
 from fastapi.testclient import TestClient

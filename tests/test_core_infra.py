@@ -139,3 +139,15 @@ def test_settings_auth_provider_solo_valori_ammessi(monkeypatch):
     monkeypatch.setenv("AUTH_PROVIDER", "boh")
     with pytest.raises(Exception):
         Settings(_env_file=None)
+
+
+def test_lifespan_non_parte_con_chiave_di_cifratura_non_valida(monkeypatch):
+    """Il lifespan chiama validate_keys: con ENCRYPTION_KEY non valida l'app non parte."""
+    from fastapi.testclient import TestClient
+    from app.core.config import settings
+    from app.main import app
+
+    monkeypatch.setattr(settings, "ENCRYPTION_KEY", "troppo-corta")
+    with pytest.raises(RuntimeError):
+        with TestClient(app):
+            pass
