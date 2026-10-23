@@ -29,6 +29,26 @@ _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _PHONE_RE = re.compile(r"^\+39\d{9,10}$")  # stessa regola del modello Merchant
 
 
+# Il nome è il titolo della card Instagram: stesso valore di `instagram_service.CARD_TITLE_MAX`
+# (non importato per non legare i due moduli; un test li tiene allineati).
+MAX_BUSINESS_NAME_LENGTH = 80
+
+
+def validate_business_name(business_name: Optional[str]) -> str:
+    """
+    Ripulisce il nome dell'attività dagli spazi e lo valida: obbligatorio e al massimo 80 caratteri,
+    così la card del negozio è sempre costruibile. Solleva `InvalidInputError` in italiano.
+    """
+    name = (business_name or "").strip()
+    if not name:
+        raise InvalidInputError("Il nome dell'attività è obbligatorio")
+    if len(name) > MAX_BUSINESS_NAME_LENGTH:
+        raise InvalidInputError(
+            f"Il nome dell'attività può avere al massimo {MAX_BUSINESS_NAME_LENGTH} caratteri"
+        )
+    return name
+
+
 class RegistrationData(BaseModel):
     """Dati di registrazione già validati e normalizzati."""
 
@@ -50,9 +70,7 @@ def validate_registration(
     facoltativo (`None` o stringa vuota = assente) e, se presente, deve essere `+39` + 9-10 cifre.
     Solleva `InvalidInputError` con un messaggio in italiano per il primo campo non valido.
     """
-    name = (business_name or "").strip()
-    if not name:
-        raise InvalidInputError("Il nome dell'attività è obbligatorio")
+    name = validate_business_name(business_name)
 
     normalized_email = (email or "").strip().lower()
     if not _EMAIL_RE.match(normalized_email):
@@ -131,8 +149,11 @@ def update_own_settings(session: Session, merchant: Merchant, changes: dict) -> 
     """
     Applica le modifiche del merchant a se stesso. `conversion_value_eur` (euro) viene
     convertito in `conversion_value_cents`; i campi non indicati restano invariati.
+    Un `business_name` nuovo è ripulito e validato (solleva `InvalidInputError` se vuoto o oltre 80 caratteri).
     """
     changes = dict(changes)
+    if changes.get("business_name") is not None:
+        changes["business_name"] = validate_business_name(changes["business_name"])
     if "conversion_value_eur" in changes:
         changes["conversion_value_cents"] = euro_to_cents(changes.pop("conversion_value_eur"))
     return merchant_crud.update_merchant(session, merchant, changes)

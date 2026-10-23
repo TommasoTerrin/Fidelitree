@@ -5,7 +5,9 @@ Test del core puro di `merchant_service`: validazione dei dati di registrazione 
 import pytest
 
 from app.core.errors import InvalidInputError
-from app.services.merchant_service import validate_registration
+from app.services.merchant_service import (
+    MAX_BUSINESS_NAME_LENGTH, validate_business_name, validate_registration,
+)
 
 
 def _valid(**overrides):
@@ -43,6 +45,26 @@ def test_nome_vuoto(name):
 
 def test_nome_ripulito_dagli_spazi():
     assert _valid(business_name="  Bar Sole  ").business_name == "Bar Sole"
+
+
+def test_nome_massimo_80_caratteri():
+    assert _valid(business_name="a" * 80).business_name == "a" * 80
+    with pytest.raises(InvalidInputError, match="80"):
+        _valid(business_name="a" * 81)
+    assert _valid(business_name="  " + "a" * 80 + "  ").business_name == "a" * 80  # gli spazi non contano
+
+
+def test_limite_nome_allineato_al_titolo_della_card():
+    from app.services.instagram_service import CARD_TITLE_MAX
+    assert MAX_BUSINESS_NAME_LENGTH == CARD_TITLE_MAX
+
+
+def test_validate_business_name_per_l_aggiornamento():
+    assert validate_business_name("  Forno Rosso ") == "Forno Rosso"
+    with pytest.raises(InvalidInputError, match="80"):
+        validate_business_name("a" * 81)
+    with pytest.raises(InvalidInputError, match="nome"):
+        validate_business_name(None)
 
 
 def test_telefono_facoltativo_e_con_prefisso():
