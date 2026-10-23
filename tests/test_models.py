@@ -10,9 +10,11 @@ from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 
-from app.core.enums import Level, PointTransactionKind
+from app.core.clock import utc_now
+from app.core.enums import InstagramStatus, Level, PointTransactionKind, WebhookOutcome
 from app.models.models import (
-    Card, Customer, Merchant, MerchantPool, PointTransaction, TreePlanting,
+    Card, Customer, Merchant, MerchantPool, PointTransaction, ProcessedWebhookEvent,
+    TreePlanting, ZernioSendCounter,
 )
 
 VALID = {"business_name": "Bar Prova", "email": "bar@prova.it"}
@@ -154,6 +156,115 @@ def test_stesso_customer_su_due_merchant_ok(session):
 
 
 # ---------------------------------------------------------------------------
+# Carta via DM Instagram (v0.3.0): Merchant, Card, eventi webhook, contatore quota
+# ---------------------------------------------------------------------------
+
+def test_merchant_nuovo_non_ha_instagram_collegato():
+    m = Merchant.model_validate(VALID)
+    assert m.instagram_status == InstagramStatus.NOT_CONNECTED
+    assert m.persistent_menu_set is False
+    for field in ("zernio_api_key_enc", "zernio_account_id", "zernio_profile_id", "zernio_team_id",
+                  "instagram_username", "webhook_hook_id", "webhook_secret_enc", "zernio_webhook_id",
+                  "standby_detected_at", "standby_owner_app_id"):
+        assert getattr(m, field) is None
+
+
+def test_merchant_zernio_account_id_e_hook_id_unici(session):
+    make_merchant(session, zernio_account_id="acc1", webhook_hook_id="h1")
+    for extra in ({"zernio_account_id": "acc1"}, {"webhook_hook_id": "h1"}):
+        with pytest.raises(IntegrityError):
+            make_merchant(session, email="altro@prova.it", **extra)
+        session.rollback()
+    # i NULL non collidono
+    make_merchant(session, email="due@prova.it")
+    make_merchant(session, email="tre@prova.it")
+
+
+def test_card_con_igsid_senza_customer(session):
+    m = make_merchant(session)
+    session.add(Card(merchant_id=m.id, igsid_hash="h" * 64))
+    session.commit()
+    card = session.exec(select(Card)).one()
+    assert card.customer_id is None
+    assert card.link_version == 1
+    assert card.link_token_hash is None
+    assert card.zernio_conversation_id is None and card.last_inbound_at is None
+    assert card.created_at is not None
+
+
+def test_card_igsid_duplicato_stesso_negozio(session):
+    m = make_merchant(session)
+    session.add(Card(merchant_id=m.id, igsid_hash="abc"))
+    session.commit()
+    session.add(Card(merchant_id=m.id, igsid_hash="abc"))
+    with pytest.raises(IntegrityError):
+        session.commit()
+    session.rollback()
+
+
+def test_card_stesso_igsid_su_due_negozi_ok(session):
+    m1, m2 = make_merchant(session), make_merchant(session, email="altro@prova.it")
+    session.add(Card(merchant_id=m1.id, igsid_hash="abc"))
+    session.add(Card(merchant_id=m2.id, igsid_hash="abc"))
+    session.commit()
+    assert len(session.exec(select(Card)).all()) == 2
+
+
+def test_card_vecchio_flusso_senza_igsid_ancora_possibile(session):
+    m, c = make_merchant(session), make_customer(session)
+    session.add(Card(merchant_id=m.id, customer_id=c.id))
+    session.commit()
+    assert session.exec(select(Card)).one().igsid_hash is None
+
+
+def test_card_link_token_hash_unico(session):
+    m = make_merchant(session)
+    session.add(Card(merchant_id=m.id, igsid_hash="a", link_token_hash="tok"))
+    session.commit()
+    session.add(Card(merchant_id=m.id, igsid_hash="b", link_token_hash="tok"))
+    with pytest.raises(IntegrityError):
+        session.commit()
+    session.rollback()
+
+
+def test_processed_webhook_event_default_e_unicita(session):
+    merchant_id = make_merchant(session).id
+    session.add(ProcessedWebhookEvent(event_id="evt-1", merchant_id=merchant_id))
+    session.commit()
+    event = session.exec(select(ProcessedWebhookEvent)).one()
+    assert event.outcome == WebhookOutcome.RECEIVED
+    assert event.received_at is not None
+
+    session.expunge_all()
+    session.add(ProcessedWebhookEvent(event_id="evt-1", merchant_id=merchant_id))
+    with pytest.raises(IntegrityError):
+        session.commit()
+    session.rollback()
+
+
+def test_zernio_send_counter_pk_composta(session):
+    session.add(ZernioSendCounter(quota_scope="zernio:t1", period="2026-10"))
+    session.commit()
+    assert session.exec(select(ZernioSendCounter)).one().sent == 0
+
+    session.expunge_all()
+    session.add(ZernioSendCounter(quota_scope="zernio:t1", period="2026-10"))
+    with pytest.raises(IntegrityError):
+        session.commit()
+    session.rollback()
+
+    session.add(ZernioSendCounter(quota_scope="zernio:t1", period="2026-11"))  # altro mese
+    session.add(ZernioSendCounter(quota_scope="zernio:t2", period="2026-10"))  # altro team
+    session.commit()
+
+
+def test_created_at_e_received_at_aware_utc():
+    for value in (Card(merchant_id=1).created_at, ProcessedWebhookEvent(event_id="e", merchant_id=1).received_at):
+        assert value.tzinfo is not None
+        assert value.utcoffset() == timedelta(0)
+
+
+# ---------------------------------------------------------------------------
 # TreePlanting
 # ---------------------------------------------------------------------------
 
@@ -237,6 +348,19 @@ def test_cancellare_merchant_elimina_tutto_il_collegato(session):
     for table in (Card, PointTransaction, MerchantPool, TreePlanting):
         assert session.exec(select(table)).all() == []
     assert session.exec(select(Customer)).one()  # il cliente resta
+
+
+def test_cancellare_merchant_elimina_carte_instagram_ed_eventi(session):
+    m = make_merchant(session)
+    session.add(Card(merchant_id=m.id, igsid_hash="abc", last_inbound_at=utc_now()))
+    session.add(ProcessedWebhookEvent(event_id="evt-1", merchant_id=m.id))
+    session.commit()
+
+    session.delete(m)
+    session.commit()
+
+    assert session.exec(select(Card)).all() == []
+    assert session.exec(select(ProcessedWebhookEvent)).all() == []
 
 
 def test_cancellare_customer_elimina_le_sue_carte(session):

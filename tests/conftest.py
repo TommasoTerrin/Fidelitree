@@ -6,6 +6,13 @@ né fa chiamate di rete. La sessione di test viene iniettata nell'app
 tramite dependency_overrides.
 """
 
+import os
+
+# Chiavi obbligatorie senza default: i valori di test vanno impostati PRIMA di importare l'app.
+os.environ.setdefault("ENCRYPTION_KEY", "dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcy0hISE=")  # 32 byte base64 urlsafe
+os.environ.setdefault("IGSID_HMAC_KEY", "test-igsid-hmac-key")
+os.environ.setdefault("CARD_LINK_KEY", "test-card-link-key")
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool

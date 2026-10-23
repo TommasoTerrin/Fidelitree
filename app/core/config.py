@@ -4,8 +4,11 @@ Carica le variabili d'ambiente da .env (in locale) o dall'ambiente (in produzion
 Tutte le variabili senza default sono obbligatorie: l'app non parte se mancano.
 """
 
+import base64
+import binascii
 from typing import Literal
 
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
@@ -41,7 +44,33 @@ class Settings(BaseSettings):
     TIER_SILVER_POINTS: int = 300
     TIER_GOLD_POINTS: int = 600
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # Cifratura e segreti (v0.3.0) — obbligatorie e senza default: l'app non parte se mancano
+    ENCRYPTION_KEY: str = Field(min_length=1)    # AES-256-GCM per chiave Zernio e secret webhook: 32 byte, base64 urlsafe
+    ENCRYPTION_KEY_ID: str = "1"                 # id salvato col dato cifrato (rotazione futura)
+    IGSID_HMAC_KEY: str = Field(min_length=1)    # indice cieco dell'IGSID; NON ruotabile senza scollegare le carte
+    CARD_LINK_KEY: str = Field(min_length=1)     # deriva il token del link /c/<token>; cambiarla invalida i link
+
+    # Instagram / Zernio (v0.3.0)
+    PUBLIC_BASE_URL: str = "http://127.0.0.1:8001"  # URL pubblico https: link delle carte e webhook su Zernio
+    ZERNIO_BASE_URL: str = "https://zernio.com/api"  # base dell'API Zernio
+    INSTAGRAM_CARD_KEYWORD: str = "CARTA"            # parola chiave di piattaforma che il cliente scrive in DM
+    ZERNIO_MONTHLY_SEND_LIMIT: int = 10000           # invii gratuiti al mese per team Zernio (solo per l'avviso)
+    ZERNIO_SEND_WARN_PERCENT: int = 75               # soglia di avviso nel pannello del merchant (%)
+
+    @field_validator("ENCRYPTION_KEY")
+    @classmethod
+    def validate_encryption_key(cls, v: str) -> str:
+        """La chiave di cifratura deve decodificare (base64 urlsafe) in esattamente 32 byte."""
+        try:
+            raw = base64.urlsafe_b64decode(v)
+        except (binascii.Error, ValueError):
+            raise ValueError("ENCRYPTION_KEY non è base64 urlsafe valido")
+        if len(raw) != 32:
+            raise ValueError("ENCRYPTION_KEY deve essere di 32 byte (base64 urlsafe)")
+        return v
+
+    # hide_input_in_errors: un errore di avvio non deve mai stampare il valore di una chiave
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", hide_input_in_errors=True)
 
 
 @lru_cache()

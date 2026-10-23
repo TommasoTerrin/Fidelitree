@@ -31,6 +31,14 @@ class AuthError(DomainError):
     """Credenziali o codice di accesso errati (HTTP 401)."""
 
 
+class MessageTooLongError(InvalidInputError):
+    """Un campo della card supera il limite della piattaforma (HTTP 400)."""
+
+
+class InvalidSignatureError(AuthError):
+    """Firma del webhook assente o errata (HTTP 401)."""
+
+
 class InsufficientBalanceError(DomainError):
     """Un saldo (tree points o cashback) scenderebbe sotto zero (HTTP 400)."""
 
