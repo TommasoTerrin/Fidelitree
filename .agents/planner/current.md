@@ -57,6 +57,11 @@ Note sui ticket fatti:
    ipotesi di `zernio-notes.md`: **fermarsi e chiedere**.
 3. Poi 06 → 11 in ordine.
 
+### Decisione del 2026-10-23: carta solo a chi segue
+Il webhook (06) manda la card solo se `isFollower` è `true` o `null`; se `false` solo un testo di invito a seguire, senza
+creare la carta. Dettagli in AGENTS.md e nel ticket 06 (nuovo esito `follow_requested`). Il comportamento con `null` si
+rivede nel collaudo finale. QR "apri la chat": a mano dal founder (ticket 11).
+
 ### Da fare a mano (founder)
 
 - Aggiungere al `.env` locale `ENCRYPTION_KEY`, `IGSID_HMAC_KEY`, `CARD_LINK_KEY` (l'app non parte senza; i test le

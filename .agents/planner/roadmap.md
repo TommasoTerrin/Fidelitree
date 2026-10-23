@@ -1,22 +1,96 @@
 # Roadmap Fidelitree
 
-## Release 1 — MVP Cashback (v0.1.0) ✅ rilasciata
+## Dove vogliamo arrivare (app a regime)
 
+Una micro-SaaS **gratuita per i merchant** e a gestione leggera per il founder, che regge qualche decina di negozi:
+
+- **Cliente**: scrive "CARTA" in DM al negozio su Instagram e riceve la sua carta (punti, cashback, alberi). Niente app,
+  niente iscrizione. In seguito anche da commento a un post o risposta a una storia.
+- **Merchant**: si collega da solo (oggi con la propria chiave Zernio), scansiona il QR dalla PWA, assegna tree points e
+  cashback, racconta i risultati del negozio ("questo mese abbiamo piantato 5 alberi").
+- **Founder**: approva i negozi, chiude il mese in un comando (poi in automatico) e pianta gli alberi con la chiave
+  Ecologi di piattaforma; gestisce tutto da un'unica chiave Zernio. I ricavi arrivano da consulenza social e contenuti IA
+  venduti ai merchant (modello agenzia), non dall'app.
+- **Pubblico**: un contatore degli alberi piantati, base del build-in-public e della caccia ai primi 3-5 negozi pilota.
+- **Tecnica**: auth reale (Supabase), migrazioni DB, test in CI, staging separato dalla produzione.
+
+Percorso: **v0.3.0** (carta via DM, pilota con chiave Zernio del merchant) → **pilota reale con 3-5 negozi** →
+**v0.4.x** (consolidamento: Supabase, contatore pubblico, cron di chiusura, dashboard) → **v0.5+** (chiave Zernio unica
+del founder, trigger da commenti e storie, privacy/DPA a regime).
+
+## Versioni
+
+### v0.1.0 — MVP cashback ✅ rilasciata
 Login merchant, carte fedeltà con QR, aggiunta/rimozione cashback, WhatsApp share.
 
-## v0.2.0 — Pool del negozio, auth, wallet cliente (branch `rinascimento`, pronta al merge)
+### v0.2.0 / v0.2.1 — Pool del negozio, auth, wallet cliente (non rilasciata, assorbita da v0.3.0)
+Pool mensile per negozio pagato dal founder (chiave Ecologi unica), auth merchant per email dietro un'interfaccia
+pronta per Supabase, cashback e conversione tree points, logo e icone PWA. Il flusso cliente con OTP e wallet è sostituito
+da v0.3.0. Storico: [`tickets/v0.2.0/STORICO.md`](../tickets/v0.2.0/STORICO.md).
 
-Assorbe la vecchia "Release 2 — Tree Points per-merchant", **mai andata in produzione** (alberi per carta,
-chiave Ecologi del merchant, `mode`): sostituita da un **pool mensile per negozio pagato dal founder** (chiave
-Ecologi unica di piattaforma), iscrizione cliente con OTP + wallet PWA, auth merchant per email dietro
-un'interfaccia pronta per Supabase. Regole e decisioni: AGENTS.md; dettaglio dei ticket: `.agents/tickets/v0.2.0/`.
+### v0.3.0 — Carta fedeltà via DM Instagram (in sviluppo, `feature/instagram-cards`)
+La carta nasce da un DM Instagram al negozio (parola chiave o voce di menu), ricevuto via **Zernio** e risposto con una
+card che apre la pagina carta con un link segreto. Sostituisce OTP cliente, wallet, QR `/join` e la PWA cliente;
+alberi, pool, cashback e auth merchant restano. Prima release in produzione dopo v0.1.0.
+Decisioni: AGENTS.md; ticket e stato: [`tickets/v0.3.0/`](../tickets/v0.3.0/README.md) e [`current.md`](current.md).
+
+### Dopo v0.3.0: verso la v0.4 di consolidamento
+Dopo il rilascio e il pilota, in quest'ordine indicativo: Supabase Auth, contatore alberi pubblico, endpoint/cron per
+`close_period`, dashboard merchant, CI. Le voci sono nel backlog sotto; l'ordine definitivo lo decide l'esito del pilota.
+
+## Estensioni future del flusso Instagram (dopo v0.3.0)
+
+### Trigger da commento a post o storia → DM
+Il cliente commenta un post o risponde a una storia con la parola chiave e riceve la card in DM (evento
+`comment.received` di Zernio / private reply). Il riconoscitore di trigger di v0.3.0 accetta già nuove sorgenti
+(`InboundMessage.source`): si aggiunge la sorgente e l'evento al webhook. Attenzione: per le private reply Meta può
+rifiutare bottoni e card ai non follower (errore 2/1545133, vedi `zernio-notes.md`).
+
+### Follow-gate per negozio e QR temporaneo per chi non segue
+- **Opzione per singolo negozio** del blocco "carta solo a chi segue" e **testo di invito scelto dal merchant** (in
+  v0.3.0 il blocco vale per tutti e il testo è fisso).
+- **QR temporaneo** per chi non segue: dà tree points e alberi al pool ma **niente cashback**, così partecipa comunque
+  al gioco. Complessità in più, rimandata.
+- **QR "apri la chat" in negozio** (`https://ig.me/m/<username>`): oggi fatto a mano dal founder; eventuale
+  generazione dal pannello merchant, domande d'apertura (ice breakers) e trigger `referral` (`?ref=`) da verificare.
+
+### Modalità chiave Zernio unica del founder
+Una sola chiave di piattaforma, un `profileId` Zernio per negozio, account Instagram collegato con il connect OAuth
+(`GET /v1/connect/instagram?profileId=...`) invece della chiave incollata dal merchant. Si cambia solo
+`zernio_service.zernio_credentials_for` (oggi restituisce la chiave del merchant) e l'onboarding. Da valutare prima:
+la quota di 10.000 invii/mese e il rate limit diventano **condivisi** tra tutti i negozi (sono per team), dal terzo
+account Zernio si paga ($6/account/mese nella fascia 3-10), un webhook per negozio o uno unico instradato per `accountId`
+(limite di 50 webhook per team).
+Con una carta di credito sull'account di piattaforma Zernio **non si ferma** a 10.000 invii (fattura l'eccedenza):
+al momento della migrazione va riconsiderato un blocco nostro (oggi c'è solo l'avviso).
+
+### DPA con i merchant
+Il negozio è titolare del trattamento, Fidelitree responsabile: serve un accordo di trattamento dati (documento, non
+codice) da firmare all'onboarding. Insieme: verifica legale del testo di `/privacy`.
+
+### Segreto del link dopo `#`
+Oggi il token è nel percorso (`/c/<token>`): è mascherato nei nostri log ma resta nei log di piattaforma (DigitalOcean).
+Quando l'app cresce: link `/c#<token>`, la pagina legge il token in JS e chiede i dati via API (il frammento non arriva
+mai al server).
+
+### Comando di cancellazione via DM
+"CANCELLA" in DM elimina la carta e risponde con una card di conferma (oggi la cancellazione passa dal merchant).
+
+### Pulizia automatica delle carte inattive
+Script periodico (stile `close_period`) che elimina le carte senza movimenti da N mesi; il periodo va scritto
+nell'informativa.
+
+### Rotazione della chiave di cifratura
+Script che ricifra chiavi Zernio e secret con una nuova `ENCRYPTION_KEY` (il formato salvato porta già l'id della chiave).
+L'`IGSID_HMAC_KEY` invece non è ruotabile senza scollegare le carte.
 
 ## Backlog (in ordine di priorità indicativa)
 
-### Collegare Supabase (prossimo passo dopo v0.2.0)
+### Collegare Supabase (primo passo dopo v0.3.0)
 Progetto Supabase, migrazione del DB da Neon, `SupabaseAuthProvider` reale al posto del provider `dev`
-(email+password per i merchant, OTP email per i clienti, recupero password), env `AUTH_PROVIDER=supabase`.
+(email+password per i **merchant**, recupero password; i clienti non hanno auth), env `AUTH_PROVIDER=supabase`.
 Supabase Auth sostituisce anche le voci "Sicurezza password" e "Integrazione Clerk" (superate).
+Prerequisito per un pilota con negozi veri che si registrano da soli: oggi il provider `dev` non parte in produzione.
 Da risolvere in quell'occasione: **collegare un merchant creato dall'admin** (senza `auth_user_id`) al suo
 account al primo accesso, solo con email verificata (oggi la sua email non si può registrare: 409).
 
@@ -33,9 +107,9 @@ il merchant deve poter inserire manualmente un codice numerico (shortcode o
 UUID abbreviato della carta). Fallback robusto per ambienti difficili.
 
 ### Frontend: redirect intelligente per non autenticati
-Oggi l'app ritorna 401 a chi non è loggato. Migliorare UX: redirect a
-`/merchant/login` con messaggio "Accedi per continuare" oppure `/merchant/register`
-se nuovo. Vale per `/merchant/settings`, `/merchant/scanner`, `/merchant/card/.../manage`.
+v0.3.0 (ticket 08) introduce il redirect semplice a `/merchant/login` per le pagine HTML merchant (serve alla PWA).
+Resta da fare: messaggio "Accedi per continuare", ritorno alla pagina richiesta dopo il login (`next`), proposta di
+`/merchant/register` ai nuovi.
 
 ### Contatore alberi pubblico
 Pagina che mostra il totale alberi piantati (da `TreePlanting`, esclusi i test)
@@ -69,6 +143,8 @@ ruff (lint) + mypy (type check) in pre-commit locale (vedi CI/CD sopra per il li
 
 ## Changelog
 
+- **2026-10-22** — Avviata **v0.3.0** (carta via DM Instagram con Zernio): analisi, grilling e 11 ticket; **v0.2.x
+  non verrà rilasciata**, assorbita da v0.3.0. Storico di v0.2.0 in `tickets/v0.2.0/STORICO.md`.
 - **2026-10-13** — **v0.2.0** pronta (branch `rinascimento`, 11 ticket): pool mensile per negozio con livelli
   bronzo/argento/oro, tree points → cashback automatico, registro movimenti + contatore `MerchantPool`,
   `scripts.close_period` (anteprima, idempotente, cap globale) con Ecologi a chiave unica di piattaforma,

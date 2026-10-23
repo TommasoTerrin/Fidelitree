@@ -16,6 +16,12 @@ Se ne manca una l'app **crasha all'avvio** (Settings pydantic con campi obbligat
 | `DATABASE_URL` | URL Postgres completo (`postgresql://...?sslmode=require`) |
 | `JWT_SECRET_KEY` | firma dei token di sessione |
 | `ADMIN_SECRET_KEY` | chiave per gli endpoint admin (`X-Admin-Key`) |
+| `ENCRYPTION_KEY` | (v0.3.0) chiave AES-256-GCM, 32 byte in base64 urlsafe: cifra chiave Zernio e secret del webhook dei merchant |
+| `IGSID_HMAC_KEY` | (v0.3.0) indice cieco dell'IGSID dei clienti. **Non ruotabile**: cambiarla scollega tutte le carte |
+| `CARD_LINK_KEY` | (v0.3.0) deriva il token dei link delle carte; cambiarla invalida tutti i link già inviati |
+
+Generazione (una per variabile, valori diversi): `python -c "import secrets, base64; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())"`.
+Conservale anche fuori da DigitalOcean (password manager): perderle significa perdere le chiavi Zernio dei merchant e il collegamento delle carte.
 
 Variabili **opzionali** (hanno un default), introdotte con v0.2.0:
 
@@ -30,8 +36,18 @@ Variabili **opzionali** (hanno un default), introdotte con v0.2.0:
 | `ECOLOGI_TEST_MODE` | `true` | `true` = chiave di test + flag `test` (nessun addebito, nulla sul profilo Ecologi); `false` SOLO in produzione. In produzione: `ECOLOGI_TEST_MODE=false` + `ECOLOGI_API_KEY`; in locale: `true` + `ECOLOGI_TEST_API_KEY` |
 | `ECOLOGI_GLOBAL_MONTHLY_CAP` | `20` | massimo alberi piantati in una chiusura mensile |
 | `TIER_BRONZE_POINTS` / `TIER_SILVER_POINTS` / `TIER_GOLD_POINTS` | `100` / `300` / `600` | soglie di default dei livelli del pool (override per negozio nel DB) |
+| `ENCRYPTION_KEY_ID` | `1` | (v0.3.0) id della chiave di cifratura salvato con ogni dato cifrato (rotazione futura) |
+| `PUBLIC_BASE_URL` | `http://127.0.0.1:8001` | (v0.3.0) URL pubblico **https** dell'app: link delle carte e URL del webhook su Zernio. In produzione il dominio dell'app. **Se cambia, i merchant devono rifare l'onboarding Instagram** (il webhook su Zernio punta al vecchio URL) |
+| `ZERNIO_BASE_URL` | `https://zernio.com/api` | (v0.3.0) URL dell'API Zernio (valore della spec ufficiale, confermato nel collaudo del ticket 05) |
+| `INSTAGRAM_CARD_KEYWORD` | `CARTA` | (v0.3.0) parola chiave che il cliente scrive in DM al negozio |
+| `ZERNIO_MONTHLY_SEND_LIMIT` | `10000` | (v0.3.0) invii gratuiti al mese per team Zernio (solo per l'avviso: è Zernio a fermare gli invii) |
+| `ZERNIO_SEND_WARN_PERCENT` | `75` | (v0.3.0) soglia di avviso nel pannello del merchant |
 
-Eliminate da v0.2.0 (cancellabili da DO): `ENCRYPTION_KEY`, `MERCHANT_PASSWORD`. Storiche non più usate: `HUMANI_*`, `TELEGRAM_BOT_TOKEN`, `BASE_URL`, `DATABASE_PASSWORD`.
+Eliminate da v0.2.0 (cancellabili da DO): `MERCHANT_PASSWORD`. Storiche non più usate: `HUMANI_*`, `TELEGRAM_BOT_TOKEN`, `BASE_URL`, `DATABASE_PASSWORD`.
+
+> ⚠️ **`ENCRYPTION_KEY` torna in v0.3.0 con un significato nuovo** (AES-256-GCM per le chiavi Zernio). Se su DigitalOcean
+> è rimasta la vecchia chiave Fernet di v0.1.0, **sostituiscila con una generata da zero**: ha lo stesso formato e
+> verrebbe accettata in silenzio. Lo stesso vale per `IGSID_HMAC_KEY` e `CARD_LINK_KEY`: tre valori nuovi e diversi.
 
 > ⚠️ **Schema v0.2.0**: `create_all()` non modifica le tabelle esistenti. Il passaggio al nuovo modello (email, clienti, pool...) richiede il reset del DB (`python -m scripts.reset_db`): i dati di v0.1.0 non si migrano.
 
@@ -81,6 +97,24 @@ python local_main.py                             # http://127.0.0.1:8001
 ```
 
 Per tornare al DB del `.env`: chiudi il terminale o `Remove-Item Env:DATABASE_URL`. Checklist completa: `pre-release.md`.
+
+### Collaudo del flusso Instagram (v0.3.0)
+
+Zernio deve raggiungere il server locale via https: si usa un tunnel rapido **cloudflared** (gratuito, nessun account).
+
+```powershell
+cloudflared tunnel --url http://127.0.0.1:8001        # stampa https://<nome>.trycloudflare.com
+$env:PUBLIC_BASE_URL = "https://<nome>.trycloudflare.com"   # in un ALTRO terminale, prima di avviare il server
+$env:DATABASE_URL = "sqlite:///collaudo.db"
+python local_main.py
+```
+
+- Serve un account Instagram **Business o Creator** di prova collegato a un account Zernio gratuito, più due profili
+  personali (uno che segue il negozio, uno no). Procedura completa nei ticket 05, 07 e 11 di v0.3.0.
+- L'URL del tunnel rapido **cambia a ogni avvio**: dopo un riavvio del tunnel rifai l'onboarding del merchant
+  (scollega/ricollega) così il webhook su Zernio punta al nuovo URL.
+- `python -m scripts.zernio_check accounts` verifica la chiave senza toccare il DB; `python -m scripts.replay_webhook`
+  rigioca un evento firmato verso il server locale (il server invierà davvero la card sulla conversazione indicata).
 
 ## Reset/seed del DB remoto (distruttivo!)
 
