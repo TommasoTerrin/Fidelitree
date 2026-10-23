@@ -3,6 +3,6 @@
 
 [project]
 name = "fidelitree"
-version = "0.2.1"
+version = "0.3.0"
 description = "Carte fedeltà digitali che piantano alberi veri per i piccoli negozi"
 requires-python = ">=3.12"
