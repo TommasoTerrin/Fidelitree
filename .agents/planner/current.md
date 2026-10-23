@@ -1,96 +1,85 @@
 # Stato corrente
 
-> Aggiorna questo file a inizio e fine sessione di lavoro.
-> Item completati → spostali nel changelog di `roadmap.md`.
+> Aggiorna questo file a inizio e fine sessione di lavoro, e dentro il commit di ogni ticket.
+> Qui sta solo il lavoro **di adesso**. Item completati di una versione → riga nel changelog di `roadmap.md`;
+> il registro dettagliato di una versione chiusa → `.agents/tickets/vX.Y.Z/STORICO.md`
+> (v0.2.0: [STORICO.md](../tickets/v0.2.0/STORICO.md)).
 
-## In corso
+## Dove siamo
 
-- **v0.2.0 — Pool del negozio, auth, wallet cliente** (branch `rinascimento`).
-  Fase di analisi e pianificazione **completata il 2026-10-09**: decisioni in AGENTS.md,
-  11 ticket in [.agents/tickets/v0.2.0/](../tickets/v0.2.0/README.md).
-  Ticket **01 (versionamento) completato**: `pyproject.toml`, `app/version.py`, `version` in `/health`.
-  Ticket **02 (modelli dati, config ed errori di dominio) completato il 2026-10-12**: nuovo schema
-  (`Customer`, `PointTransaction`, `MerchantPool`, `TreePlanting` ridefinita, centesimi, UTC aware), `enums`/`money`/`clock`/`errors`,
-  handler `DomainError`, config nuova; 100 test verdi.
-  Ticket **03 (core puro: livelli, periodi, piano di chiusura) completato il 2026-10-12**:
-  `app/services/tree_service.py` contiene solo il core; `tests/unit/test_pool.py`; 141 test verdi.
-  `update_tree_points` (transitoria) è stata spostata in `card_service` (→ sostituita dal ticket 04).
-  Ticket **04 (scan: registro movimenti e conversione) completato il 2026-10-12**: `card_service` con core
-  (`compute_conversion`, `apply_*_delta`) e shell (`add_tree_points` transazionale con pool atomico, `update_cashback`),
-  `tree_service.pool_points`/`current_pool_progress`, `ScanResponse`; `tests/test_scan.py`, `tests/unit/test_conversion.py`; 164 test verdi.
-  Ticket **05 (Ecologi di piattaforma e `close_period`) completato il 2026-10-12**: `ecologi_service` con chiave unica
-  e idempotency key deterministica, `tree_service.close_period` (blocco su divergenze contatore/registro e su cap,
-  snapshot, commit per riga), `scripts/close_period.py`; `tests/test_close_period.py`; 192 test verdi.
-  Ticket **06 (interfaccia auth e provider dev) completato il 2026-10-12**: `app/core/auth.py` (`AuthProvider`,
-  `DevAuthProvider`, stub `SupabaseAuthProvider`, `get_auth_provider`), `AuthError` → 401, dependency
-  `get_auth_identity`/`get_current_merchant`/`get_current_customer` via `auth_user_id` (cookie o Bearer);
-  `cryptography` rimosso da requirements e venv (`python-jose` senza extra); 210 test verdi.
-  Ticket **07 (auth merchant, approvazione e admin) completato il 2026-10-13**: `merchant_service` (core
-  `validate_registration` + shell `register_merchant`/`login_merchant`/update), `POST /merchant/register` e login
-  email+password via provider, `/me` con `is_approved` e soglie effettive, `POST /api/merchant/{id}/approve`, override
-  soglie con controllo di coerenza, `create_test_merchant` rimosso; nuovi `ConflictError` (409) e `InvalidInputError` (400);
-  246 test verdi. Inoltre: variabili Ecologi **di test** distinte (`ECOLOGI_TEST_API_KEY`, `ECOLOGI_TEST_BASE_URL`),
-  usate quando `ECOLOGI_TEST_MODE=true`; chiave/URL reali solo con `false`.
-  Ticket **08 (backend cliente: OTP, join, wallet, proprietà carta) completato il 2026-10-13**: `customer_service`
-  (core `normalize_email`/`safe_next_path`/`build_wallet` + shell `get_or_create_customer`/`join_merchant`/`list_wallet`/`get_owned_card`),
-  `POST /api/customer/otp/{request,verify}`, `GET /customer/logout`, `POST /api/customer/join/{id}`, `GET /api/customer/wallet`,
-  `/api/card/{id}` e `/card/{id}` solo al proprietario (altrui → 404, anonimo → 401 / redirect 303 al login con `next`),
-  `get_current_customer` crea il cliente al primo accesso; rimossi `/api/get-card`, `/download_card`, WhatsApp e cliente segnaposto;
-  287 test verdi. Le pagine `join`/`wallet`/`login` sono **segnaposto minimi** (la UI vera è del ticket 10).
-  Ticket **09 (frontend merchant) completato il 2026-10-13**: `GET /merchant/register` e template ricreato (email, password,
-  telefono facoltativo, senza Ecologi); `settings.html` con stato approvazione, anteprima conversione, soglie effettive in sola lettura
-  e QR del negozio (`/join/{id}`, scarica/stampa); `update_card.html` con blocco "Pool del negozio" e toast di conversione;
-  le route passano `pool`/`thresholds`/`join_path` dai service; 301 test verdi.
-  Ticket **10 (frontend cliente e PWA) completato il 2026-10-13**: `consumer/{login,join,wallet,card}.html` reali
-  (login OTP a due passi con toast e promemoria `000000` solo con `AUTH_PROVIDER=dev`; join con redirect alla carta e
-  pagina 404 amichevole; wallet con medaglia e mini-barra del negozio; carta con saldo personale, "Ancora X punti per € Y",
-  blocco "Il progetto del negozio" e livello massimo), partial condivisi `partials/{pwa,toast,levels}.html`,
-  `app/static/{manifest.webmanifest,sw.js,icon.svg,apple-touch-icon.png}`, `GET /sw.js` con scope `/`,
-  `card_service.conversion_progress` (core puro); `download.html` rimosso; 326 test verdi.
-  Il service worker mette in cache solo la shell statica (nessuna pagina né API autenticata).
-  Ticket **11 (seed, smoke test, documentazione, release) completato il 2026-10-13**: `seed_db` riscritto (`seed(session)`
-  iniettabile, solo `AUTH_PROVIDER=dev`, idempotente; Bar Demo oro con conversione + Forno Solo Alberi senza livello,
-  scan solo via `add_tree_points`, `pool_mismatches` vuoto); `DEV_AUTH_PASSWORD` (env) perché i merchant del seed
-  possano accedere dal server (il provider dev tiene le password in memoria del processo); `smoke_test_prod` con client
-  HTTP iniettabile, copre `/health.version`, pagine cliente/merchant, `/join/{id}`, PWA, admin con e senza chiave, non pianta
-  alberi; `run_test_flow.py` **rimosso** (obsoleto: login per telefono, `add-point`, `planted_now`, UUID fissi);
-  `.env.example` ora versionato (`!.env.example` nel `.gitignore`); docs riallineate (AGENTS.md senza banner di transizione,
-  overview con diagramma del pool, deploy con `close_period` e collaudo locale, pre-release, roadmap, README);
-  `tests/test_scripts.py`; 339 test verdi. Provato a mano su SQLite + uvicorn: reset, seed (rilanciato), login merchant da
-  processo diverso, OTP cliente, scan, registrazione non approvata, smoke test, anteprima `close_period`.
-  Tutto il lavoro dei ticket 01–11 è in un unico commit su `rinascimento`.
-  **2026-10-14: aggiunti i ticket 12–13 (Ecologi)** dopo il confronto con la documentazione ufficiale: in test mode il codice
-  richiede `ECOLOGI_TEST_BASE_URL`, che Ecologi non prevede (il test è il flag `"test": true` sullo stesso URL), quindi
-  oggi la chiusura in test fallisce; inoltre il `name` mandato a Ecologi diventa `<negozio> · <mese> <anno>` e
-  `ecologi_ref` = `treeUrl`. Il merge aspetta 12–13.
-  Ticket **12 (Ecologi: ambienti e nome del negozio) completato il 2026-10-14**: `ECOLOGI_TEST_BASE_URL` rimosso,
-  un solo URL e due chiavi scelte da `ECOLOGI_TEST_MODE` (nessun fallback), `purchase_trees(..., force_test=)`,
-  `extract_ref` = `treeUrl`, core `tree_service.planting_name` ("Bar Demo · ottobre 2026") usato da `close_period`;
-  `tests/unit/test_planting_name.py`; 354 test verdi. Il `.env` locale ha ancora la vecchia `ECOLOGI_TEST_BASE_URL` (ignorata, da togliere a mano).
-  Ticket **13 (script `ecologi_check`) completato il 2026-10-14**: `scripts/ecologi_check.py` (chiamata sempre con
-  `test=true`, mostra nome, `treeUrl`, importo, progetti, chiave solo con ultimi 4 caratteri), test in `tests/test_scripts.py`,
-  AGENTS.md/deploy.md/pre-release aggiornati; 360 test verdi. **Resta il collaudo manuale con le chiavi vere (a cura del founder).**
-  **⏭️ PROSSIMO (in ordine):**
-  0. Collaudo manuale `ecologi_check` (chiave di test e reale) e `close_period` in test mode con `treeUrl` salvato.
-  1. Collaudo manuale della checklist `pre-release.md` (inclusa la **PWA su telefono**: installazione in Home e apertura standalone; serve HTTPS o un tunnel).
-  2. ~~Logo vero~~ **fatto il 2026-10-20** (`feature/logo`, mergiato su `develop`): loghi in `app/static/loghi/`, versioni leggere `logo_*.jpg` nei template, icone PWA `icon-192.png`/`icon-512.png`/`apple-touch-icon.png`; versione **0.2.1**.
-  3. Merge su `main` + tag **`v0.2.1`** (`v0.2.0` non è mai stato taggato né rilasciato) secondo `pre-release.md` (il push su `main` deploya in produzione); prima `reset_db` del DB (i dati v0.1.0 non si migrano).
-  **Debito noto:**
-  - un merchant creato dall'admin non ha `auth_user_id` e la sua email non si può registrare (409): si risolve col collegamento Supabase (roadmap);
-  - DB esistenti: `create_all()` non migra, serve `scripts.reset_db`;
-  - `reset_db`/`seed_db` agiscono sul `DATABASE_URL` del `.env` (oggi Neon): per il collaudo usa SQLite usa-e-getta (`deploy.md`).
-- La vecchia "Release 2 — Tree Points per-merchant" **non verrà mai rilasciata**: è assorbita da v0.2.0
-  (il codice su `rinascimento` parte dal commit `544fb4e`, che la contiene).
+**v0.3.0 — carta fedeltà via DM Instagram (Zernio)**, branch `feature/instagram-cards` (da `develop`, avviata il
+2026-10-22). È la **prima release in produzione dopo v0.1.0**: assorbe v0.2.x (pool del negozio, auth merchant,
+alberi), mai rilasciata. Dopo v0.3.0 l'app è funzionalmente quella descritta in AGENTS.md; la strada verso la
+versione "a regime" è nella [roadmap](roadmap.md).
 
-## Dopo v0.2.0 (dettagli in `roadmap.md`)
+Contesto di riferimento: decisioni in [AGENTS.md](../../AGENTS.md), vincoli Zernio/Meta con le fonti in
+[zernio-notes.md](../architecture/zernio-notes.md), ticket in [tickets/v0.3.0](../tickets/v0.3.0/README.md).
 
-- Collegare Supabase (progetto, DB, provider auth reale al posto di `dev`; collegare i merchant creati dall'admin).
-- Endpoint admin/cron per `close_period` quando i negozi superano i 10-20.
-- Pagina pubblica contatore alberi, poi lancio build-in-public e caccia ai primi 3-5 negozi pilota.
+### Ticket
+
+| # | Ticket | Stato |
+|---|---|---|
+| 01 | Versione 0.3.0 | ✅ `505fc00` |
+| 02 | Modelli, config ed errori | ✅ `865797d` |
+| 03 | Cifratura AES-GCM, indice cieco IGSID, token del link | ✅ `161850d` (414 test) |
+| 04 | Core dei messaggi: trigger, card, finestra 24 h, quota | ✅ 2026-10-23 `f4bb1b3` (459 test) |
+| 05 | Client Zernio, `zernio_check`, **collaudo anticipato** | 🟡 codice fatto 2026-10-23 (549 test), in attesa del collaudo manuale del founder |
+| 06 | Webhook: dalla parola chiave alla card | |
+| 07 | Onboarding Instagram del merchant | |
+| 08 | Pagina carta, QR, scan e PWA merchant | |
+| 09 | Rimozione del vecchio flusso cliente (OTP, wallet, `/join`, `Customer`) | |
+| 10 | Seed, smoke test e script | |
+| 11 | Documentazione, collaudo end-to-end e release | |
+
+Suite di partenza: 360 test. I ticket 02-08 **aggiungono** il nuovo flusso accanto al vecchio (che continua a
+funzionare); il vecchio si toglie tutto insieme nel 09.
+
+Note sui ticket fatti:
+- **03**: `app/core/crypto.py` (AES-256-GCM, HMAC dell'IGSID, token del link, `mask_secret`) e `validate_keys` all'avvio.
+- **04**: `instagram_service` contiene per ora **solo il core** (payload `message.received`, firma, normalizzazione e
+  trigger, card e testo di ripiego con limiti, finestra 24 h, stato quota); la shell arriva con i ticket 05-07.
+  `merchant_service.validate_business_name`: nome del negozio ≤ 80 caratteri (è il titolo della card).
+
+- **05**: `zernio_service` (core: `classify_error`, corpi delle richieste, `parse_accounts`, `ZernioCredentials` con
+  `SecretStr`; shell: client httpx senza nuovi tentativi, timeout 3 s invio / 10 s configurazione,
+  `zernio_credentials_for` unico lettore dei campi cifrati) e `scripts/zernio_check`. Dalla spec: il menu si imposta con
+  **PUT** `messenger-menu`, il webhook si elimina con `DELETE /v1/webhooks/settings?webhookId=`, e **`folder=requests`
+  non funziona con Instagram Login** (400 `PLATFORM_LIMITATION`); nessun campo identifica il team Zernio, quindi
+  `get_team_identity` → `None` (quota `account:<id>`). Dettagli in `zernio-notes.md`. Lo script ha bisogno di
+  `ENCRYPTION_KEY`, `IGSID_HMAC_KEY`, `CARD_LINK_KEY` nell'ambiente (importa le settings).
+
+### Prossimo passo
+
+1. ~~Ticket 05~~ codice fatto; **chiuderlo** dopo il collaudo.
+2. **Collaudo manuale anticipato, a cura del founder**, su un account Instagram vero, **prima** di scrivere il 06.
+   Verifica i rischi più grossi: Meta accetta la card a chi non segue il negozio? Il webhook arriva per i DM in
+   Requests? Come si comporta ManyChat come app di default? Quale base URL Zernio vale? Se l'esito contraddice le
+   ipotesi di `zernio-notes.md`: **fermarsi e chiedere**.
+3. Poi 06 → 11 in ordine.
+
+### Da fare a mano (founder)
+
+- Aggiungere al `.env` locale `ENCRYPTION_KEY`, `IGSID_HMAC_KEY`, `CARD_LINK_KEY` (l'app non parte senza; i test le
+  impostano da soli). Non committare mai i valori.
+- Collaudo del ticket 05 (sopra), un account Zernio gratuito e un account Instagram Business/Creator di prova.
+- Rimasti da v0.2.x e ancora validi per il rilascio di v0.3.0: collaudo di `ecologi_check` (chiave di test e reale) e
+  di `close_period` in test mode; checklist `pre-release.md`, PWA merchant su telefono (HTTPS o tunnel).
+- Lavoro di documentazione della fase 4 (AGENTS.md, overview, deploy, `.env.example`, ticket v0.3.0, planner) ancora
+  **non committato**: va committato a parte rispetto ai ticket di codice.
+
+## Debito noto
+
+- Merchant creato dall'admin senza `auth_user_id`: la sua email non si può registrare (409). Si risolve con Supabase.
+- `create_all()` non migra: serve `scripts.reset_db` (nessun dato di produzione da preservare per ora).
+- `reset_db`/`seed_db` agiscono sul `DATABASE_URL` del `.env` (oggi Neon): per il collaudo usare un SQLite usa-e-getta
+  (`.agents/workflows/deploy.md`).
+- Il testo di `/privacy` è una bozza da far verificare; DPA con i merchant ancora da scrivere (roadmap).
 
 ## Note per chi riprende il lavoro
 
 - Regole di business e vincoli: AGENTS.md ("Contesto di business" e "Vincoli e trade-off").
-- Convenzioni di codice (functional core / imperative shell, docstring italiane): AGENTS.md regola 3-5 e README dei ticket.
-- I test girano offline (SQLite in-memory, Ecologi mockato): `python -m pytest`; il core puro in `tests/unit/`.
+- Convenzioni di codice (functional core / imperative shell, docstring italiane): AGENTS.md regole 3-5 e README dei ticket.
+- I test girano offline (SQLite in-memory, Ecologi e Zernio mockati): `python -m pytest`; il core puro in `tests/unit/`.
+- Si lavora un ticket alla volta; a fine ticket: test verdi, commit in italiano "... (ticket NN)", riepilogo di 3 righe
+  e attesa dell'approvazione.
 - La vecchia logica alberi/Telegram è in `feature/trees` (branch di archivio, non mergiare).
