@@ -122,7 +122,9 @@ collaudo), `AGENTS.md` (comando).
   - 401 → exit 1 e messaggio su stderr;
   - `send-card` invia un solo POST con il corpo del core.
 
-## Collaudo manuale anticipato (a cura del founder, PRIMA del ticket 06)
+## Collaudo manuale anticipato (a cura del founder, PRIMA del ticket 07)
+> Spostato il 2026-10-23: il 06 si scrive e si testa con risposte finte. Prima del 07 servono almeno i passi 1-2 (chiave,
+> base URL, card su mobile al profilo che segue). Il passo 3 (profilo che non segue) si rifà nel collaudo finale (11).
 Servono: un account Zernio gratuito; un account Instagram Business o Creator di prova collegato a Zernio; due profili
 Instagram personali, A **che segue** il negozio e B **che non lo segue**.
 1. `python -m scripts.zernio_check accounts` → l'account compare. Se `https://zernio.com/api` risponde 404, prova

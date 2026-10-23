@@ -51,7 +51,9 @@ Note sui ticket fatti:
 ### Prossimo passo
 
 1. ~~Ticket 05~~ codice fatto; **chiuderlo** dopo il collaudo.
-2. **Collaudo manuale anticipato, a cura del founder**, su un account Instagram vero, **prima** di scrivere il 06.
+2. **Ticket 06** (con risposte finte), poi **collaudo manuale anticipato del 05, a cura del founder** (passi 1-2 almeno;
+   ticket 05 → "Collaudo manuale anticipato"), **prima** di scrivere il 07. Se ManyChat risulta ancora collegato
+   all'account, scollegarlo.
    Verifica i rischi più grossi: Meta accetta la card a chi non segue il negozio? Il webhook arriva per i DM in
    Requests? Come si comporta ManyChat come app di default? Quale base URL Zernio vale? Se l'esito contraddice le
    ipotesi di `zernio-notes.md`: **fermarsi e chiedere**.
