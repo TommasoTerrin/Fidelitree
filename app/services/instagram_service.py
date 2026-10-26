@@ -17,8 +17,8 @@ Regole di business
 - **Testo dei clienti**: mai salvato; qui lo si legge solo per riconoscere il trigger.
 
 Il core usa solo Pydantic e stdlib: il tempo si passa come argomento, niente DB né rete. La shell
-(`get_or_create_card`, `card_link_url`, `handle_webhook`) legge il webhook, salva la carta e invia tramite
-`zernio_service`. Fonti dei limiti e del formato dei payload: `.agents/architecture/zernio-notes.md`.
+(`get_or_create_card`, `card_link_url`, `get_card_by_link_token`, `handle_webhook`) legge il webhook,
+salva la carta, risolve il token della pagina carta e invia tramite `zernio_service`. Fonti dei limiti e del formato dei payload: `.agents/architecture/zernio-notes.md`.
 """
 
 import hashlib
@@ -326,6 +326,20 @@ def card_link_url(card: Card) -> str:
     """Link segreto della carta: `<PUBLIC_BASE_URL>/c/<token>`, con il token ricalcolato da id e versione."""
     token = crypto.card_link_token(card.id, card.link_version)
     return f"{settings.PUBLIC_BASE_URL.rstrip('/')}/c/{token}"
+
+
+def get_card_by_link_token(session: Session, token: str) -> Card:
+    """
+    Carta del token `/c/<token>`. Si cerca per `SHA-256(token)` (`Card.link_token_hash`); poi il token
+    presentato si confronta, in tempo costante, con quello ricalcolato da id e versione della carta: così
+    la revoca (`link_version` + 1) vale anche se l'hash salvato fosse rimasto quello vecchio.
+    Solleva `NotFoundError` per un token sconosciuto o revocato, con un messaggio che non cita il token
+    né dice se una carta esista.
+    """
+    card = card_crud.get_card_by_link_token_hash(session, crypto.token_hash(token)) if token else None
+    if card is None or not crypto.constant_time_equals(token, crypto.card_link_token(card.id, card.link_version)):
+        raise NotFoundError("Link non valido o scaduto")
+    return card
 
 
 def _mark_standby(session: Session, merchant: Merchant, now: datetime) -> None:

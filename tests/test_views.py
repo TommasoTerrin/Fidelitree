@@ -6,6 +6,8 @@ import re
 import uuid
 from datetime import timedelta
 
+import pytest
+
 from app.core.clock import utc_now
 from app.core.crypto import encrypt_secret
 from app.core.enums import InstagramStatus
@@ -38,8 +40,9 @@ def test_pagina_card_inesistente(client, customer):
 
 
 def test_scanner_richiede_login(client):
-    resp = client.get("/merchant/scanner")
-    assert resp.status_code == 401
+    resp = client.get("/merchant/scanner", follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/merchant/login"
 
 
 def test_scanner_con_login(auth_client):
@@ -48,9 +51,18 @@ def test_scanner_con_login(auth_client):
     assert "html5-qrcode" in resp.text
 
 
+def test_scanner_accetta_solo_l_uuid_della_carta(auth_client):
+    text = auth_client.get("/merchant/scanner").text
+    assert "QR non riconosciuto" in text
+    assert "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}" in text
+    assert 'replace("/card/"' not in text and "startsWith(\"http\")" not in text  # niente più URL del vecchio flusso
+    assert "/merchant/card/" in text
+
+
 def test_gestione_card_richiede_login(client, card):
-    resp = client.get(f"/merchant/card/{card.id}/manage")
-    assert resp.status_code == 401
+    resp = client.get(f"/merchant/card/{card.id}/manage", follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/merchant/login"
 
 
 def test_gestione_card_con_login(auth_client, card):
@@ -89,7 +101,61 @@ def test_pagina_login_senza_ecologi_ne_telefono(client):
 
 
 def test_settings_richiede_login(client):
-    assert client.get("/merchant/settings").status_code == 401
+    resp = client.get("/merchant/settings", follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/merchant/login"
+
+
+# --- Pagine HTML merchant senza sessione: 303 al login, con la dependency vera (nessun override) ---
+
+MERCHANT_PAGES = ("/merchant/scanner", "/merchant/settings", f"/merchant/card/{uuid.uuid4()}/manage")
+
+
+def _merchant_con_login(client, session, merchant):
+    """Collega il merchant di test al provider `dev` e apre la sessione con un cookie vero."""
+    from app.core.auth import dev_user_id
+    merchant.auth_user_id = dev_user_id(merchant.email)
+    session.add(merchant)
+    session.commit()
+    return login_as(client, identity_for(merchant.email))
+
+
+@pytest.mark.parametrize("path", MERCHANT_PAGES)
+def test_pagine_merchant_con_cookie_non_valido_303(client, auth_provider, path):
+    client.cookies.set("access_token", "spazzatura")
+    resp = client.get(path, follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/merchant/login"
+
+
+@pytest.mark.parametrize("path", MERCHANT_PAGES)
+def test_pagine_merchant_con_identita_non_merchant_303(client, auth_provider, customer, path):
+    """Il cookie di un vecchio cliente è valido ma non è un esercente: login, non un 403 in JSON."""
+    login_as(client, identity_for(customer.email))
+    resp = client.get(path, follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/merchant/login"
+
+
+def test_pagine_merchant_con_cookie_vero_200(client, session, auth_provider, merchant, card):
+    _merchant_con_login(client, session, merchant)
+    assert client.get("/merchant/scanner", follow_redirects=False).status_code == 200
+    assert client.get("/merchant/settings", follow_redirects=False).status_code == 200
+    assert client.get(f"/merchant/card/{card.id}/manage", follow_redirects=False).status_code == 200
+
+
+def test_gestione_carta_altrui_con_cookie_vero_404(client, session, auth_provider, merchant, card):
+    altro = merchant_crud.create_merchant(session, {
+        "business_name": "Altro Negozio", "email": "altro@test.it", "is_approved": True,
+    })
+    _merchant_con_login(client, session, altro)
+    assert client.get(f"/merchant/card/{card.id}/manage", follow_redirects=False).status_code == 404
+
+
+def test_le_api_merchant_senza_cookie_restano_401(client):
+    resp = client.get("/api/merchant/me")
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Non autenticato"
 
 
 def test_settings_mostra_conversione_soglie_e_qr(auth_client, merchant):
@@ -456,7 +522,10 @@ def test_manifest_valido(client):
     assert resp.status_code == 200
     manifest = json.loads(resp.text)
     assert manifest["name"] == "Fidelitree"
-    assert manifest["start_url"] == "/wallet"
+    assert manifest["start_url"] == "/merchant/scanner"
+    assert manifest["scope"] == "/merchant/"
+    assert manifest["start_url"].startswith(manifest["scope"])
+    assert manifest["description"] == "Lo scanner Fidelitree del tuo negozio"
     assert manifest["display"] == "standalone"
     sizes = {icon["sizes"] for icon in manifest["icons"]}
     assert {"192x192", "512x512"} <= sizes
@@ -464,22 +533,34 @@ def test_manifest_valido(client):
         assert client.get(icon["src"]).status_code == 200
 
 
-def test_service_worker_servito_dalla_radice(client):
+def test_service_worker_servito_dalla_radice_con_scope_merchant(client):
     resp = client.get("/sw.js")
     assert resp.status_code == 200
     assert "javascript" in resp.headers["content-type"]
-    assert resp.headers["service-worker-allowed"] == "/"
+    assert resp.headers["service-worker-allowed"] == "/merchant/"
     # nessuna cache delle pagine autenticate né delle API: solo la shell statica
     assert "/api/" not in resp.text and '"/wallet"' not in resp.text and '"/card' not in resp.text
 
 
-def test_pagine_cliente_includono_il_manifest(client, merchant, customer, card):
-    _accedi(client, customer)
-    for path in ("/wallet", f"/card/{card.id}", f"/join/{merchant.id}", "/customer/login"):
+def test_pagine_merchant_includono_manifest_e_service_worker(auth_client, client, card):
+    for path in (
+        "/merchant/scanner", "/merchant/settings", f"/merchant/card/{card.id}/manage",
+        "/merchant/login", "/merchant/register",
+    ):
         text = client.get(path).text
         assert 'rel="manifest"' in text, path
         assert 'name="theme-color"' in text, path
         assert "serviceWorker" in text, path
+        assert "scope: '/merchant/'" in text, path
+
+
+def test_pagine_cliente_non_sono_una_pwa(client, merchant, customer, card):
+    """PWA solo merchant: né manifest né service worker nelle pagine del cliente (nemmeno nelle vecchie)."""
+    _accedi(client, customer)
+    for path in ("/wallet", f"/card/{card.id}", f"/join/{merchant.id}", "/customer/login", "/privacy"):
+        text = client.get(path).text
+        assert 'rel="manifest"' not in text, path
+        assert "serviceWorker" not in text, path
 
 
 def test_download_card_rimossa_e_template_cancellato(client):

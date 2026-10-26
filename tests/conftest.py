@@ -19,7 +19,7 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel, Session, create_engine
 
 from app.main import app
-from app.core.dependencies import get_session, get_current_merchant
+from app.core.dependencies import get_session, get_current_merchant, get_optional_merchant
 from app.models.models import Merchant, Customer, Card
 from app.services import ecologi_service
 from app.services.db_crud import merchant_crud, customer_crud
@@ -81,9 +81,11 @@ def card(session, merchant, customer) -> Card:
 @pytest.fixture()
 def auth_client(client, merchant):
     """TestClient con il merchant di test già autenticato."""
-    app.dependency_overrides[get_current_merchant] = lambda: merchant
+    app.dependency_overrides[get_current_merchant] = lambda: merchant      # API /api/merchant/*
+    app.dependency_overrides[get_optional_merchant] = lambda: merchant     # pagine HTML /merchant/*
     yield client
     app.dependency_overrides.pop(get_current_merchant, None)
+    app.dependency_overrides.pop(get_optional_merchant, None)
 
 
 @pytest.fixture()

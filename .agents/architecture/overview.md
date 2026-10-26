@@ -135,6 +135,10 @@ del pool e un **QR che contiene solo l'id della carta** (non il token: una foto 
 lo inquadra da `/merchant/scanner` (PWA) → `/merchant/card/<id>/manage` (cookie merchant + carta del suo negozio) →
 +tree points → registro, pool e conversione come in v0.2.0.
 
+La pagina carta risponde con `Cache-Control: no-store` e `Referrer-Policy: no-referrer` (il saldo cambia a ogni scan,
+l'URL è il segreto); token sconosciuto o revocato → stessa 404 amichevole. Le pagine HTML merchant senza sessione valida
+rimandano con 303 a `/merchant/login` (le API `/api/merchant/*` restano 401).
+
 ### 4. Chiusura mensile
 
 `python -m scripts.close_period` (vedi `deploy.md`), invariata.

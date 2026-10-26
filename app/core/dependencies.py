@@ -52,6 +52,18 @@ def get_current_merchant(
         raise HTTPException(status_code=403, detail="Account non registrato come esercente")
     return merchant
 
+def get_optional_merchant(
+    identity: Optional[AuthIdentity] = Depends(get_optional_identity),
+    session: Session = Depends(get_session),
+):
+    """
+    Come `get_current_merchant` ma senza errori: `None` se non c'è una sessione valida o l'identità non è di
+    un esercente (es. il cookie di un vecchio cliente). Serve alle pagine HTML merchant, che in quel caso
+    rimandano al login invece di mostrare un JSON di errore.
+    """
+    from app.services.db_crud import merchant_crud
+    return merchant_crud.get_merchant_by_auth_user_id(session, identity.user_id) if identity else None
+
 def get_current_customer(
     identity: AuthIdentity = Depends(get_auth_identity),
     session: Session = Depends(get_session),

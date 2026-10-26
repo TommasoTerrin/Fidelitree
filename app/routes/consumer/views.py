@@ -1,7 +1,8 @@
 """
 Route per il frontend lato cliente.
-Gestisce le pagine Jinja2: accesso, ingresso da QR del negozio, wallet e singola carta.
-Le pagine riservate mandano al login (con `next`) chi non ha una sessione valida.
+Pagina carta `/c/<token>` (link segreto, nessun login) e informativa `/privacy`; finché il ticket 09
+non le toglie restano le vecchie pagine: accesso, ingresso da QR del negozio, wallet e `/card/{id}`.
+Le vecchie pagine riservate mandano al login (con `next`) chi non ha una sessione valida.
 """
 
 from typing import Optional
@@ -17,16 +18,71 @@ from app.core.auth import DEV_OTP_CODE
 from app.core.clock import utc_now
 from app.core.config import settings
 from app.core.dependencies import get_optional_customer, get_session
-from app.models.models import Customer, Merchant
-from app.services import card_service, customer_service, tree_service
+from app.core.errors import NotFoundError
+from app.models.models import Card, Customer, Merchant
+from app.services import card_service, customer_service, instagram_service, tree_service
 
 router = APIRouter(tags=["Consumer Frontend"])
 templates = Jinja2Templates(directory="app/templates")
+
+# L'URL della pagina carta contiene il segreto e il saldo cambia a ogni scan: niente cache, niente Referer.
+CARD_PAGE_HEADERS = {"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"}
 
 
 def _login_redirect(path: str) -> RedirectResponse:
     """Redirect 303 al login del cliente che, dopo l'accesso, riporta su `path`."""
     return RedirectResponse(url=f"/customer/login?next={quote(path, safe='/')}", status_code=303)
+
+
+def _card_page_context(session: Session, card: Card) -> dict:
+    """
+    Contesto della pagina carta: carta, negozio, avanzamento del pool del mese, avanzamento della
+    conversione (solo se attiva) e `scan_code`, il contenuto del QR = id della carta (mai il token).
+    """
+    merchant = session.get(Merchant, card.merchant_id)
+    conversion = (
+        card_service.conversion_progress(card.tree_points, merchant.conversion_threshold)
+        if merchant.conversion_enabled else None
+    )
+    return {
+        "card": card,
+        "merchant": merchant,
+        "pool": tree_service.current_pool_progress(session, merchant, utc_now()),
+        "conversion": conversion,
+        "scan_code": str(card.id),
+    }
+
+
+# 0. PAGINA CARTA DAL LINK DELLA CARD (nessun login: il token nel percorso è il segreto)
+@router.get("/c/{token}", response_class=HTMLResponse)
+async def card_page(request: Request, token: str, session: Session = Depends(get_session)):
+    """
+    Pagina della carta del cliente: tree points, cashback, livello del pool e QR con l'id della carta.
+    Token sconosciuto o revocato → pagina 404 amichevole che non dice se la carta esista.
+    """
+    try:
+        card = instagram_service.get_card_by_link_token(session, token)
+    except NotFoundError:
+        return templates.TemplateResponse(
+            request=request,
+            name="consumer/card_not_found.html",
+            context={"keyword": settings.INSTAGRAM_CARD_KEYWORD},
+            status_code=404,
+            headers=CARD_PAGE_HEADERS,
+        )
+    return templates.TemplateResponse(
+        request=request,
+        name="consumer/card.html",
+        context=_card_page_context(session, card),
+        headers=CARD_PAGE_HEADERS,
+    )
+
+
+# 0b. INFORMATIVA PRIVACY (bozza da far verificare al founder)
+@router.get("/privacy", response_class=HTMLResponse)
+async def privacy_page(request: Request):
+    """Informativa privacy per i clienti, linkata in fondo alla pagina carta."""
+    return templates.TemplateResponse(request=request, name="consumer/privacy.html")
 
 
 # 1. PAGINA DI ACCESSO (email + OTP)
@@ -91,26 +147,12 @@ async def view_card(
     session: Session = Depends(get_session),
 ):
     """
-    Mostra la carta al suo proprietario con saldo cashback e QR code.
-    Senza login → login (con `next`); carta inesistente o altrui → 404.
+    Vecchio flusso (via con il ticket 09): mostra la carta al suo proprietario, con lo stesso template
+    della pagina `/c/<token>`. Senza login → login (con `next`); carta inesistente o altrui → 404.
     """
     if customer is None:
         return _login_redirect(f"/card/{card_id}")
     card = customer_service.get_owned_card(session, customer, card_id)
-
-    merchant = session.get(Merchant, card.merchant_id)
-    conversion = (
-        card_service.conversion_progress(card.tree_points, merchant.conversion_threshold)
-        if merchant.conversion_enabled else None
-    )
     return templates.TemplateResponse(
-        request=request,
-        name="consumer/card.html",
-        context={
-            "card": card,
-            "merchant": merchant,
-            "pool": tree_service.current_pool_progress(session, merchant, utc_now()),
-            "conversion": conversion,
-            "full_url": str(request.url),  # URL per il QR code
-        },
+        request=request, name="consumer/card.html", context=_card_page_context(session, card),
     )

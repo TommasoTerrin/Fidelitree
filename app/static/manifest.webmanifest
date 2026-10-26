@@ -1,9 +1,9 @@
 {
   "name": "Fidelitree",
   "short_name": "Fidelitree",
-  "description": "Le tue carte fedeltà che piantano alberi veri",
-  "start_url": "/wallet",
-  "scope": "/",
+  "description": "Lo scanner Fidelitree del tuo negozio",
+  "start_url": "/merchant/scanner",
+  "scope": "/merchant/",
   "display": "standalone",
   "background_color": "#f9fafb",
   "theme_color": "#16a34a",

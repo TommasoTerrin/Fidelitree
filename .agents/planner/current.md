@@ -26,7 +26,7 @@ Contesto di riferimento: decisioni in [AGENTS.md](../../AGENTS.md), vincoli Zern
 | 05 | Client Zernio, `zernio_check`, **collaudo anticipato** | ✅ 2026-10-26: passi 1-2 del collaudo fatti (base URL `https://zernio.com/api` ok, `send-card` consegnata e corretta su mobile al profilo del founder); passo 3 (non follower) rimandato al collaudo del 07/11 |
 | 06 | Webhook: dalla parola chiave alla card | ✅ 2026-10-23 (644 test) |
 | 07 | Onboarding Instagram del merchant | ✅ codice 2026-10-26 (739 test); collaudo 2026-10-26 fatto per onboarding e DM da follower (timeout invio 4 s); non follower/Requests, ManyChat, menu e «Scollega» rimandati al ticket 11 |
-| 08 | Pagina carta, QR, scan e PWA merchant | |
+| 08 | Pagina carta, QR, scan e PWA merchant | ✅ codice 2026-10-26 (793 test); prova manuale (link dal browser di Instagram, scan dalla PWA, installazione) al founder |
 | 09 | Rimozione del vecchio flusso cliente (OTP, wallet, `/join`, `Customer`) | |
 | 10 | Seed, smoke test e script | |
 | 11 | Documentazione, collaudo end-to-end e release | |
@@ -75,6 +75,24 @@ Note sui ticket fatti:
   con `code` stabile (`menu`, `standby`, `key_invalid`, `quota`). Il vecchio test di `test_views` che vietava la parola
   «chiave» nelle impostazioni ora vieta solo `monthly`, `cap` ed `ecologi`.
 
+- **08**: `instagram_service.get_card_by_link_token` (hash → `card_crud.get_card_by_link_token_hash`, poi il token
+  presentato si confronta in tempo costante con quello **ricalcolato** da id e versione: la revoca vale anche con
+  l'hash vecchio nel DB), `GET /c/{token}` e `GET /privacy` in `routes/consumer/views.py`, template `card` (QR = id
+  della carta, niente PWA), `card_not_found` (404 uguale per token sconosciuto e revocato) e `privacy` (bozza: la nota
+  è un commento Jinja, non arriva alla pagina). `app/core/logging_filters.py` (core `mask_sensitive_paths`, filtro che
+  riscrive messaggio **e argomenti** del record, installato nel lifespan su `uvicorn.access`, idempotente). Le pagine
+  HTML merchant usano `get_optional_merchant` (in `dependencies.py`) e senza sessione valida (anche con il cookie di
+  un vecchio cliente, che prima dava 403) rimandano con 303 a `/merchant/login`; le API restano 401. Manifest
+  `start_url` `/merchant/scanner` e `scope` `/merchant/`, `/sw.js` con `Service-Worker-Allowed: /merchant/`, partial
+  PWA nelle 5 pagine merchant. Scelte non previste dal ticket: la pagina carta risponde con `Cache-Control: no-store`
+  e `Referrer-Policy: no-referrer` (più `noindex`): il saldo cambia a ogni scan e l'URL è il segreto; il testo del 404
+  cita `INSTAGRAM_CARD_KEYWORD` invece di «CARTA» fisso; il partial PWA è tolto anche dalle vecchie pagine cliente
+  (wallet, join, login: spariscono nel 09) e `/card/{id}` condivide il template (ora con `scan_code`, niente
+  `full_url`); lo scanner mostra «QR non riconosciuto» una sola volta ogni 3 s (la callback scatta ~15 volte al
+  secondo); la fixture `auth_client` sovrascrive anche `get_optional_merchant` e `test_views` ha test con il cookie
+  vero (la dependency non è coperta dagli override); `scripts/smoke_test_prod.py` controlla ora lo scope
+  `/merchant/` (il resto dello script è del 10).
+
 ### Prossimo passo
 
 1. ~~Ticket 05~~ codice fatto; **chiuderlo** dopo il collaudo.
@@ -86,7 +104,10 @@ Note sui ticket fatti:
    `zernio-notes.md`, "Verificato nel collaudo del 07"). **Ancora da fare** (rimandati al collaudo finale, ticket 11):
    card/risposta a un **non follower** e DM in **Requests** via webhook (serve un profilo che non segue il negozio),
    `isFollower: null`, **ManyChat/standby**, tocco della voce di menu «🌳 La mia carta», «Scollega» da pannello.
-4. Poi 08 → 11 in ordine, dopo l'approvazione.
+4. ~~Ticket 08~~ codice fatto; **prova manuale al founder** (Definition of Done del ticket): link della card di prova
+   aperto dal browser di Instagram, scan del QR dalla PWA con aggiunta di punti, installazione della PWA dalle pagine
+   merchant. Server locale su SQLite usa-e-getta con tunnel (`.agents/workflows/deploy.md`).
+5. Poi 09 → 11 in ordine, dopo l'approvazione.
 
 Esiti del collaudo del 05 (2026-10-26): `conversations` ha date in ritardo (la conversazione del founder risultava del
 giorno prima: per trovarla si legge il mittente dei messaggi, non si fida dell'ordine); `--folder requests` dà 400

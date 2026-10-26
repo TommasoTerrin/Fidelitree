@@ -11,19 +11,31 @@ manuale dei punti. I dati mostrati (pool del mese, soglie, QR) arrivano dai serv
 #   GET  /merchant/scanner     → Pagina QR scanner
 #   GET  /merchant/card/{id}/manage → Pagina gestione punti di una card
 
+from typing import Optional
+
 from fastapi import APIRouter, Request, Depends, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session
 import uuid
 
 from app.core.clock import utc_now
-from app.core.dependencies import get_session, get_current_merchant
+from app.core.dependencies import get_session, get_optional_merchant
 from app.models.models import Merchant, Card
 from app.services import merchant_service, tree_service
 
 router = APIRouter(prefix="/merchant", tags=["Merchant Views"])
 templates = Jinja2Templates(directory="app/templates")
+
+
+def _login_redirect() -> RedirectResponse:
+    """
+    Redirect 303 al login del merchant per le pagine HTML senza sessione valida (cookie assente, scaduto o
+    di un account non esercente). Le API `/api/merchant/*` restano 401: qui serve che la PWA installata
+    con il cookie scaduto non si apra su un JSON di errore. Nessun parametro `next`.
+    """
+    return RedirectResponse(url="/merchant/login", status_code=303)
+
 
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
@@ -45,13 +57,16 @@ async def register_page(request: Request):
 async def settings_page(
     request: Request,
     session: Session = Depends(get_session),
-    merchant: Merchant = Depends(get_current_merchant),
+    merchant: Optional[Merchant] = Depends(get_optional_merchant),
 ):
     """
     Serve la pagina impostazioni: conversione, soglie effettive dei livelli (sola lettura),
     stato di approvazione, sezione Instagram (`instagram` è il pannello: uno stato per volta, mai segreti,
     nessuna chiamata a Zernio) e QR del negozio (`join_path` è il percorso che il QR codifica).
+    Senza sessione merchant valida → 303 al login.
     """
+    if merchant is None:
+        return _login_redirect()
     return templates.TemplateResponse(
         request=request,
         name="merchant/settings.html",
@@ -64,8 +79,10 @@ async def settings_page(
     )
 
 @router.get("/scanner", response_class=HTMLResponse)
-async def scanner_page(request: Request, merchant: Merchant = Depends(get_current_merchant)):
-    """Serve la pagina con il QR scanner."""
+async def scanner_page(request: Request, merchant: Optional[Merchant] = Depends(get_optional_merchant)):
+    """Serve la pagina con il QR scanner; senza sessione merchant valida → 303 al login."""
+    if merchant is None:
+        return _login_redirect()
     return templates.TemplateResponse(
         request=request, 
         name="merchant/qr_scanner.html", 
@@ -77,9 +94,14 @@ async def manage_card_page(
     request: Request, 
     card_id: uuid.UUID, 
     session: Session = Depends(get_session), 
-    merchant: Merchant = Depends(get_current_merchant)
+    merchant: Optional[Merchant] = Depends(get_optional_merchant)
 ):
-    """Serve la pagina di gestione della card: saldi, pool del mese del negozio, tree points e cashback."""
+    """
+    Serve la pagina di gestione della card: saldi, pool del mese del negozio, tree points e cashback.
+    Senza sessione merchant valida → 303 al login; carta inesistente o di un altro negozio → 404.
+    """
+    if merchant is None:
+        return _login_redirect()
     card = session.get(Card, card_id)
     if not card or card.merchant_id != merchant.id:
         raise HTTPException(status_code=404, detail="Card non trovata o non associata a questo merchant")

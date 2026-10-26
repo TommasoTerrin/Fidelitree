@@ -14,6 +14,7 @@ from app.core.crypto import validate_keys
 from app.core.errors import (
     AuthError, ConflictError, DomainError, ExternalServiceError, ForbiddenError, NotFoundError,
 )
+from app.core.logging_filters import install_access_log_filter
 from app.version import get_version
 
 # Import dei router
@@ -30,10 +31,11 @@ from app.routes.webhooks import router as webhooks_router
 async def lifespan(app: FastAPI):
     """
     Gestisce il ciclo di vita dell'applicazione.
-    Verifica le chiavi di cifratura (l'app non parte se non valide) e crea le
-    tabelle del database all'avvio se non esistono.
+    Verifica le chiavi di cifratura (l'app non parte se non valide), installa il filtro che maschera
+    token del link e `hook_id` nei log di accesso e crea le tabelle del database se non esistono.
     """
     validate_keys()
+    install_access_log_filter()
     SQLModel.metadata.create_all(engine)
     yield
 
@@ -87,13 +89,14 @@ app.include_router(webhooks_router)              # POST /webhooks/zernio/{hook_i
 @app.get("/sw.js", include_in_schema=False)
 async def service_worker() -> FileResponse:
     """
-    Service worker della PWA servito dalla radice, così ha scope `/` (da `/static/` avrebbe
-    scope `/static/`). `Cache-Control: no-cache` fa arrivare subito le nuove versioni.
+    Service worker della PWA del merchant servito dalla radice, con scope ristretto a `/merchant/`
+    (`Service-Worker-Allowed`): la pagina carta del cliente non ha service worker. Da `/static/` lo scope
+    massimo sarebbe `/static/`. `Cache-Control: no-cache` fa arrivare subito le nuove versioni.
     """
     return FileResponse(
         "app/static/sw.js",
         media_type="application/javascript",
-        headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"},
+        headers={"Service-Worker-Allowed": "/merchant/", "Cache-Control": "no-cache"},
     )
 
 

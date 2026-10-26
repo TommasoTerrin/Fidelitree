@@ -112,6 +112,7 @@ app/
     crypto.py           # AES-GCM (chiave Zernio, secret webhook), indice cieco IGSID, token del link, mask_secret
     dependencies.py     # get_session, get_auth_identity, get_current_merchant, require_admin_key
     errors.py enums.py money.py clock.py   # errori di dominio, enum (Level, InstagramStatus...), centesimi↔euro, utc_now
+    logging_filters.py  # filtro di uvicorn.access: maschera /c/<token> e /webhooks/zernio/<hook_id> nei log
   models/models.py      # tabelle SQLModel
   version.py            # versione letta da pyproject.toml (esposta da /health)
   schemas/              # Pydantic request/response

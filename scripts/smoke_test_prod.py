@@ -58,8 +58,8 @@ def run_smoke_test(base_url: str, admin_key: str, http=requests) -> bool:
             check(f"Pagina {page} raggiungibile", False, str(e))
     try:
         resp = http.get(f"{base_url}/sw.js", timeout=10)
-        check("Service worker /sw.js con scope /", resp.status_code == 200
-              and resp.headers.get("Service-Worker-Allowed") == "/", f"status {resp.status_code}")
+        check("Service worker /sw.js con scope /merchant/", resp.status_code == 200
+              and resp.headers.get("Service-Worker-Allowed") == "/merchant/", f"status {resp.status_code}")
         resp = http.get(f"{base_url}/static/manifest.webmanifest", timeout=10)
         check("Manifest PWA raggiungibile", resp.status_code == 200, f"status {resp.status_code}")
     except Exception as e:

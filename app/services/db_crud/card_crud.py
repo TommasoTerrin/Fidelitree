@@ -41,6 +41,11 @@ def get_card_by_igsid_hash(session: Session, merchant_id: int, igsid_hash: str) 
     return session.exec(statement).first()
 
 
+def get_card_by_link_token_hash(session: Session, token_hash: str) -> Optional[Card]:
+    """Recupera la carta dall'hash SHA-256 del token del suo link (`link_token_hash`, unico e indicizzato)."""
+    return session.exec(select(Card).where(Card.link_token_hash == token_hash)).first()
+
+
 def get_card_by_id(session: Session, card_id: uuid.UUID) -> Optional[Card]:
     """Recupera una carta per ID."""
     return session.get(Card, card_id)
