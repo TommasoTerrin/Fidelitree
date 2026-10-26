@@ -26,8 +26,8 @@ Contesto di riferimento: decisioni in [AGENTS.md](../../AGENTS.md), vincoli Zern
 | 05 | Client Zernio, `zernio_check`, **collaudo anticipato** | ✅ 2026-10-26: passi 1-2 del collaudo fatti (base URL `https://zernio.com/api` ok, `send-card` consegnata e corretta su mobile al profilo del founder); passo 3 (non follower) rimandato al collaudo del 07/11 |
 | 06 | Webhook: dalla parola chiave alla card | ✅ 2026-10-23 (644 test) |
 | 07 | Onboarding Instagram del merchant | ✅ codice 2026-10-26 (739 test); collaudo 2026-10-26 fatto per onboarding e DM da follower (timeout invio 4 s); non follower/Requests, ManyChat, menu e «Scollega» rimandati al ticket 11 |
-| 08 | Pagina carta, QR, scan e PWA merchant | ✅ codice 2026-10-26 (793 test); prova manuale (link dal browser di Instagram, scan dalla PWA, installazione) al founder |
-| 09 | Rimozione del vecchio flusso cliente (OTP, wallet, `/join`, `Customer`) | |
+| 08 | Pagina carta, QR, scan e PWA merchant | ✅ 2026-10-26 (793 test); prova manuale del founder riuscita (link `/c/<token>`, scan dalla PWA con aggiunta di punti, PWA installata, redirect al login) |
+| 09 | Rimozione del vecchio flusso cliente (OTP, wallet, `/join`, `Customer`) | ✅ 2026-10-26 (744 test) |
 | 10 | Seed, smoke test e script | |
 | 11 | Documentazione, collaudo end-to-end e release | |
 
@@ -93,6 +93,32 @@ Note sui ticket fatti:
   vero (la dependency non è coperta dagli override); `scripts/smoke_test_prod.py` controlla ora lo scope
   `/merchant/` (il resto dello script è del 10).
 
+- **09**: tolto tutto il vecchio flusso cliente. Via `Customer`, `Card.customer_id` (e la sua `UniqueConstraint`),
+  `customer_service`, `customer_crud`, `schemas/customer.py`, `consumer/auth.py` e `consumer/api.py` (restava vuoto: via
+  anche dal `main`), `get_current_customer`/`get_optional_customer`, `request_otp`/`verify_otp`/`DEV_OTP_CODE` da
+  `AuthProvider`, `card_crud.create_card`/`get_cards_by_customer`/`get_card_by_merchant_and_customer`, `JoinResponse` e
+  `WalletEntryResponse`, i template `login`/`join`/`wallet`, le route `/customer/login`, `/customer/logout`,
+  `/join/{id}`, `/wallet`, `/card/{id}` e `/api/customer/*`, `/api/card/{id}`. `Card.igsid_hash` e `link_token_hash`
+  sono ora `str` obbligatori (NOT NULL: il costruttore di una tabella SQLModel non valida, l'errore è un
+  `IntegrityError` al salvataggio). Scelte non previste dal ticket: il blocco «QR del negozio» `/join` delle
+  impostazioni è tolto **per intero** (HTML, `join_path`, `qrcode.min.js` e tutto lo script QR: lasciando lo script
+  `qrBox` sarebbe stato `null` e il form delle impostazioni avrebbe smesso di salvare); nessun sostituto, il QR
+  `ig.me` resta a mano fuori dall'app. Fixture: `make_card(session, merchant, igsid="igsid-test-1")` in `conftest.py`
+  su `instagram_service.get_or_create_card` (hash veri, quindi `/c/<token>` funziona nei test); `card` e
+  `approved_merchants` lo usano, la fixture `customer` non c'è più. Test: `test_customer.py` e `test_customer_core.py`
+  eliminati; il resto (WhatsApp, `/api/get-card` e `/download_card` 404) è in `tests/test_old_flow_removed.py`, che
+  contiene anche le route rimosse (404), il grep case-insensitive su `app/` (`customer|wallet|\botp\b|/join`),
+  le colonne NOT NULL, il flusso completo (webhook → `/c/<token>` → scan +60 → conversione e pool) e la
+  cancellazione da parte del merchant con ricreazione a zero; i test di contenuto della pagina carta passati da
+  `/card/{id}` a `/c/<token>` (nessun livello, oro, conversione disattivata) stanno in `test_card_page.py`.
+  Modifica minima agli script (il resto è del 10): `seed_db` crea le carte con `get_or_create_card` da IGSID
+  finti (`igsid-seed-anna`, `igsid-seed-luca`) e stampa solo credenziali merchant e id delle carte (niente token del
+  link); `smoke_test_prod` controlla `/privacy` al posto di `/customer/login` e non verifica più `/join/{id}`.
+  `create_all()`/`drop_all()` non conoscono più la tabella `customer`: su un DB vecchio resterebbe orfana (innocua;
+  il DB di collaudo è usa-e-getta). Verificato l'avvio su un SQLite appena creato (lifespan, `/health`, `/privacy`,
+  seed). Nota per il 10: la stampa del seed contiene `→`, che su una console Windows cp1252 dà
+  `UnicodeEncodeError` (già così prima del 09; con `PYTHONIOENCODING=utf-8` funziona).
+
 ### Prossimo passo
 
 1. ~~Ticket 05~~ codice fatto; **chiuderlo** dopo il collaudo.
@@ -104,10 +130,8 @@ Note sui ticket fatti:
    `zernio-notes.md`, "Verificato nel collaudo del 07"). **Ancora da fare** (rimandati al collaudo finale, ticket 11):
    card/risposta a un **non follower** e DM in **Requests** via webhook (serve un profilo che non segue il negozio),
    `isFollower: null`, **ManyChat/standby**, tocco della voce di menu «🌳 La mia carta», «Scollega» da pannello.
-4. ~~Ticket 08~~ codice fatto; **prova manuale al founder** (Definition of Done del ticket): link della card di prova
-   aperto dal browser di Instagram, scan del QR dalla PWA con aggiunta di punti, installazione della PWA dalle pagine
-   merchant. Server locale su SQLite usa-e-getta con tunnel (`.agents/workflows/deploy.md`).
-5. Poi 09 → 11 in ordine, dopo l'approvazione.
+4. ~~Ticket 08~~ fatto, prova manuale del founder riuscita il 2026-10-26.
+5. ~~Ticket 09~~ fatto. Poi 10 → 11 in ordine, dopo l'approvazione.
 
 Esiti del collaudo del 05 (2026-10-26): `conversations` ha date in ritardo (la conversazione del founder risultava del
 giorno prima: per trovarla si legge il mittente dei messaggi, non si fida dell'ordine); `--folder requests` dà 400

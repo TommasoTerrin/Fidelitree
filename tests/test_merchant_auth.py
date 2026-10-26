@@ -7,8 +7,8 @@ from pathlib import Path
 
 from sqlmodel import select
 
-from app.models.models import Card, Merchant
-from app.services.db_crud import customer_crud
+from app.models.models import Merchant
+from tests.conftest import make_card
 
 REGISTER = {
     "business_name": "  Bar Sole ",
@@ -107,11 +107,7 @@ def test_merchant_non_approvato_puo_lavorare(client, session, auth_provider):
     merchant_id = _register(client).json()["merchant_id"]
     assert client.get("/merchant/scanner").status_code == 200
 
-    customer = customer_crud.create_customer(session, "cliente@test.it")
-    card = Card(merchant_id=merchant_id, customer_id=customer.id)
-    session.add(card)
-    session.commit()
-    session.refresh(card)
+    card = make_card(session, session.get(Merchant, merchant_id))
 
     resp = client.post(f"/api/merchant/add-tree-points/{card.id}", json={"tree_points": 10})
     assert resp.status_code == 200

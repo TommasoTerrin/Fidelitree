@@ -6,7 +6,6 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field
 from typing import Optional
 import uuid
 
-from app.core.enums import Level
 from app.core.money import cents_to_euro
 from app.services.tree_service import PoolProgress
 
@@ -29,35 +28,6 @@ class CardResponse(BaseModel):
     merchant_id: int
     cashback_cents: int = Field(exclude=True)
     tree_points: int
-
-    @computed_field
-    @property
-    def cashback_point(self) -> float:
-        """Credito cashback in euro, derivato da `cashback_cents`."""
-        return cents_to_euro(self.cashback_cents)
-
-
-class JoinResponse(BaseModel):
-    """Esito dell'iscrizione a un negozio: la carta e se è stata appena creata."""
-    card_id: uuid.UUID
-    created: bool
-
-
-class WalletEntryResponse(BaseModel):
-    """Carta nel wallet con il livello del pool del negozio. Il cashback esce in euro."""
-    model_config = ConfigDict(from_attributes=True)
-
-    card_id: uuid.UUID
-    merchant_id: int
-    business_name: str
-    cashback_cents: int = Field(exclude=True)
-    tree_points: int
-    level: Level
-    pool_points: int
-    next_level: Optional[Level]
-    points_to_next: Optional[int]
-    percent_to_next: int
-    trees_at_month_end: int
 
     @computed_field
     @property

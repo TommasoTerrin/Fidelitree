@@ -7,7 +7,7 @@ manuale dei punti. I dati mostrati (pool del mese, soglie, QR) arrivano dai serv
 # Endpoint previsti:
 #   GET  /merchant/login      → Pagina di login
 #   GET  /merchant/register   → Pagina di registrazione
-#   GET  /merchant/settings   → Pagina impostazioni (Instagram, conversione, soglie, QR del negozio)
+#   GET  /merchant/settings   → Pagina impostazioni (Instagram, conversione, soglie)
 #   GET  /merchant/scanner     → Pagina QR scanner
 #   GET  /merchant/card/{id}/manage → Pagina gestione punti di una card
 
@@ -62,7 +62,7 @@ async def settings_page(
     """
     Serve la pagina impostazioni: conversione, soglie effettive dei livelli (sola lettura),
     stato di approvazione, sezione Instagram (`instagram` è il pannello: uno stato per volta, mai segreti,
-    nessuna chiamata a Zernio) e QR del negozio (`join_path` è il percorso che il QR codifica).
+    nessuna chiamata a Zernio).
     Senza sessione merchant valida → 303 al login.
     """
     if merchant is None:
@@ -74,7 +74,6 @@ async def settings_page(
             "merchant": merchant,
             "thresholds": tree_service.effective_thresholds(merchant),
             "instagram": merchant_service.read_instagram_panel(session, merchant, utc_now()),
-            "join_path": f"/join/{merchant.id}",
         }
     )
 

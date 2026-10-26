@@ -21,7 +21,7 @@ from app.models.models import Card, Merchant, ZernioSendCounter
 from app.services.instagram_service import CARD_POSTBACK_PAYLOAD
 from app.services.zernio_service import get_zernio_http
 from tests.conftest import (
-    INSTAGRAM_ACCOUNT_ID, TEST_PUBLIC_BASE_URL, WEBHOOK_TEST_SECRET, ZERNIO_TEST_KEY, ZernioMock,
+    INSTAGRAM_ACCOUNT_ID, TEST_PUBLIC_BASE_URL, WEBHOOK_TEST_SECRET, ZERNIO_TEST_KEY, ZernioMock, make_card,
 )
 
 NEW_KEY = "sk_" + "cd34" * 16
@@ -411,9 +411,8 @@ def test_scollega_rimuove_il_webhook_e_cancella_i_campi(zernio, client, session,
     instagram_merchant.zernio_webhook_id = "wh-9"
     instagram_merchant.persistent_menu_set = True
     session.add(instagram_merchant)
-    carta = Card(merchant_id=instagram_merchant.id, igsid_hash="h" * 64)
-    session.add(carta)
     session.commit()
+    make_card(session, instagram_merchant)
     app.dependency_overrides[get_current_merchant] = lambda: instagram_merchant
 
     resp = client.delete("/api/merchant/instagram")

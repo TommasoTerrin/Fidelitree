@@ -273,7 +273,7 @@ def quota_status(sent: int, limit: int, warn_percent: int) -> QuotaStatus:
 
 # --- Shell ---
 #
-# Gli import della shell stanno qui, come in `customer_service`: `zernio_service` importa `CardMessage`
+# Gli import della shell stanno qui, dopo il core: `zernio_service` importa `CardMessage`
 # dal core di questo modulo, quindi il core deve essere già definito quando lo si importa.
 
 import json  # noqa: E402
@@ -302,7 +302,7 @@ def get_or_create_card(session: Session, merchant: Merchant, igsid: str) -> tupl
     Carta del cliente (identificato dall'IGSID) presso il negozio; la crea al primo messaggio. Ritorna
     `(carta, creata)`. Si cerca per `(merchant_id, indice cieco dell'IGSID)`: l'IGSID non si salva. Alla
     creazione si salva anche l'hash del token del link (il token si ricalcola, non si salva). Richieste
-    simultanee non producono doppioni: si riusa la carta creata dall'altra (come `join_merchant`).
+    simultanee non producono doppioni: si riusa la carta creata dall'altra.
     """
     igsid_hash = crypto.igsid_blind_index(igsid)
     card = card_crud.get_card_by_igsid_hash(session, merchant.id, igsid_hash)

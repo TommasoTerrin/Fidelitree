@@ -113,6 +113,7 @@ def test_pagina_carta_dal_link_del_webhook(client, session, instagram_merchant, 
     text = resp.text
     assert SHOP_NAME in text
     assert "🥉 Bronzo" in text and "150 punti questo mese" in text   # livello del pool
+    assert "Ancora 150 punti al livello Argento" in text and "Insieme questo mese stiamo piantando 1 albero 🌳" in text
     assert f"€ {cashback_cents / 100:.2f}" in text                      # cashback
     assert "I tuoi Tree Points" in text and f"🌳 {session.get(Card, card.id).tree_points}" in text
 
@@ -163,6 +164,34 @@ def test_conversione_attiva_mostra_i_punti_mancanti(client, session, instagram_m
     )
     card_service.add_tree_points(session, instagram_merchant, card.id, 20)
     assert "Ancora 30 punti per € 2.00 di cashback" in client.get(f"/c/{token}").text
+
+
+def test_conversione_disattivata_senza_barra_personale(client, session, instagram_merchant, zernio_mock):
+    card, token = _request_card(client, session, instagram_merchant, zernio_mock)
+    merchant_crud.update_merchant(session, instagram_merchant, {"conversion_enabled": False})
+    card_service.add_tree_points(session, instagram_merchant, card.id, 20)
+    text = client.get(f"/c/{token}").text
+    assert "di cashback" not in text and 'id="conversion-note"' not in text
+    assert "Cashback" in text  # il cashback resta sempre visibile
+
+
+def test_pagina_carta_senza_livello(client, session, instagram_merchant, zernio_mock):
+    _, token = _request_card(client, session, instagram_merchant, zernio_mock)
+    text = client.get(f"/c/{token}").text
+    assert "Nessun livello" in text
+    assert "Ancora 100 punti al livello Bronzo" in text  # soglie di default 100/300/600
+    assert "stiamo piantando" not in text
+
+
+def test_pagina_carta_con_pool_oro_mostra_il_livello_massimo(client, session, instagram_merchant, zernio_mock):
+    card, token = _request_card(client, session, instagram_merchant, zernio_mock)
+    merchant_crud.update_merchant(session, instagram_merchant, {"conversion_enabled": False})
+    card_service.add_tree_points(session, instagram_merchant, card.id, 700)
+    text = client.get(f"/c/{token}").text
+    assert "🥇 Oro" in text
+    assert "Livello massimo raggiunto!" in text
+    assert "Insieme questo mese stiamo piantando 5 alberi 🌳" in text
+    assert "al livello" not in text  # nessun livello successivo
 
 
 # --- 404 amichevole, revoca, isolamento ---

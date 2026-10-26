@@ -13,20 +13,10 @@ from app.models.models import Card
 logger = logging.getLogger(__name__)
 
 
-def create_card(session: Session, merchant_id: int, customer_id: int) -> Card:
-    """Crea una nuova Card per la coppia merchant/cliente."""
-    new_card = Card(merchant_id=merchant_id, customer_id=customer_id)
-    session.add(new_card)
-    session.commit()
-    session.refresh(new_card)
-    logger.info("Nuova Card creata: %s (merchant=%s)", new_card.id, merchant_id)
-    return new_card
-
-
 def add_card(session: Session, card: Card) -> Card:
     """
-    Salva una carta già costruita (nuovo flusso Instagram: `igsid_hash` e `link_token_hash` li
-    calcola il service). Solleva `IntegrityError` se esiste già la carta per `(merchant_id, igsid_hash)`.
+    Salva una carta già costruita (`igsid_hash` e `link_token_hash` li calcola il service). Solleva
+    `IntegrityError` se esiste già la carta per `(merchant_id, igsid_hash)` o se manca un campo obbligatorio.
     """
     session.add(card)
     session.commit()
@@ -49,19 +39,6 @@ def get_card_by_link_token_hash(session: Session, token_hash: str) -> Optional[C
 def get_card_by_id(session: Session, card_id: uuid.UUID) -> Optional[Card]:
     """Recupera una carta per ID."""
     return session.get(Card, card_id)
-
-
-def get_card_by_merchant_and_customer(
-    session: Session, merchant_id: int, customer_id: int
-) -> Optional[Card]:
-    """Recupera la carta di un cliente presso un negozio (ne esiste una sola per coppia)."""
-    statement = select(Card).where(Card.merchant_id == merchant_id, Card.customer_id == customer_id)
-    return session.exec(statement).first()
-
-
-def get_cards_by_customer(session: Session, customer_id: int) -> List[Card]:
-    """Tutte le carte di un cliente (il suo wallet), senza ordinamento."""
-    return session.exec(select(Card).where(Card.customer_id == customer_id)).all()
 
 
 def get_all_cards(session: Session, skip: int = 0, limit: int = 100) -> List[Card]:

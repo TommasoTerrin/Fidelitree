@@ -58,30 +58,14 @@ def get_optional_merchant(
 ):
     """
     Come `get_current_merchant` ma senza errori: `None` se non c'è una sessione valida o l'identità non è di
-    un esercente (es. il cookie di un vecchio cliente). Serve alle pagine HTML merchant, che in quel caso
+    un esercente (es. il cookie di un vecchio account non esercente). Serve alle pagine HTML merchant, che in quel caso
     rimandano al login invece di mostrare un JSON di errore.
     """
     from app.services.db_crud import merchant_crud
     return merchant_crud.get_merchant_by_auth_user_id(session, identity.user_id) if identity else None
 
-def get_current_customer(
-    identity: AuthIdentity = Depends(get_auth_identity),
-    session: Session = Depends(get_session),
-):
-    """Cliente collegato all'identità (`auth_user_id`); al primo accesso viene creato."""
-    from app.services import customer_service
-    return customer_service.get_or_create_customer(session, identity)
-
-def get_optional_customer(
-    identity: Optional[AuthIdentity] = Depends(get_optional_identity),
-    session: Session = Depends(get_session),
-):
-    """Come `get_current_customer` ma ritorna `None` se non c'è una sessione valida (pagine HTML)."""
-    from app.services import customer_service
-    return customer_service.get_or_create_customer(session, identity) if identity else None
-
 def set_session_cookie(response: Response, token: str) -> None:
-    """Imposta il cookie di sessione `access_token` (httponly, 7 giorni), uguale per merchant e clienti."""
+    """Imposta il cookie di sessione `access_token` (httponly, 7 giorni) del merchant."""
     response.set_cookie("access_token", token, httponly=True, max_age=60*24*7*60)
 
 def require_admin_key(x_admin_key: str = Header(default=None)):

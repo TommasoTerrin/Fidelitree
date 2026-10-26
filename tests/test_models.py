@@ -13,7 +13,7 @@ from sqlmodel import select
 from app.core.clock import utc_now
 from app.core.enums import InstagramStatus, Level, PointTransactionKind, WebhookOutcome
 from app.models.models import (
-    Card, Customer, Merchant, MerchantPool, PointTransaction, ProcessedWebhookEvent,
+    Card, Merchant, MerchantPool, PointTransaction, ProcessedWebhookEvent,
     TreePlanting, ZernioSendCounter,
 )
 
@@ -29,12 +29,9 @@ def make_merchant(session, email="bar@prova.it", **extra) -> Merchant:
     return m
 
 
-def make_customer(session, email="cliente@prova.it") -> Customer:
-    c = Customer.model_validate({"email": email})
-    session.add(c)
-    session.commit()
-    session.refresh(c)
-    return c
+def make_card(merchant_id, igsid_hash="h" * 64, **extra) -> Card:
+    """Carta con i campi obbligatori; `link_token_hash` ricavato da `igsid_hash` (è unico)."""
+    return Card(merchant_id=merchant_id, igsid_hash=igsid_hash, link_token_hash="tok-" + igsid_hash, **extra)
 
 
 # ---------------------------------------------------------------------------
@@ -94,9 +91,8 @@ def test_merchant_contact_phone_opzionale():
     assert Merchant.model_validate({**VALID, "contact_phone": "+393331234567"}).contact_phone == "+393331234567"
 
 
-def test_email_normalizzata_in_minuscolo_merchant_e_customer():
+def test_email_normalizzata_in_minuscolo():
     assert Merchant.model_validate({**VALID, "email": "  Mario@Bar.IT "}).email == "mario@bar.it"
-    assert Customer.model_validate({"email": "  Mario@Bar.IT "}).email == "mario@bar.it"
 
 
 def test_email_duplicata_dopo_normalizzazione(session):
@@ -112,8 +108,8 @@ def test_email_duplicata_dopo_normalizzazione(session):
 
 def test_created_at_aware_utc():
     for obj in (
-        Customer(email="a@b.it"),
-        PointTransaction(merchant_id=1, card_id=Card(merchant_id=1, customer_id=1).id,
+        make_card(1),
+        PointTransaction(merchant_id=1, card_id=make_card(1).id,
                          kind=PointTransactionKind.SCAN, delta=1, period="2026-10"),
         TreePlanting(merchant_id=1, period="2026-10", level=Level.BRONZE,
                      tree_count=1, pool_points=100),
@@ -127,32 +123,13 @@ def test_created_at_aware_utc():
 # ---------------------------------------------------------------------------
 
 def test_card_default():
-    card = Card(merchant_id=1, customer_id=1)
+    card = make_card(1)
     assert card.cashback_cents == 0
     assert isinstance(card.cashback_cents, int)
     assert card.tree_points == 0
     assert card.id is not None  # UUID generato automaticamente
     assert "trees_planted" not in Card.model_fields
     assert "cashback_point" not in Card.model_fields
-
-
-def test_card_duplicata_stesso_merchant_e_customer(session):
-    m, c = make_merchant(session), make_customer(session)
-    session.add(Card(merchant_id=m.id, customer_id=c.id))
-    session.commit()
-    session.add(Card(merchant_id=m.id, customer_id=c.id))
-    with pytest.raises(IntegrityError):
-        session.commit()
-    session.rollback()
-
-
-def test_stesso_customer_su_due_merchant_ok(session):
-    m1, m2 = make_merchant(session), make_merchant(session, email="altro@prova.it")
-    c = make_customer(session)
-    session.add(Card(merchant_id=m1.id, customer_id=c.id))
-    session.add(Card(merchant_id=m2.id, customer_id=c.id))
-    session.commit()
-    assert len(session.exec(select(Card)).all()) == 2
 
 
 # ---------------------------------------------------------------------------
@@ -180,23 +157,21 @@ def test_merchant_zernio_account_id_e_hook_id_unici(session):
     make_merchant(session, email="tre@prova.it")
 
 
-def test_card_con_igsid_senza_customer(session):
+def test_card_con_i_campi_obbligatori_ha_i_default_attesi(session):
     m = make_merchant(session)
-    session.add(Card(merchant_id=m.id, igsid_hash="h" * 64))
+    session.add(make_card(m.id))
     session.commit()
     card = session.exec(select(Card)).one()
-    assert card.customer_id is None
     assert card.link_version == 1
-    assert card.link_token_hash is None
     assert card.zernio_conversation_id is None and card.last_inbound_at is None
     assert card.created_at is not None
 
 
 def test_card_igsid_duplicato_stesso_negozio(session):
     m = make_merchant(session)
-    session.add(Card(merchant_id=m.id, igsid_hash="abc"))
+    session.add(Card(merchant_id=m.id, igsid_hash="abc", link_token_hash="t1"))
     session.commit()
-    session.add(Card(merchant_id=m.id, igsid_hash="abc"))
+    session.add(Card(merchant_id=m.id, igsid_hash="abc", link_token_hash="t2"))
     with pytest.raises(IntegrityError):
         session.commit()
     session.rollback()
@@ -204,17 +179,10 @@ def test_card_igsid_duplicato_stesso_negozio(session):
 
 def test_card_stesso_igsid_su_due_negozi_ok(session):
     m1, m2 = make_merchant(session), make_merchant(session, email="altro@prova.it")
-    session.add(Card(merchant_id=m1.id, igsid_hash="abc"))
-    session.add(Card(merchant_id=m2.id, igsid_hash="abc"))
+    session.add(Card(merchant_id=m1.id, igsid_hash="abc", link_token_hash="t1"))
+    session.add(Card(merchant_id=m2.id, igsid_hash="abc", link_token_hash="t2"))
     session.commit()
     assert len(session.exec(select(Card)).all()) == 2
-
-
-def test_card_vecchio_flusso_senza_igsid_ancora_possibile(session):
-    m, c = make_merchant(session), make_customer(session)
-    session.add(Card(merchant_id=m.id, customer_id=c.id))
-    session.commit()
-    assert session.exec(select(Card)).one().igsid_hash is None
 
 
 def test_card_link_token_hash_unico(session):
@@ -333,8 +301,8 @@ def test_merchant_pool_default_e_unicita(session):
 # ---------------------------------------------------------------------------
 
 def test_cancellare_merchant_elimina_tutto_il_collegato(session):
-    m, c = make_merchant(session), make_customer(session)
-    card = Card(merchant_id=m.id, customer_id=c.id)
+    m = make_merchant(session)
+    card = make_card(m.id)
     session.add(card)
     session.add(PointTransaction(merchant_id=m.id, card_id=card.id,
                                  kind=PointTransactionKind.SCAN, delta=10, period="2026-10"))
@@ -347,12 +315,11 @@ def test_cancellare_merchant_elimina_tutto_il_collegato(session):
 
     for table in (Card, PointTransaction, MerchantPool, TreePlanting):
         assert session.exec(select(table)).all() == []
-    assert session.exec(select(Customer)).one()  # il cliente resta
 
 
 def test_cancellare_merchant_elimina_carte_instagram_ed_eventi(session):
     m = make_merchant(session)
-    session.add(Card(merchant_id=m.id, igsid_hash="abc", last_inbound_at=utc_now()))
+    session.add(make_card(m.id, "abc", last_inbound_at=utc_now()))
     session.add(ProcessedWebhookEvent(event_id="evt-1", merchant_id=m.id))
     session.commit()
 
@@ -361,15 +328,3 @@ def test_cancellare_merchant_elimina_carte_instagram_ed_eventi(session):
 
     assert session.exec(select(Card)).all() == []
     assert session.exec(select(ProcessedWebhookEvent)).all() == []
-
-
-def test_cancellare_customer_elimina_le_sue_carte(session):
-    m, c = make_merchant(session), make_customer(session)
-    session.add(Card(merchant_id=m.id, customer_id=c.id))
-    session.commit()
-
-    session.delete(c)
-    session.commit()
-
-    assert session.exec(select(Card)).all() == []
-    assert session.exec(select(Merchant)).one()

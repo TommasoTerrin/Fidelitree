@@ -1,37 +1,26 @@
 """
 Route per il frontend lato cliente.
-Pagina carta `/c/<token>` (link segreto, nessun login) e informativa `/privacy`; finché il ticket 09
-non le toglie restano le vecchie pagine: accesso, ingresso da QR del negozio, wallet e `/card/{id}`.
-Le vecchie pagine riservate mandano al login (con `next`) chi non ha una sessione valida.
+Pagina carta `/c/<token>` (link segreto, nessun login) e informativa `/privacy`. Il cliente non ha
+account né sessione: la carta nasce da un DM Instagram e si apre solo con il link della card.
 """
 
-from typing import Optional
-from urllib.parse import quote
-
 from fastapi import APIRouter, Request, Depends
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session
-import uuid
 
-from app.core.auth import DEV_OTP_CODE
 from app.core.clock import utc_now
 from app.core.config import settings
-from app.core.dependencies import get_optional_customer, get_session
+from app.core.dependencies import get_session
 from app.core.errors import NotFoundError
-from app.models.models import Card, Customer, Merchant
-from app.services import card_service, customer_service, instagram_service, tree_service
+from app.models.models import Card, Merchant
+from app.services import card_service, instagram_service, tree_service
 
 router = APIRouter(tags=["Consumer Frontend"])
 templates = Jinja2Templates(directory="app/templates")
 
 # L'URL della pagina carta contiene il segreto e il saldo cambia a ogni scan: niente cache, niente Referer.
 CARD_PAGE_HEADERS = {"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"}
-
-
-def _login_redirect(path: str) -> RedirectResponse:
-    """Redirect 303 al login del cliente che, dopo l'accesso, riporta su `path`."""
-    return RedirectResponse(url=f"/customer/login?next={quote(path, safe='/')}", status_code=303)
 
 
 def _card_page_context(session: Session, card: Card) -> dict:
@@ -53,7 +42,7 @@ def _card_page_context(session: Session, card: Card) -> dict:
     }
 
 
-# 0. PAGINA CARTA DAL LINK DELLA CARD (nessun login: il token nel percorso è il segreto)
+# 1. PAGINA CARTA DAL LINK DELLA CARD (nessun login: il token nel percorso è il segreto)
 @router.get("/c/{token}", response_class=HTMLResponse)
 async def card_page(request: Request, token: str, session: Session = Depends(get_session)):
     """
@@ -78,81 +67,8 @@ async def card_page(request: Request, token: str, session: Session = Depends(get
     )
 
 
-# 0b. INFORMATIVA PRIVACY (bozza da far verificare al founder)
+# 2. INFORMATIVA PRIVACY (bozza da far verificare al founder)
 @router.get("/privacy", response_class=HTMLResponse)
 async def privacy_page(request: Request):
     """Informativa privacy per i clienti, linkata in fondo alla pagina carta."""
     return templates.TemplateResponse(request=request, name="consumer/privacy.html")
-
-
-# 1. PAGINA DI ACCESSO (email + OTP)
-@router.get("/customer/login", response_class=HTMLResponse)
-async def customer_login(request: Request, next: Optional[str] = None):
-    """
-    Pagina di accesso del cliente; `next` (solo percorsi interni) è dove tornare dopo il login.
-    Con `AUTH_PROVIDER=dev` la pagina mostra il codice OTP di sviluppo.
-    """
-    dev_code = DEV_OTP_CODE if settings.AUTH_PROVIDER == "dev" else None
-    return templates.TemplateResponse(
-        request=request,
-        name="consumer/login.html",
-        context={"next": customer_service.safe_next_path(next), "dev_code": dev_code},
-    )
-
-
-# 2. INGRESSO DAL QR STATICO DEL NEGOZIO
-@router.get("/join/{merchant_id}", response_class=HTMLResponse)
-async def join_page(
-    request: Request,
-    merchant_id: int,
-    customer: Optional[Customer] = Depends(get_optional_customer),
-    session: Session = Depends(get_session),
-):
-    """
-    Pagina pubblica del QR del negozio. Il contesto dice se il cliente è già loggato
-    (`customer`): in quel caso la pagina può chiamare `POST /api/customer/join/{id}`.
-    """
-    merchant = session.get(Merchant, merchant_id)
-    return templates.TemplateResponse(
-        request=request,
-        name="consumer/join.html",
-        context={"merchant": merchant, "customer": customer, "merchant_id": merchant_id},
-        status_code=200 if merchant else 404,  # negozio inesistente: pagina 404 amichevole
-    )
-
-
-# 3. WALLET (tutte le carte del cliente)
-@router.get("/wallet", response_class=HTMLResponse)
-async def wallet_page(
-    request: Request,
-    customer: Optional[Customer] = Depends(get_optional_customer),
-    session: Session = Depends(get_session),
-):
-    """Wallet del cliente con le sue carte e il livello di ciascun negozio; senza login → login."""
-    if customer is None:
-        return _login_redirect("/wallet")
-    return templates.TemplateResponse(
-        request=request,
-        name="consumer/wallet.html",
-        context={"customer": customer, "wallet": customer_service.list_wallet(session, customer)},
-    )
-
-
-# 4. VISUALIZZAZIONE DI UNA SPECIFICA CARD (con QR e saldo cashback)
-@router.get("/card/{card_id}", response_class=HTMLResponse)
-async def view_card(
-    request: Request,
-    card_id: uuid.UUID,
-    customer: Optional[Customer] = Depends(get_optional_customer),
-    session: Session = Depends(get_session),
-):
-    """
-    Vecchio flusso (via con il ticket 09): mostra la carta al suo proprietario, con lo stesso template
-    della pagina `/c/<token>`. Senza login → login (con `next`); carta inesistente o altrui → 404.
-    """
-    if customer is None:
-        return _login_redirect(f"/card/{card_id}")
-    card = customer_service.get_owned_card(session, customer, card_id)
-    return templates.TemplateResponse(
-        request=request, name="consumer/card.html", context=_card_page_context(session, card),
-    )

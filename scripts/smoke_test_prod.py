@@ -49,8 +49,8 @@ def run_smoke_test(base_url: str, admin_key: str, http=requests) -> bool:
         print(f"[ERROR] Health check fallito: {e}")
         return False
 
-    # 2. Pagine pubbliche (cliente e merchant) e PWA
-    for page in ["/customer/login", "/merchant/login", "/merchant/register"]:
+    # 2. Pagine pubbliche (privacy del cliente e merchant) e PWA
+    for page in ["/privacy", "/merchant/login", "/merchant/register"]:
         try:
             resp = http.get(f"{base_url}{page}", timeout=10)
             check(f"Pagina {page} raggiungibile", _is_html(resp), f"status {resp.status_code}")
@@ -65,7 +65,7 @@ def run_smoke_test(base_url: str, admin_key: str, http=requests) -> bool:
     except Exception as e:
         check("File PWA raggiungibili", False, str(e))
 
-    # 3. Ciclo di vita merchant via API admin (crea -> leggi -> pagina join -> elimina)
+    # 3. Ciclo di vita merchant via API admin (crea -> leggi -> elimina)
     print("--- Test API & Database ---")
     m_id = None
     try:
@@ -82,9 +82,6 @@ def run_smoke_test(base_url: str, admin_key: str, http=requests) -> bool:
 
         resp = http.get(f"{base_url}/api/merchant/{m_id}", headers=headers, timeout=10)
         check("API Merchant: lettura", resp.status_code == 200, f"status {resp.status_code}")
-
-        resp = http.get(f"{base_url}/join/{m_id}", timeout=10)
-        check("Pagina /join/{id} del negozio", _is_html(resp), f"status {resp.status_code}")
 
         # Gli endpoint admin devono rifiutare le richieste senza chiave
         resp = http.get(f"{base_url}/api/merchant/{m_id}", timeout=10)

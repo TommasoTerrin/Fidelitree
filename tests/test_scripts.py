@@ -16,10 +16,9 @@ from app.core.config import settings
 from app.core.clock import utc_now
 from app.core.enums import Level, WebhookOutcome
 from app.models.models import (
-    Card, Customer, Merchant, MerchantPool, PointTransaction, ProcessedWebhookEvent,
+    Card, Merchant, MerchantPool, PointTransaction, ProcessedWebhookEvent,
 )
 from app.services import ecologi_service, instagram_service, tree_service, zernio_service
-from app.services.db_crud import customer_crud
 from scripts import ecologi_check, replay_webhook, reset_db, seed_db, zernio_check
 from scripts.smoke_test_prod import run_smoke_test
 from tests.conftest import WEBHOOK_TEST_SECRET, ZERNIO_TEST_KEY
@@ -34,15 +33,15 @@ def _count(session, model) -> int:
 
 # --- seed ---
 
-def test_seed_crea_merchant_clienti_carte_e_movimenti(session):
+def test_seed_crea_merchant_carte_e_movimenti(session):
     entries = seed_db.seed(session, now=NOW)
 
     assert len(entries) == 2
     merchants = session.exec(select(Merchant)).all()
     assert len(merchants) == 2
     assert all(m.is_approved and m.auth_user_id for m in merchants)
-    assert _count(session, Customer) == 2
-    assert _count(session, Card) == 4  # ogni cliente ha una carta presso ciascun negozio
+    assert _count(session, Card) == 4  # ogni cliente finto ha una carta presso ciascun negozio
+    assert all(c.igsid_hash and c.link_token_hash for c in session.exec(select(Card)).all())
     assert _count(session, PointTransaction) > 0
     # un merchant con conversione e uno "solo alberi", con soglie diverse
     assert {m.conversion_enabled for m in merchants} == {True, False}
@@ -52,21 +51,21 @@ def test_seed_crea_merchant_clienti_carte_e_movimenti(session):
 def test_seed_converte_in_cashback_nel_negozio_con_conversione(session):
     entries = seed_db.seed(session, now=NOW)
     bar = next(e for e in entries if e.merchant.conversion_enabled)
-    anna = session.get(Card, bar.cards["anna@fidelitree.it"].id)
+    anna = session.get(Card, bar.cards["anna"].id)
     assert anna.cashback_cents == 200 and anna.tree_points == 10  # 60 punti: 50 → 2 €, restano 10
 
 
 def test_seed_e_idempotente(session):
     seed_db.seed(session, now=NOW)
     snapshot = (
-        _count(session, Merchant), _count(session, Customer), _count(session, Card),
+        _count(session, Merchant), _count(session, Card),
         _count(session, PointTransaction), [p.points for p in session.exec(select(MerchantPool)).all()],
     )
 
     seed_db.seed(session, now=NOW)
 
     assert snapshot == (
-        _count(session, Merchant), _count(session, Customer), _count(session, Card),
+        _count(session, Merchant), _count(session, Card),
         _count(session, PointTransaction), [p.points for p in session.exec(select(MerchantPool)).all()],
     )
 
@@ -82,7 +81,7 @@ def test_seed_produce_pool_coerenti_e_un_piano_utile_al_collaudo(session):
     assert not plan.exceeds_cap
 
 
-def test_main_del_seed_stampa_link_e_credenziali(monkeypatch, capsys):
+def test_main_del_seed_stampa_credenziali_e_id_delle_carte(monkeypatch, capsys):
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     SQLModel.metadata.create_all(engine)
     monkeypatch.setattr(seed_db, "engine", engine)
@@ -90,9 +89,9 @@ def test_main_del_seed_stampa_link_e_credenziali(monkeypatch, capsys):
     seed_db.main()  # stampa a sessione aperta: fuori da essa i modelli sarebbero scollegati
 
     out = capsys.readouterr().out
-    assert "/join/1" in out and "/join/2" in out
-    assert "/wallet" in out and settings.DEV_AUTH_PASSWORD in out
-    assert "demo@fidelitree.it" in out and "anna@fidelitree.it" in out
+    assert settings.DEV_AUTH_PASSWORD in out and "demo@fidelitree.it" in out
+    assert "Carta di anna: id " in out
+    assert "/join" not in out and "/wallet" not in out and "/c/" not in out  # nessun token del link stampato
     engine.dispose()
 
 
@@ -142,15 +141,17 @@ def test_reset_db_ricrea_lo_schema_vuoto(monkeypatch):
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     SQLModel.metadata.create_all(engine)
     with Session(engine) as s:
-        customer_crud.create_customer(s, "x@y.it")
+        s.add(Merchant.model_validate({"business_name": "Bar Prova", "email": "x@y.it"}))
+        s.commit()
     monkeypatch.setattr(reset_db, "engine", engine)
 
     reset_db.reset_db()
 
     tables = set(inspect(engine).get_table_names())
-    assert {"merchant", "customer", "card", "pointtransaction", "merchantpool", "treeplanting"} <= tables
+    assert {"merchant", "card", "pointtransaction", "merchantpool", "treeplanting"} <= tables
+    assert "customer" not in tables
     with engine.connect() as conn:
-        assert conn.exec_driver_sql("SELECT COUNT(*) FROM customer").scalar() == 0
+        assert conn.exec_driver_sql("SELECT COUNT(*) FROM merchant").scalar() == 0
     engine.dispose()
 
 

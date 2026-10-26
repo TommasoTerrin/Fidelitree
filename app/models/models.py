@@ -1,8 +1,8 @@
 """
 Definizione dei modelli database SQLModel per l'applicazione Fidelitree.
 
-Tabelle: Merchant (esercenti), Customer (clienti, vecchio flusso: sparisce nel ticket 09),
-Card (carta cliente↔negozio), PointTransaction (registro movimenti, fonte di verità),
+Tabelle: Merchant (esercenti), Card (carta del cliente Instagram presso un negozio),
+PointTransaction (registro movimenti, fonte di verità),
 MerchantPool (contatore del pool mensile, cache del registro), TreePlanting
 (piantumazioni di fine mese), ProcessedWebhookEvent (dedup dei webhook Zernio) e
 ZernioSendCounter (contatore mensile degli invii, per l'avviso di quota).
@@ -151,48 +151,26 @@ class Merchant(SQLModel, table=True):
         return v
 
 
-class Customer(SQLModel, table=True):
-    """Cliente finale: si iscrive con email e ha una carta per ogni negozio."""
-    id: Optional[int] = Field(default=None, primary_key=True)
-    email: str = Field(unique=True, index=True)  # normalizzata in minuscolo
-    auth_user_id: Optional[str] = Field(default=None, unique=True, index=True)
-    created_at: datetime = _created_at_field()
-
-    cards: List["Card"] = Relationship(
-        back_populates="customer",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
-    )
-
-    @field_validator("email")
-    @classmethod
-    def normalize_email(cls, v: str) -> str:
-        return _normalize_email(v)
-
-
 class Card(SQLModel, table=True):
     """
-    Carta fedeltà di un cliente presso un negozio (una sola per coppia).
+    Carta fedeltà di un cliente Instagram presso un negozio (una sola per coppia).
     Tiene il credito cashback (centesimi) e i tree points accumulati.
 
-    Nel nuovo flusso la carta nasce da un DM Instagram ed è identificata da
-    `(merchant_id, igsid_hash)`: dell'IGSID si salva solo l'indice cieco. Il token
-    del link non si salva, solo il suo hash. `customer_id` serve al vecchio flusso
-    e sparisce con `Customer` (ticket 09); i NULL non violano i vincoli di unicità.
+    La carta nasce da un DM Instagram ed è identificata da `(merchant_id, igsid_hash)`: dell'IGSID
+    si salva solo l'indice cieco. Il token del link non si salva, solo il suo hash. `igsid_hash` e
+    `link_token_hash` sono obbligatori (colonne NOT NULL: il costruttore di una tabella SQLModel non
+    valida, l'errore arriva dal DB al salvataggio).
     """
-    __table_args__ = (
-        UniqueConstraint("merchant_id", "customer_id"),
-        UniqueConstraint("merchant_id", "igsid_hash"),
-    )
+    __table_args__ = (UniqueConstraint("merchant_id", "igsid_hash"),)
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)  # è anche il contenuto del QR
     merchant_id: int = Field(foreign_key="merchant.id", ondelete="CASCADE")
-    customer_id: Optional[int] = Field(default=None, foreign_key="customer.id", ondelete="CASCADE")
     cashback_cents: int = Field(default=0)  # credito in centesimi di euro
     tree_points: int = Field(default=0)     # tree points non ancora convertiti
 
-    igsid_hash: Optional[str] = Field(default=None)  # HMAC-SHA256 dell'IGSID (obbligatorio dal ticket 09)
+    igsid_hash: str                                  # HMAC-SHA256 dell'IGSID
     link_version: int = Field(default=1)             # +1 = revoca del link
-    link_token_hash: Optional[str] = Field(default=None, unique=True, index=True)  # SHA-256 del token
+    link_token_hash: str = Field(unique=True, index=True)  # SHA-256 del token
     zernio_conversation_id: Optional[str] = Field(default=None)  # handle per rispondere, aggiornato a ogni messaggio
     last_inbound_at: Optional[datetime] = Field(  # sentAt dell'ultimo messaggio del cliente (UTC)
         default=None, sa_column=Column(DateTime(timezone=True), nullable=True),
@@ -200,7 +178,6 @@ class Card(SQLModel, table=True):
     created_at: datetime = _created_at_field()
 
     merchant: Merchant = Relationship(back_populates="cards")
-    customer: Optional[Customer] = Relationship(back_populates="cards")
 
 
 class ProcessedWebhookEvent(SQLModel, table=True):

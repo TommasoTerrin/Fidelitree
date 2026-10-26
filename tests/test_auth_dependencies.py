@@ -5,28 +5,18 @@ from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
 from app.core.auth import AuthIdentity, dev_user_id
-from app.core.dependencies import (
-    get_current_customer, get_current_merchant, get_session,
-)
-from sqlmodel import select
-
-from app.models.models import Customer
-from app.services.db_crud import customer_crud
+from app.core.dependencies import get_current_merchant, get_session
 from tests.conftest import login_as
 
 
 @pytest.fixture()
 def api(session, auth_provider):
-    """App minima con una route per ogni dependency."""
+    """App minima con una route protetta dalla dependency del merchant."""
     app = FastAPI()
 
     @app.get("/m")
     def m(merchant=Depends(get_current_merchant)):
         return {"id": merchant.id}
-
-    @app.get("/c")
-    def c(customer=Depends(get_current_customer)):
-        return {"id": customer.id}
 
     def override_session():
         yield session
@@ -73,17 +63,3 @@ def test_header_bearer_come_il_cookie(api, session, merchant, auth_provider):
     assert api.get("/m", headers={"Authorization": f"Bearer {token}"}).status_code == 200
     assert api.get("/m", headers={"Authorization": "Bearer spazzatura"}).status_code == 401
     assert api.get("/m", headers={"Authorization": "Basic xyz"}).status_code == 401
-
-
-def test_customer_creato_al_primo_accesso_e_poi_riusato(api, session):
-    assert api.get("/c").status_code == 401
-
-    login_as(api, _identity("cliente@test.it"))
-    first = api.get("/c")
-    assert first.status_code == 200
-    customer = customer_crud.get_customer_by_email(session, "cliente@test.it")
-    assert customer.auth_user_id == dev_user_id("cliente@test.it")
-    assert first.json()["id"] == customer.id
-
-    assert api.get("/c").json()["id"] == customer.id
-    assert len(session.exec(select(Customer)).all()) == 1

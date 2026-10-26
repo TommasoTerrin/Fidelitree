@@ -18,10 +18,9 @@ from app.core.security import create_jwt_token, decode_jwt_token
 
 __all__ = [
     "AuthError", "AuthIdentity", "AuthProvider", "DevAuthProvider", "SupabaseAuthProvider",
-    "DEV_OTP_CODE", "dev_user_id", "get_auth_provider",
+    "dev_user_id", "get_auth_provider",
 ]
 
-DEV_OTP_CODE = "000000"  # codice OTP accettato dal provider dev
 _DEV_NAMESPACE = uuid.UUID("6f1d2c1e-5b7a-4e0b-9a43-0c1f7f0d2e11")
 
 
@@ -40,12 +39,6 @@ class AuthProvider(Protocol):
     def sign_in_password(self, email: str, password: str) -> str:
         """Ritorna il token se le credenziali sono giuste, altrimenti solleva `AuthError`."""
 
-    def request_otp(self, email: str) -> None:
-        """Invia un codice monouso all'email."""
-
-    def verify_otp(self, email: str, code: str) -> str:
-        """Ritorna il token se il codice è giusto, altrimenti solleva `AuthError`."""
-
     def verify_token(self, token: str) -> Optional[AuthIdentity]:
         """Ritorna l'identità del token, `None` se è invalido o scaduto."""
 
@@ -62,8 +55,7 @@ def dev_user_id(email: str) -> str:
 
 class DevAuthProvider:
     """
-    Provider SOLO per sviluppo e test: utenti in memoria, OTP sempre `DEV_OTP_CODE`,
-    password dev di fallback per gli utenti non registrati in memoria (`DEV_AUTH_PASSWORD`),
+    Provider SOLO per sviluppo e test: utenti in memoria, password dev di fallback per gli utenti non registrati in memoria (`DEV_AUTH_PASSWORD`),
     token = JWT firmato con `JWT_SECRET_KEY` (claim `sub` e `email`).
     Lo stato vive nel processo: si azzera con `reset()` e a ogni riavvio.
     """
@@ -99,16 +91,6 @@ class DevAuthProvider:
             raise AuthError("Credenziali non valide")
         return self.issue_token(AuthIdentity(user_id=dev_user_id(email), email=email))
 
-    def request_otp(self, email: str) -> None:
-        """Non invia nulla: il codice è sempre `DEV_OTP_CODE`."""
-
-    def verify_otp(self, email: str, code: str) -> str:
-        """Token se il codice è `DEV_OTP_CODE`; `AuthError` altrimenti."""
-        if code != DEV_OTP_CODE:
-            raise AuthError("Codice non valido")
-        email = _normalize(email)
-        return self.issue_token(AuthIdentity(user_id=dev_user_id(email), email=email))
-
     def verify_token(self, token: str) -> Optional[AuthIdentity]:
         """Identità del token, `None` se spazzatura, scaduto o privo di `sub`/`email`."""
         payload = decode_jwt_token(token)
@@ -130,12 +112,6 @@ class SupabaseAuthProvider:
         raise NotImplementedError(self._MSG)
 
     def sign_in_password(self, email: str, password: str) -> str:
-        raise NotImplementedError(self._MSG)
-
-    def request_otp(self, email: str) -> None:
-        raise NotImplementedError(self._MSG)
-
-    def verify_otp(self, email: str, code: str) -> str:
         raise NotImplementedError(self._MSG)
 
     def verify_token(self, token: str) -> Optional[AuthIdentity]:

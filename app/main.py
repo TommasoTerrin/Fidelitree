@@ -19,8 +19,6 @@ from app.version import get_version
 
 # Import dei router
 from app.routes.consumer.views import router as consumer_views_router
-from app.routes.consumer.api import router as consumer_api_router
-from app.routes.consumer.auth import router as consumer_auth_router
 from app.routes.merchant.api import router as merchant_api_router
 from app.routes.merchant.auth import router as merchant_auth_router
 from app.routes.merchant.views import router as merchant_views_router
@@ -77,9 +75,7 @@ engine = create_engine(
 
 
 # --- Router ---
-app.include_router(consumer_views_router)        # GET /join/{id}, /wallet, /card/{id}, /customer/login
-app.include_router(consumer_api_router, prefix="/api") # POST /api/customer/join/{id}, GET /api/customer/wallet
-app.include_router(consumer_auth_router)         # POST /api/customer/otp/..., GET /customer/logout
+app.include_router(consumer_views_router)        # GET /c/{token}, /privacy
 app.include_router(merchant_api_router, prefix="/api") # POST /api/merchant/create
 app.include_router(merchant_auth_router)         # POST /merchant/login, GET /merchant/logout
 app.include_router(merchant_views_router)        # GET /merchant/... pagine HTML

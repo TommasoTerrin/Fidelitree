@@ -20,9 +20,9 @@ from sqlmodel import SQLModel, Session, create_engine
 
 from app.main import app
 from app.core.dependencies import get_session, get_current_merchant, get_optional_merchant
-from app.models.models import Merchant, Customer, Card
-from app.services import ecologi_service
-from app.services.db_crud import merchant_crud, customer_crud
+from app.models.models import Merchant, Card
+from app.services import ecologi_service, instagram_service
+from app.services.db_crud import merchant_crud
 
 
 @pytest.fixture()
@@ -62,20 +62,20 @@ def merchant(session) -> Merchant:
     })
 
 
-@pytest.fixture()
-def customer(session) -> Customer:
-    """Cliente di test."""
-    return customer_crud.create_customer(session, "cliente@test.it")
-
-
-@pytest.fixture()
-def card(session, merchant, customer) -> Card:
-    """Card di test del cliente di test presso il merchant di test."""
-    new_card = Card(merchant_id=merchant.id, customer_id=customer.id)
-    session.add(new_card)
-    session.commit()
-    session.refresh(new_card)
+def make_card(session, merchant, igsid="igsid-test-1") -> Card:
+    """
+    Carta di un cliente Instagram (identificato da `igsid`) presso `merchant`, creata come fa il webhook:
+    indice cieco dell'IGSID e hash del token del link veri, quindi `/c/<token>` funziona. Idempotente per
+    la stessa coppia (negozio, IGSID); per più carte nello stesso negozio serve un `igsid` diverso.
+    """
+    new_card, _ = instagram_service.get_or_create_card(session, merchant, igsid)
     return new_card
+
+
+@pytest.fixture()
+def card(session, merchant) -> Card:
+    """Card di test del cliente `igsid-test-1` presso il merchant di test."""
+    return make_card(session, merchant)
 
 
 @pytest.fixture()
@@ -158,11 +158,7 @@ def approved_merchants(session):
                 "is_approved": True, "conversion_enabled": conversion_enabled,
             })
             if points:
-                c = customer_crud.create_customer(session, f"c{i}-{name.lower()}@test.it")
-                cd = Card(merchant_id=m.id, customer_id=c.id)
-                session.add(cd)
-                session.commit()
-                session.refresh(cd)
+                cd = make_card(session, m, igsid=f"igsid-pool-{i}")
                 card_service.add_tree_points(
                     session, m, cd.id, points,
                     now=datetime(2026, 10, 12, 10, 0, tzinfo=timezone.utc),
