@@ -127,7 +127,7 @@
 ## Cosa ne segue per il progetto (proposte da confermare nel grilling, non decisioni)
 
 1. **Secret del webhook**: lo scegliamo noi alla registrazione. Senza secret non c'è firma, quindi va sempre impostato. Resta da decidere se è per merchant o globale.
-2. **Tempi**: Zernio vuole risposta entro 5 s, Meta entro 30 s (policy). Proposta: risposta sincrona nel webhook, timeout verso Zernio di circa 3 s.
+2. **Tempi**: Zernio vuole risposta entro 5 s, Meta entro 30 s (policy). Proposta: risposta sincrona nel webhook, timeout verso Zernio di circa 3 s. **Misurato il 2026-10-26: l`invio della card dura 1,2-3,1 s (il 3,1 s a connessione nuova, come fa il webhook); con 3 s scadeva, quindi il timeout è 4 s.**
 3. **Dedup e retry**:
    - dedup su `X-Zernio-Event-Id`;
    - la finestra dei retry Zernio dura circa 51 h, quindi gli id degli eventi vanno conservati almeno 3 giorni;
@@ -146,3 +146,20 @@
     - la card viene accettata da chi non segue l'account?
     - come si comporta con ManyChat come app di default?
     - quale base URL usare?
+
+## Verificato nel collaudo del ticket 07 (2026-10-26, webhook reale via ngrok, account `@oroscopo.kittysincula`)
+
+| Cosa | Esito |
+|---|---|
+| Onboarding da pannello (chiave, scelta account, webhook registrato, menu vuoto → voce impostata) | funziona; stato `AWAITING_TEST_DM` |
+| `message.received` da un profilo **che segue** il negozio | il webhook arriva e firma/dedup funzionano; card consegnata; stato → `ACTIVE`; contatore invii a 1 |
+| Ritardo tra DM (`sentAt`) e webhook | ~11,5 s (14:39:57,7 → 14:40:09,2 UTC) |
+| Durata della sola chiamata di invio card (10 prove) | 1,2-3,1 s; il massimo a connessione nuova (il webhook crea un client per richiesta). Con timeout 3 s scadeva pur consegnando la card → `SEND_TIMEOUT` portato a **4 s** |
+| Ritardo percepito di ~30 s | non è l'invio: webhook ~11,5 s + consegna Instagram/telefono (il resto non è stato scomposto) |
+| `/c/<token>` | 404 fino al ticket 08 (atteso) |
+| Card a un **non follower** (rifiuto Meta 2/1545133 o consegna) | **non verificato**: manca un profilo non follower (collaudo finale, ticket 11) |
+| Webhook per DM in **Requests** | **non verificato** (stesso motivo) |
+| `isFollower: null` nel payload reale | **non verificato** |
+| ManyChat come app predefinita / standby | **non verificato** |
+| Tocco della voce di menu «🌳 La mia carta» → card | **non verificato** |
+| «Scollega» da pannello → webhook rimosso da Zernio | **non verificato** (coperto solo dai test automatici) |

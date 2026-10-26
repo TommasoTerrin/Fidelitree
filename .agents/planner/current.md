@@ -25,7 +25,7 @@ Contesto di riferimento: decisioni in [AGENTS.md](../../AGENTS.md), vincoli Zern
 | 04 | Core dei messaggi: trigger, card, finestra 24 h, quota | ✅ 2026-10-23 `f4bb1b3` (459 test) |
 | 05 | Client Zernio, `zernio_check`, **collaudo anticipato** | ✅ 2026-10-26: passi 1-2 del collaudo fatti (base URL `https://zernio.com/api` ok, `send-card` consegnata e corretta su mobile al profilo del founder); passo 3 (non follower) rimandato al collaudo del 07/11 |
 | 06 | Webhook: dalla parola chiave alla card | ✅ 2026-10-23 (644 test) |
-| 07 | Onboarding Instagram del merchant | ✅ codice 2026-10-26 (739 test); **collaudo manuale 1-3 a cura del founder** ancora da fare, esiti in `zernio-notes.md` |
+| 07 | Onboarding Instagram del merchant | ✅ codice 2026-10-26 (739 test); collaudo 2026-10-26 fatto per onboarding e DM da follower (timeout invio 4 s); non follower/Requests, ManyChat, menu e «Scollega» rimandati al ticket 11 |
 | 08 | Pagina carta, QR, scan e PWA merchant | |
 | 09 | Rimozione del vecchio flusso cliente (OTP, wallet, `/join`, `Customer`) | |
 | 10 | Seed, smoke test e script | |
@@ -41,7 +41,7 @@ Note sui ticket fatti:
   `merchant_service.validate_business_name`: nome del negozio ≤ 80 caratteri (è il titolo della card).
 
 - **05**: `zernio_service` (core: `classify_error`, corpi delle richieste, `parse_accounts`, `ZernioCredentials` con
-  `SecretStr`; shell: client httpx senza nuovi tentativi, timeout 3 s invio / 10 s configurazione,
+  `SecretStr`; shell: client httpx senza nuovi tentativi, timeout 4 s invio (era 3 s, alzato il 2026-10-26) / 10 s configurazione,
   `zernio_credentials_for` unico lettore dei campi cifrati) e `scripts/zernio_check`. Dalla spec: il menu si imposta con
   **PUT** `messenger-menu`, il webhook si elimina con `DELETE /v1/webhooks/settings?webhookId=`, e **`folder=requests`
   non funziona con Instagram Login** (400 `PLATFORM_LIMITATION`); nessun campo identifica il team Zernio, quindi
@@ -81,10 +81,11 @@ Note sui ticket fatti:
 2. ~~Ticket 06~~ fatto. ~~Collaudo anticipato del 05~~ passi 1-2 fatti il 2026-10-26 (esiti sotto). Restano da verificare,
    nel collaudo del 07: card a un non follower, DM in Requests via webhook, ManyChat/standby. Se ManyChat risulta ancora
    collegato all'account, scollegarlo. Se l'esito contraddice le ipotesi di `zernio-notes.md`: **fermarsi e chiedere**.
-3. ~~Ticket 07~~ codice fatto. **Collaudo manuale 1-3 del 07 a cura del founder** (server locale su SQLite usa-e-getta +
-   tunnel cloudflared, vedi `deploy.md`; account di prova `@oroscopo.kittysincula`): oltre ai passi del ticket
-   (card a un non follower, DM in Requests via webhook, ManyChat/standby) **annotare i tempi** (invio del DM, arrivo del
-   webhook, comparsa della card) per capire da dove vengono i ~30 s; esiti in `zernio-notes.md` ("Verificato").
+3. ~~Ticket 07~~ codice fatto; collaudo manuale del 2026-10-26 (ngrok + SQLite usa-e-getta, `@oroscopo.kittysincula`)
+   **fatto per i passi 1-2 con un follower**: onboarding, webhook, card consegnata, stato `ACTIVE` (esiti in
+   `zernio-notes.md`, "Verificato nel collaudo del 07"). **Ancora da fare** (rimandati al collaudo finale, ticket 11):
+   card/risposta a un **non follower** e DM in **Requests** via webhook (serve un profilo che non segue il negozio),
+   `isFollower: null`, **ManyChat/standby**, tocco della voce di menu «🌳 La mia carta», «Scollega» da pannello.
 4. Poi 08 → 11 in ordine, dopo l'approvazione.
 
 Esiti del collaudo del 05 (2026-10-26): `conversations` ha date in ritardo (la conversazione del founder risultava del
@@ -92,6 +93,12 @@ giorno prima: per trovarla si legge il mittente dei messaggi, non si fida dell'o
 (limite già noto). Il founder ha notato una **latenza di circa 30 secondi** da qualche parte nel giro (non chiaro se
 Zernio→webhook o consegna Instagram): **da misurare nel collaudo del 07** con timestamp di `sentAt`, arrivo del webhook e
 consegna della card, perché in negozio il cliente aspetta al banco.
+Primo giro del collaudo del 07 (2026-10-26, webhook reale via ngrok): DM `CARTA` inviato alle 14:39:57,7 UTC, webhook
+arrivato alle 14:40:09,2 (**~11,5 s dopo `sentAt`**: Instagram → Zernio → noi), poi l'invio verso Zernio è scaduto a 3 s
+pur avendo consegnato la card (esito `SEND_FAILED`, negozio rimasto `AWAITING_TEST_DM`). Misurata la sola chiamata di
+invio (6 prove): 3,10 s a connessione nuova (come fa il webhook, un client per richiesta), poi 2,03 / 1,31 / 1,24 s, e
+1,33 / 1,41 s a connessione aperta. **`SEND_TIMEOUT` portato da 3 a 4 s** (il webhook deve comunque rispondere entro
+5 s). Il resto dei ~30 s non è nell'invio: webhook ~11,5 s + consegna Instagram/telefono. `/c/<token>` dà 404 fino al 08.
 La chiave Zernio per gli script sta in `.env` come `ZERNIO_CHECK_API_KEY` (una sola variabile).
 
 ### Decisione del 2026-10-23: carta solo a chi segue

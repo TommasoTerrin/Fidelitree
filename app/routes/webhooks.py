@@ -33,7 +33,7 @@ async def zernio_webhook(
     """
     Riceve un evento Zernio: firma `X-Zernio-Signature`, dedup su `X-Zernio-Event-Id` (se manca si usa
     `payload.id`). Zernio vuole un 2xx entro 5 secondi: l'elaborazione è sincrona e i timeout verso Zernio
-    sono di 3 secondi.
+    sono di 4 secondi.
     """
     raw_body = await request.body()
     await instagram_service.handle_webhook(

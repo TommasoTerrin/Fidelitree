@@ -102,7 +102,7 @@ un errore su un negozio non blocca gli altri (resta non chiuso e si ritenta).
 7. carta = get_or_create(merchant, HMAC(IGSID)); salva conversation.id e last_inbound_at = message.sentAt
 8. can_reply(sentAt, ora) (< 24 h)?                                                  no → 200 (fuori finestra)
 9. card generic template: titolo = nome negozio, sottotitolo fisso, bottone "Apri la carta" → <PUBLIC_BASE_URL>/c/<token>
-   POST /v1/inbox/conversations/{conversation.id}/messages (Idempotency-Key = event id, timeout 3 s, nessun nuovo tentativo)
+   POST /v1/inbox/conversations/{conversation.id}/messages (Idempotency-Key = event id, timeout 4 s, nessun nuovo tentativo)
    └─ errore Meta 2/1545133 (non follower) → testo fisso con il link
    └─ 401/403 chiave → instagram_status = key_invalid · 409 not_thread_owner → come standby · altri → log
 10. invio riuscito: ZernioSendCounter(quota_scope, mese) += 1 (avviso al 75%); awaiting_test_dm → active
@@ -190,7 +190,7 @@ Rimossi in v0.3.0: `/customer/login`, `/api/customer/otp/*`, `/customer/logout`,
 ## Scelte tecniche rilevanti
 
 - **Functional core / imperative shell** nello stesso modulo di `services/` (regole in AGENTS.md). Errori di dominio in `app/core/errors.py`, tradotti in HTTP da un handler globale (`ExternalServiceError` → 502).
-- **Zernio**: client httpx diretto (`zernio_service.py`), niente SDK. `httpx.AsyncClient` iniettato tramite dependency (`MockTransport` nei test). Timeout 3 s sugli invii (il webhook deve rispondere entro 5 s), nessun nuovo tentativo (un 5xx può aver già consegnato). Vincoli e fonti: [zernio-notes.md](zernio-notes.md).
+- **Zernio**: client httpx diretto (`zernio_service.py`), niente SDK. `httpx.AsyncClient` iniettato tramite dependency (`MockTransport` nei test). Timeout 4 s sugli invii (il webhook deve rispondere entro 5 s), nessun nuovo tentativo (un 5xx può aver già consegnato). Vincoli e fonti: [zernio-notes.md](zernio-notes.md).
 - **Cifratura**: `cryptography` (AES-256-GCM), tornata in v0.3.0 perché la chiave Zernio deve essere recuperabile. Le chiavi arrivano solo da env e l'app non parte se mancano o sono malformate.
 - **Engine DB** in `app/main.py` con `pool_pre_ping=True` e `pool_recycle=300` (timeout SSL di Neon).
 - **`get_session`** importa l'engine lazy da `app.main` (evita import circolari); nei test viene sostituita da SQLite in-memory (`tests/conftest.py`).

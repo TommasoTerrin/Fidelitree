@@ -35,7 +35,7 @@ from app.services import instagram_service, zernio_service
 from app.services.zernio_service import ZernioError
 
 DEFAULT_SENDER_ID = "finto-igsid"
-REQUEST_TIMEOUT = 15.0  # secondi: il server può impiegare fino a ~3 s per invio verso Zernio
+REQUEST_TIMEOUT = 15.0  # secondi: il server può impiegare fino a ~4 s per invio verso Zernio
 
 
 def _build_parser() -> argparse.ArgumentParser:

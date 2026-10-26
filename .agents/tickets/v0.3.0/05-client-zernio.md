@@ -12,7 +12,7 @@ Endpoint, limiti ed errori in [zernio-notes.md](../../architecture/zernio-notes.
 - **Base URL**: `ZERNIO_BASE_URL`, autenticazione `Authorization: Bearer <key>`.
 - **Nessun nuovo tentativo sugli invii**: su 5xx o timeout Zernio non ritenta, rilascia l'`Idempotency-Key` e un nuovo
   tentativo potrebbe consegnare due volte.
-- **Timeout**: invio 3 s (il webhook deve rispondere entro 5 s); chiamate di configurazione 10 s.
+- **Timeout**: invio 4 s (il webhook deve rispondere entro 5 s; era 3 s, alzato il 2026-10-26); chiamate di configurazione 10 s.
 - **Errori**: si classificano su status, `code` e `platformError`, mai sul testo di `error`.
 - **Migrazione futura** (chiave unica del founder e un `profileId` per negozio): oggi
   `zernio_credentials_for(merchant)` restituisce la chiave del merchant; domani restituirà quella di piattaforma.

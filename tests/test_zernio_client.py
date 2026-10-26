@@ -92,7 +92,7 @@ def test_send_senza_message_id_nella_risposta_non_solleva():
 
 
 def test_i_timeout_di_invio_e_configurazione():
-    assert zs.SEND_TIMEOUT == 3.0
+    assert zs.SEND_TIMEOUT == 4.0
     assert zs.CONFIG_TIMEOUT == 10.0
 
 
@@ -112,7 +112,7 @@ def test_invii_e_configurazione_usano_ciascuno_il_proprio_timeout(monkeypatch):
         await zs.list_instagram_accounts(http, _creds())
 
     _call(client, both)
-    assert timeouts == [3.0, 10.0]
+    assert timeouts == [4.0, 10.0]
 
 
 # --- errori ---

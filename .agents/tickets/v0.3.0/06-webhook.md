@@ -137,4 +137,4 @@ Configurazione del webhook su Zernio (07), pagina `/c/<token>` (08: fino ad allo
 risponde 404), trigger da commenti e storie (roadmap).
 
 ## Definition of Done
-Suite verde; il webhook risponde in < 5 s anche con Zernio lento (timeout 3 s); nessun segreto nei log.
+Suite verde; il webhook risponde in < 5 s anche con Zernio lento (timeout 4 s); nessun segreto nei log.

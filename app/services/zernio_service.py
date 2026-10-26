@@ -7,7 +7,7 @@ Regole
   Le route lo ottengono dalla dependency `get_zernio_http`, sovrascrivibile in `app.dependency_overrides`.
 - **Nessun nuovo tentativo**: su 5xx o timeout Zernio non ritenta e rilascia l'`Idempotency-Key`, quindi
   ritentare un invio potrebbe consegnare due volte. Un errore di rete o un timeout è `SERVER`.
-- **Timeout**: invio 3 s (il webhook deve rispondere entro 5 s), configurazione 10 s.
+- **Timeout**: invio 4 s (il webhook deve rispondere entro 5 s; misurato 1,2-3,1 s, con 3 s scadeva a freddo), configurazione 10 s.
 - **Errori classificati su status, `code` e `platformError`**, mai sul testo di `error` (non è stabile).
   Un 403 è `AUTH` solo con `insufficient_permissions`/`invalid_credentials`: Zernio lo usa anche per
   "addon inbox mancante" e "Meta ha rifiutato l'invio fuori finestra", che non sono problemi di chiave.
@@ -213,7 +213,7 @@ def quota_scope_for(team_id: Optional[str], account_id: Optional[str]) -> str:
 
 # --- Shell ---
 
-SEND_TIMEOUT = 3.0     # secondi: il webhook deve rispondere a Zernio entro 5 s
+SEND_TIMEOUT = 4.0     # secondi: il webhook deve rispondere a Zernio entro 5 s (misurato: 1,2-3,1 s)
 CONFIG_TIMEOUT = 10.0  # secondi: onboarding e script
 
 
