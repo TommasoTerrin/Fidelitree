@@ -48,6 +48,11 @@ def get_merchant_by_webhook_hook_id(session: Session, hook_id: str) -> Optional[
     return session.exec(select(Merchant).where(Merchant.webhook_hook_id == hook_id)).first()
 
 
+def get_merchant_by_zernio_account_id(session: Session, account_id: str) -> Optional[Merchant]:
+    """Recupera il merchant a cui è collegato un account Instagram di Zernio (`Merchant.zernio_account_id`, unico)."""
+    return session.exec(select(Merchant).where(Merchant.zernio_account_id == account_id)).first()
+
+
 def get_merchant_by_auth_user_id(session: Session, auth_user_id: str) -> Optional[Merchant]:
     """Recupera il merchant collegato a un'identità del provider di autenticazione."""
     statement = select(Merchant).where(Merchant.auth_user_id == auth_user_id)

@@ -25,7 +25,7 @@ Contesto di riferimento: decisioni in [AGENTS.md](../../AGENTS.md), vincoli Zern
 | 04 | Core dei messaggi: trigger, card, finestra 24 h, quota | ✅ 2026-10-23 `f4bb1b3` (459 test) |
 | 05 | Client Zernio, `zernio_check`, **collaudo anticipato** | ✅ 2026-10-26: passi 1-2 del collaudo fatti (base URL `https://zernio.com/api` ok, `send-card` consegnata e corretta su mobile al profilo del founder); passo 3 (non follower) rimandato al collaudo del 07/11 |
 | 06 | Webhook: dalla parola chiave alla card | ✅ 2026-10-23 (644 test) |
-| 07 | Onboarding Instagram del merchant | |
+| 07 | Onboarding Instagram del merchant | ✅ codice 2026-10-26 (739 test); **collaudo manuale 1-3 a cura del founder** ancora da fare, esiti in `zernio-notes.md` |
 | 08 | Pagina carta, QR, scan e PWA merchant | |
 | 09 | Rimozione del vecchio flusso cliente (OTP, wallet, `/join`, `Customer`) | |
 | 10 | Seed, smoke test e script | |
@@ -58,16 +58,34 @@ Note sui ticket fatti:
   un negozio con `hook_id` ma senza chiave/account risponde 404, senza secret 401; un errore di costruzione del
   messaggio (link non https, nome > 80 caratteri) dà `SEND_FAILED` e 200, non un 400 che farebbe ritentare Zernio.
 
+- **07**: onboarding in `merchant_service` (come dice la mappa di AGENTS.md): core `validate_zernio_key`,
+  `webhook_url_for`, `classify_persistent_menu`, `instagram_panel` (che, oltre alla firma del ticket, prende `keyword`,
+  `send_limit` e `warn_percent` come argomenti nominati: il core non legge le settings); shell `save_zernio_key`, `list_zernio_accounts`,
+  `connect_instagram_account`, `disconnect_instagram`, `read_instagram_panel`. `ExternalServiceError` → 502 nell'handler.
+  5 endpoint in `/api/merchant/instagram...` e sezione "Instagram" nelle impostazioni (4 stati, server-side; il JS
+  chiama solo l'API). Scelte non previste dal ticket: `zernio_credentials_for(..., require_account=False)` per la
+  chiave salvata prima della scelta dell'account (resta l'unico punto che decifra; la chiave mascherata `…1234` si
+  ricava da lì); `api_key` della richiesta è `Any` e si valida nel service (400, non il 422 di FastAPI che rimanda
+  indietro il valore); `save_zernio_key` valida la nuova chiave **prima** di scollegare la vecchia configurazione;
+  `connect_instagram_account` dà 409 se il negozio ha già un webhook (si scollega prima: «Scollega» c'è anche in
+  `AWAITING_TEST_DM`, per il caso ManyChat) e controlla https/404/409 prima di ogni scrittura su Zernio;
+  un errore sul menu (GET/PUT) **non** blocca il collegamento (`persistent_menu_set=False` + avviso); un menu che ha già
+  la nostra voce `FIDELITREE_CARD` vale come impostato (nessun PUT). «Scollega» **non** rimuove il menu persistente
+  (il ticket parla solo del webhook): resta su Instagram con un postback che non risponde più. Avvisi del pannello
+  con `code` stabile (`menu`, `standby`, `key_invalid`, `quota`). Il vecchio test di `test_views` che vietava la parola
+  «chiave» nelle impostazioni ora vieta solo `monthly`, `cap` ed `ecologi`.
+
 ### Prossimo passo
 
 1. ~~Ticket 05~~ codice fatto; **chiuderlo** dopo il collaudo.
-2. ~~Ticket 06~~ fatto. Ora il **collaudo manuale anticipato del 05, a cura del founder** (passi 1-2 almeno; ticket 05 →
-   "Collaudo manuale anticipato", ora con `replay_webhook` per provare il webhook in locale), **prima** di scrivere il
-   07. Se ManyChat risulta ancora collegato all'account, scollegarlo.
-   Verifica i rischi più grossi: Meta accetta la card a chi non segue il negozio? Il webhook arriva per i DM in
-   Requests? Come si comporta ManyChat come app di default? Quale base URL Zernio vale? Se l'esito contraddice le
-   ipotesi di `zernio-notes.md`: **fermarsi e chiedere**.
-3. Poi 07 → 11 in ordine.
+2. ~~Ticket 06~~ fatto. ~~Collaudo anticipato del 05~~ passi 1-2 fatti il 2026-10-26 (esiti sotto). Restano da verificare,
+   nel collaudo del 07: card a un non follower, DM in Requests via webhook, ManyChat/standby. Se ManyChat risulta ancora
+   collegato all'account, scollegarlo. Se l'esito contraddice le ipotesi di `zernio-notes.md`: **fermarsi e chiedere**.
+3. ~~Ticket 07~~ codice fatto. **Collaudo manuale 1-3 del 07 a cura del founder** (server locale su SQLite usa-e-getta +
+   tunnel cloudflared, vedi `deploy.md`; account di prova `@oroscopo.kittysincula`): oltre ai passi del ticket
+   (card a un non follower, DM in Requests via webhook, ManyChat/standby) **annotare i tempi** (invio del DM, arrivo del
+   webhook, comparsa della card) per capire da dove vengono i ~30 s; esiti in `zernio-notes.md` ("Verificato").
+4. Poi 08 → 11 in ordine, dopo l'approvazione.
 
 Esiti del collaudo del 05 (2026-10-26): `conversations` ha date in ritardo (la conversazione del founder risultava del
 giorno prima: per trovarla si legge il mittente dei messaggi, non si fida dell'ordine); `--folder requests` dà 400
@@ -85,7 +103,11 @@ rivede nel collaudo finale. QR "apri la chat": a mano dal founder (ticket 11).
 
 - Aggiungere al `.env` locale `ENCRYPTION_KEY`, `IGSID_HMAC_KEY`, `CARD_LINK_KEY` (l'app non parte senza; i test le
   impostano da soli). Non committare mai i valori.
-- Collaudo del ticket 05 (sopra), un account Zernio gratuito e un account Instagram Business/Creator di prova.
+- Collaudo manuale 1-3 del ticket 07 (sopra; il passo 5 «Scollega» verifica solo il webhook: la voce di menu
+  «🌳 La mia carta» resta su Instagram e, dopo lo scollegamento, toccarla non fa nulla: non è un bug, vedi nota 07).
+  Servono un account Zernio gratuito e un account Instagram Business/Creator di prova. Per i tempi: il log `info` del
+  webhook (`esito=...`) **non si vede** in locale, perché `local_main.py` configura solo `uvicorn` e i logger dell'app
+  restano a WARNING; serve una configurazione di log con timestamp (solo locale), da decidere a parte.
 - Rimasti da v0.2.x e ancora validi per il rilascio di v0.3.0: collaudo di `ecologi_check` (chiave di test e reale) e
   di `close_period` in test mode; checklist `pre-release.md`, PWA merchant su telefono (HTTPS o tunnel).
 - Lavoro di documentazione della fase 4 (AGENTS.md, overview, deploy, `.env.example`, ticket v0.3.0, planner) ancora

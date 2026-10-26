@@ -3,12 +3,13 @@ Endpoint API dedicati agli esercenti (Merchant).
 
 Due livelli di protezione:
 - CRUD merchant e approvazione: riservati all'amministratore (header X-Admin-Key).
-- Operazioni sulle card: riservate al merchant autenticato (cookie JWT).
+- Operazioni sulle card, profilo e onboarding Instagram: riservate al merchant autenticato (cookie JWT).
 """
 
 import uuid
 import logging
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
@@ -18,8 +19,14 @@ from app.core.money import cents_to_euro
 from app.models.models import Merchant
 from app.services import card_service, merchant_service, tree_service
 from app.services.db_crud import card_crud, merchant_crud
+from app.services.zernio_service import get_zernio_http
 from app.schemas.card import AddPointsRequest, AddTreePointsRequest, CardResponse, ConvertedInfo, ScanResponse
 from app.schemas.merchant import (
+    InstagramAccountRequest,
+    InstagramAccountResponse,
+    InstagramAccountsResponse,
+    InstagramKeyRequest,
+    InstagramPanelResponse,
     MerchantCreateRequest,
     MerchantUpdateRequest,
     MerchantSettingsRequest,
@@ -83,6 +90,76 @@ async def update_own_settings(
         session, merchant, body.model_dump(exclude_unset=True, exclude_none=True),
     )
     return await read_own_profile(merchant)
+
+
+# ---------------------------------------------------------------------------
+# 1c. Onboarding Instagram del merchant autenticato (cookie JWT), sempre sul proprio negozio.
+# NB: prima di /{merchant_id}, che si aspetta un int. Nessuna risposta contiene la chiave Zernio o il secret.
+# ---------------------------------------------------------------------------
+
+def _accounts_response(accounts) -> InstagramAccountsResponse:
+    """Elenco degli account da mostrare: solo id e username (mai `profileId`)."""
+    return InstagramAccountsResponse(
+        accounts=[InstagramAccountResponse(id=a.id, username=a.username) for a in accounts],
+    )
+
+
+@router.post("/instagram/key", response_model=InstagramAccountsResponse)
+async def save_instagram_key(
+    body: InstagramKeyRequest,
+    session: Session = Depends(get_session),
+    http: httpx.AsyncClient = Depends(get_zernio_http),
+    merchant: Merchant = Depends(get_current_merchant),
+):
+    """
+    Passo 1: valida la chiave Zernio con una chiamata reale, la salva cifrata e ritorna gli account Instagram
+    tra cui scegliere. 400 se la chiave è vuota, malformata o rifiutata; 502 se Zernio non risponde.
+    """
+    return _accounts_response(await merchant_service.save_zernio_key(session, http, merchant, body.api_key))
+
+
+@router.get("/instagram/accounts", response_model=InstagramAccountsResponse)
+async def list_instagram_accounts(
+    http: httpx.AsyncClient = Depends(get_zernio_http),
+    merchant: Merchant = Depends(get_current_merchant),
+):
+    """Account Instagram collegati alla chiave già salvata (senza richiederla di nuovo)."""
+    return _accounts_response(await merchant_service.list_zernio_accounts(http, merchant))
+
+
+@router.post("/instagram/account", response_model=InstagramPanelResponse)
+async def connect_instagram_account(
+    body: InstagramAccountRequest,
+    session: Session = Depends(get_session),
+    http: httpx.AsyncClient = Depends(get_zernio_http),
+    merchant: Merchant = Depends(get_current_merchant),
+):
+    """
+    Passo 2: collega l'account scelto (webhook e voce di menu configurati dall'app) e ritorna il pannello.
+    404 account sconosciuto, 409 già collegato a un altro negozio, 400 `PUBLIC_BASE_URL` non https, 502 Zernio.
+    """
+    merchant = await merchant_service.connect_instagram_account(session, http, merchant, body.account_id)
+    return merchant_service.read_instagram_panel(session, merchant, utc_now())
+
+
+@router.get("/instagram", response_model=InstagramPanelResponse)
+async def read_instagram_panel(
+    session: Session = Depends(get_session),
+    merchant: Merchant = Depends(get_current_merchant),
+):
+    """Pannello Instagram del negozio (stato, chiave mascherata, quota, avvisi); non chiama Zernio."""
+    return merchant_service.read_instagram_panel(session, merchant, utc_now())
+
+
+@router.delete("/instagram", response_model=InstagramPanelResponse)
+async def disconnect_instagram(
+    session: Session = Depends(get_session),
+    http: httpx.AsyncClient = Depends(get_zernio_http),
+    merchant: Merchant = Depends(get_current_merchant),
+):
+    """Scollega Instagram: rimuove il webhook da Zernio (un tentativo), cancella chiave e campi Zernio, le carte restano."""
+    merchant = await merchant_service.disconnect_instagram(session, http, merchant)
+    return merchant_service.read_instagram_panel(session, merchant, utc_now())
 
 
 @router.get("/{merchant_id}", response_model=MerchantResponse, dependencies=[Depends(require_admin_key)])

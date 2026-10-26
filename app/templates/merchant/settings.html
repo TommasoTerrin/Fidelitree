@@ -29,6 +29,93 @@
             {% endif %}
         </div>
 
+        <!-- ===================== INSTAGRAM (Zernio): uno stato per volta ===================== -->
+
+        {% set ig_state = instagram.status.value %}
+        <section id="instagram-section" data-state="{{ ig_state }}"
+            class="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 space-y-4">
+            <div>
+                <p class="text-xs text-slate-400 font-bold uppercase mb-1">Instagram</p>
+                <p class="text-xs text-slate-400">I clienti ricevono la carta scrivendo {{ instagram.keyword }} in DM al tuo negozio.</p>
+            </div>
+
+            {% for w in instagram.warnings %}
+            <div data-warning="{{ w.code }}"
+                class="text-xs font-bold rounded-2xl p-3 border {% if w.code == 'key_invalid' %}bg-red-50 border-red-200 text-red-700{% else %}bg-yellow-50 border-yellow-200 text-yellow-800{% endif %}">
+                {{ w.message }}
+            </div>
+            {% endfor %}
+
+            {% if ig_state in ('not_connected', 'key_invalid') %}
+            {% if ig_state == 'not_connected' %}
+            <ol class="text-xs text-slate-500 list-decimal pl-4 space-y-1">
+                <li>Crea un account gratuito su Zernio (zernio.com).</li>
+                <li>Collega il tuo Instagram Business o Creator.</li>
+                <li>Crea una API key e incollala qui sotto.</li>
+            </ol>
+            {% endif %}
+            {% if instagram.key_masked and ig_state == 'not_connected' %}
+            <p class="text-xs text-slate-500">Chiave salvata: <span class="font-mono">{{ instagram.key_masked }}</span>. Scegli l'account o incolla un'altra chiave.</p>
+            {% endif %}
+            <form id="instagram-key-form" class="space-y-3">
+                <input type="password" id="zernio-key" autocomplete="off" placeholder="sk_..."
+                    class="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-mono text-sm focus:border-green-500 focus:outline-none">
+                <button type="submit" id="btn-instagram-key"
+                    class="w-full bg-slate-900 text-white font-bold py-3 rounded-2xl active:scale-95 transition-transform">
+                    {% if ig_state == 'key_invalid' %}USA LA NUOVA CHIAVE{% else %}COLLEGA ZERNIO{% endif %}
+                </button>
+            </form>
+            <div id="account-picker" class="hidden space-y-3"
+                {% if instagram.key_saved and ig_state == 'not_connected' %}data-autoload="1"{% endif %}>
+                <p class="text-xs font-bold text-slate-500 uppercase tracking-wider">Scegli l'account Instagram</p>
+                <select id="account-select"
+                    class="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm focus:border-green-500 focus:outline-none"></select>
+                <button type="button" id="btn-instagram-account"
+                    class="w-full bg-green-600 text-white font-bold py-3 rounded-2xl shadow-lg active:scale-95 transition-transform">
+                    COLLEGA ACCOUNT
+                </button>
+            </div>
+
+            {% elif ig_state == 'awaiting_test_dm' %}
+            <div class="bg-green-50 rounded-2xl p-4 space-y-1">
+                <p class="text-sm font-bold text-green-800">Quasi fatto! Ultimo passo: la prova</p>
+                <p class="text-sm text-green-800">Scrivi {{ instagram.keyword }} al tuo negozio{% if instagram.username %} (@{{ instagram.username }}){% endif %} da un altro profilo Instagram: quando la carta arriva, la funzione è attiva.</p>
+            </div>
+            {% if instagram.key_masked %}<p class="text-xs text-slate-400">Chiave Zernio <span class="font-mono">{{ instagram.key_masked }}</span></p>{% endif %}
+            <div class="grid grid-cols-2 gap-3">
+                <button type="button" id="btn-instagram-refresh"
+                    class="bg-slate-900 text-white font-bold py-3 rounded-2xl text-sm active:scale-95 transition-transform">
+                    Aggiorna
+                </button>
+                <button type="button" id="btn-instagram-disconnect"
+                    class="bg-slate-100 text-slate-600 font-bold py-3 rounded-2xl text-sm active:scale-95 transition-transform">
+                    Scollega
+                </button>
+            </div>
+
+            {% elif ig_state == 'active' %}
+            <div class="space-y-1">
+                <span class="inline-block text-xs font-bold px-3 py-1 rounded-full bg-green-100 text-green-700">Attivo ✅</span>
+                {% if instagram.username %}<p class="font-black text-slate-800">@{{ instagram.username }}</p>{% endif %}
+                {% if instagram.key_masked %}<p class="text-xs text-slate-400">Chiave Zernio <span class="font-mono">{{ instagram.key_masked }}</span></p>{% endif %}
+            </div>
+            {% if instagram.quota %}
+            <div>
+                <p class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Invii di questo mese</p>
+                <div class="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
+                    <div id="quota-bar" class="h-3 rounded-full {% if instagram.quota.warning %}bg-yellow-500{% else %}bg-green-500{% endif %}"
+                        style="width: {{ [instagram.quota.percent, 100] | min }}%"></div>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">{{ instagram.quota.sent }} / {{ instagram.quota.limit }} invii gratuiti</p>
+            </div>
+            {% endif %}
+            <button type="button" id="btn-instagram-disconnect"
+                class="w-full bg-slate-100 text-slate-600 font-bold py-3 rounded-2xl text-sm active:scale-95 transition-transform">
+                Scollega
+            </button>
+            {% endif %}
+        </section>
+
         <form id="settings-form" class="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 space-y-5">
 
             <label class="flex items-start gap-3 cursor-pointer">
@@ -121,6 +208,81 @@
             toast.className = `fixed bottom-6 left-1/2 -translate-x-1/2 px-6 py-3 rounded-2xl text-white font-bold shadow-xl z-50 transition-all ${isError ? 'bg-red-500' : 'bg-green-600'}`;
             toast.classList.remove('hidden');
             setTimeout(() => { toast.classList.add('hidden'); }, 4000);
+        }
+
+        // Instagram: chiamate all'API del merchant; la chiave non resta nel campo dopo l'invio
+        async function instagramCall(method, path, body) {
+            const res = await fetch('/api/merchant/instagram' + path, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: body ? JSON.stringify(body) : undefined
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Operazione non riuscita');
+            return data;
+        }
+
+        const accountPicker = document.getElementById('account-picker');
+        function showAccounts(accounts) {
+            const select = document.getElementById('account-select');
+            select.replaceChildren(...accounts.map(a => {
+                const option = document.createElement('option');
+                option.value = a.id;
+                option.textContent = a.username ? '@' + a.username : a.id;
+                return option;
+            }));
+            accountPicker.classList.remove('hidden');
+        }
+
+        const keyForm = document.getElementById('instagram-key-form');
+        if (keyForm) {
+            keyForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const keyInput = document.getElementById('zernio-key');
+                const keyBtn = document.getElementById('btn-instagram-key');
+                keyBtn.disabled = true;
+                try {
+                    const data = await instagramCall('POST', '/key', { api_key: keyInput.value });
+                    showAccounts(data.accounts);
+                } catch (err) {
+                    showToast(err.message, true);
+                } finally {
+                    keyInput.value = '';
+                    keyBtn.disabled = false;
+                }
+            });
+            document.getElementById('btn-instagram-account').addEventListener('click', async (e) => {
+                e.target.disabled = true;
+                try {
+                    await instagramCall('POST', '/account', { account_id: document.getElementById('account-select').value });
+                    window.location.reload();
+                } catch (err) {
+                    showToast(err.message, true);
+                    e.target.disabled = false;
+                }
+            });
+            if (accountPicker.dataset.autoload) {
+                instagramCall('GET', '/accounts').then(data => showAccounts(data.accounts))
+                    .catch(err => showToast(err.message, true));
+            }
+        }
+
+        const refreshBtn = document.getElementById('btn-instagram-refresh');
+        if (refreshBtn) refreshBtn.addEventListener('click', () => window.location.reload());
+
+        const disconnectBtn = document.getElementById('btn-instagram-disconnect');
+        if (disconnectBtn) {
+            disconnectBtn.addEventListener('click', async () => {
+                if (!confirm('Scollegare Instagram? Le carte dei clienti restano, ma nessuna nuova carta verrà inviata.')) return;
+                disconnectBtn.disabled = true;
+                try {
+                    await instagramCall('DELETE', '');
+                    window.location.reload();
+                } catch (err) {
+                    showToast(err.message, true);
+                    disconnectBtn.disabled = false;
+                }
+            });
         }
 
         // Anteprima testuale della conversione, aggiornata mentre si digita

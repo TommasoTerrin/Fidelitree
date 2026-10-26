@@ -247,13 +247,15 @@ def credentials_from_key(api_key: str, account_id: Optional[str] = None) -> Zern
     )
 
 
-def zernio_credentials_for(merchant) -> ZernioCredentials:
+def zernio_credentials_for(merchant, *, require_account: bool = True) -> ZernioCredentials:
     """
     Credenziali Zernio del negozio: decifra chiave e secret del webhook. **Unico** codice che legge
     `Merchant.zernio_api_key_enc` e `webhook_secret_enc`. `ZernioError(NOT_CONFIGURED)` se mancano chiave o
     account, o se la chiave non si decifra (dato alterato o chiave di cifratura diversa; nessun dettaglio).
+    Con `require_account=False` (onboarding: chiave salvata, account Instagram non ancora scelto) l'account
+    può mancare: la chiave è comunque obbligatoria.
     """
-    if not merchant.zernio_api_key_enc or not merchant.zernio_account_id:
+    if not merchant.zernio_api_key_enc or (require_account and not merchant.zernio_account_id):
         raise ZernioError(ZernioErrorKind.NOT_CONFIGURED)
     try:
         api_key = crypto.decrypt_secret(merchant.zernio_api_key_enc)

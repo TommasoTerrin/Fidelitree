@@ -396,6 +396,16 @@ def test_credenziali_merchant_senza_account():
     assert e.value.kind == ZernioErrorKind.NOT_CONFIGURED
 
 
+def test_credenziali_senza_account_se_non_richiesto():
+    # onboarding: la chiave è salvata ma l'account Instagram non è ancora stato scelto
+    creds = zs.zernio_credentials_for(_merchant(zernio_api_key_enc=encrypt_secret(KEY)), require_account=False)
+    assert creds.api_key.get_secret_value() == KEY
+    assert creds.account_id is None and creds.quota_scope == ""
+    with pytest.raises(ZernioError) as e:  # senza chiave non c'è nulla da restituire, anche così
+        zs.zernio_credentials_for(_merchant(), require_account=False)
+    assert e.value.kind == ZernioErrorKind.NOT_CONFIGURED
+
+
 def test_credenziali_con_chiave_illeggibile_sono_not_configured_senza_dettagli():
     m = _merchant(zernio_api_key_enc="1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", zernio_account_id="acc_9")
     with pytest.raises(ZernioError) as e:

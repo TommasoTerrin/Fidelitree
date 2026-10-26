@@ -11,7 +11,9 @@ from sqlmodel import SQLModel, create_engine
 
 from app.core.config import settings
 from app.core.crypto import validate_keys
-from app.core.errors import AuthError, ConflictError, DomainError, ForbiddenError, NotFoundError
+from app.core.errors import (
+    AuthError, ConflictError, DomainError, ExternalServiceError, ForbiddenError, NotFoundError,
+)
 from app.version import get_version
 
 # Import dei router
@@ -45,7 +47,7 @@ async def domain_error_handler(request: Request, exc: DomainError) -> JSONRespon
     """
     Traduce gli errori di dominio del core in risposte HTTP `{"detail": ...}`:
     AuthError → 401, NotFoundError → 404, ForbiddenError → 403, ConflictError → 409,
-    tutti gli altri → 400.
+    ExternalServiceError → 502, tutti gli altri → 400.
     """
     if isinstance(exc, AuthError):
         status = 401
@@ -55,6 +57,8 @@ async def domain_error_handler(request: Request, exc: DomainError) -> JSONRespon
         status = 403
     elif isinstance(exc, ConflictError):
         status = 409
+    elif isinstance(exc, ExternalServiceError):
+        status = 502
     else:
         status = 400
     return JSONResponse(status_code=status, content={"detail": str(exc)})

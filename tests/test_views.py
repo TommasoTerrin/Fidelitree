@@ -4,11 +4,17 @@ Test di rendering delle pagine HTML (Jinja2).
 
 import re
 import uuid
+from datetime import timedelta
 
-from app.models.models import Card
+from app.core.clock import utc_now
+from app.core.crypto import encrypt_secret
+from app.core.enums import InstagramStatus
+from app.models.models import Card, ZernioSendCounter
 from app.services import card_service
 from app.services.db_crud import customer_crud, merchant_crud
-from tests.conftest import identity_for, login_as
+from tests.conftest import (
+    INSTAGRAM_ACCOUNT_ID, INSTAGRAM_HOOK_ID, WEBHOOK_TEST_SECRET, ZERNIO_TEST_KEY, identity_for, login_as,
+)
 
 
 def test_pagina_login(client):
@@ -100,7 +106,8 @@ def test_settings_mostra_conversione_soglie_e_qr(auth_client, merchant):
     assert f"/join/{merchant.id}" in text
     assert "qrcode" in text
     lower = text.lower()
-    assert "monthly" not in lower and "chiave" not in lower and not re.search(r"\bcap\b", lower)
+    # la sezione Instagram parla della chiave Zernio del merchant: qui contano solo i dettagli interni degli alberi
+    assert "monthly" not in lower and not re.search(r"\bcap\b", lower)
     assert "ecologi" not in lower
 
 
@@ -125,6 +132,120 @@ def test_settings_conversione_disattivata_non_spunta_l_interruttore(auth_client,
     text = auth_client.get("/merchant/settings").text
     [checkbox] = re.findall(r'<input[^>]*id="conversion_enabled"[^>]*>', text)
     assert "checked" not in checkbox
+
+
+# --- sezione Instagram delle impostazioni: uno stato per volta ---
+
+def _instagram_section(text: str) -> str:
+    """Solo l'HTML della sezione Instagram (dal tag `<section id="instagram-section"` alla sua chiusura)."""
+    start = text.index('<section id="instagram-section"')
+    return text[start:text.index("</section>", start)]
+
+
+def _collega(session, merchant, status, **extra):
+    """Porta il merchant di test in uno stato Instagram (chiave e secret cifrati come dopo l'onboarding)."""
+    merchant_crud.update_merchant(session, merchant, {
+        "zernio_api_key_enc": encrypt_secret(ZERNIO_TEST_KEY),
+        "zernio_account_id": INSTAGRAM_ACCOUNT_ID,
+        "instagram_username": "bar_demo",
+        "webhook_hook_id": INSTAGRAM_HOOK_ID,
+        "webhook_secret_enc": encrypt_secret(WEBHOOK_TEST_SECRET),
+        "persistent_menu_set": True,
+        "instagram_status": status,
+        **extra,
+    })
+
+
+def test_settings_instagram_non_collegato_mostra_istruzioni_e_campo_chiave(auth_client):
+    section = _instagram_section(auth_client.get("/merchant/settings").text)
+
+    assert 'data-state="not_connected"' in section
+    [field] = re.findall(r'<input[^>]*id="zernio-key"[^>]*>', section)
+    assert 'type="password"' in field and 'autocomplete="off"' in field
+    assert "Zernio" in section and "Business" in section
+    assert 'id="account-picker"' in section and "data-autoload" not in section
+    assert "Scollega" not in section and "Aggiorna" not in section
+
+
+def test_settings_instagram_con_chiave_salvata_carica_gli_account(auth_client, session, merchant):
+    merchant_crud.update_merchant(session, merchant, {"zernio_api_key_enc": encrypt_secret(ZERNIO_TEST_KEY)})
+    section = _instagram_section(auth_client.get("/merchant/settings").text)
+
+    assert 'data-state="not_connected"' in section and "data-autoload" in section
+    assert "…ef56" in section
+
+
+def test_settings_instagram_in_attesa_del_dm_di_prova(auth_client, session, merchant):
+    _collega(session, merchant, InstagramStatus.AWAITING_TEST_DM)
+    section = _instagram_section(auth_client.get("/merchant/settings").text)
+
+    assert 'data-state="awaiting_test_dm"' in section
+    assert "Scrivi CARTA" in section and "un altro profilo" in section
+    assert 'id="btn-instagram-refresh"' in section and "Aggiorna" in section
+    assert "Scollega" in section  # senza il DM di prova (es. ManyChat) si deve poter uscire
+    assert 'id="zernio-key"' not in section
+
+
+def test_settings_instagram_attivo_mostra_account_chiave_mascherata_e_quota(auth_client, session, merchant):
+    _collega(session, merchant, InstagramStatus.ACTIVE)
+    session.add(ZernioSendCounter(
+        quota_scope=f"account:{INSTAGRAM_ACCOUNT_ID}", period=utc_now().strftime("%Y-%m"), sent=2500,
+    ))
+    session.commit()
+    section = _instagram_section(auth_client.get("/merchant/settings").text)
+
+    assert 'data-state="active"' in section
+    assert "@bar_demo" in section and "…ef56" in section
+    assert 'id="quota-bar"' in section and "width: 25%" in section and "2500" in section
+    assert "Scollega" in section and 'id="btn-instagram-disconnect"' in section
+    assert 'id="zernio-key"' not in section and "data-warning" not in section
+
+
+def test_settings_instagram_chiave_non_valida_banner_rosso_e_nuovo_campo(auth_client, session, merchant):
+    _collega(session, merchant, InstagramStatus.KEY_INVALID)
+    section = _instagram_section(auth_client.get("/merchant/settings").text)
+
+    assert 'data-state="key_invalid"' in section
+    assert 'data-warning="key_invalid"' in section and "bg-red-" in section
+    assert "Zernio ha rifiutato la chiave" in section
+    assert 'id="zernio-key"' in section and "data-autoload" not in section
+
+
+def test_settings_instagram_mostra_gli_avvisi(auth_client, session, merchant):
+    _collega(
+        session, merchant, InstagramStatus.ACTIVE,
+        persistent_menu_set=False, standby_detected_at=utc_now() - timedelta(hours=2),
+    )
+    session.add(ZernioSendCounter(
+        quota_scope=f"account:{INSTAGRAM_ACCOUNT_ID}", period=utc_now().strftime("%Y-%m"), sent=8000,
+    ))
+    session.commit()
+    section = _instagram_section(auth_client.get("/merchant/settings").text)
+
+    for code in ("menu", "standby", "quota"):
+        assert f'data-warning="{code}"' in section
+    assert "ManyChat" in section and "80%" in section
+
+
+def test_settings_instagram_senza_username_non_scrive_none(auth_client, session, merchant):
+    for status in (InstagramStatus.AWAITING_TEST_DM, InstagramStatus.ACTIVE):
+        _collega(session, merchant, status, instagram_username=None)
+        section = _instagram_section(auth_client.get("/merchant/settings").text)
+        assert f'data-state="{status.value}"' in section and "@None" not in section and "@" not in section
+
+
+def test_settings_instagram_non_espone_segreti_e_scappa_l_username(auth_client, session, merchant):
+    _collega(session, merchant, InstagramStatus.ACTIVE, instagram_username="<script>alert(1)</script>")
+    text = auth_client.get("/merchant/settings").text
+
+    for secret in (ZERNIO_TEST_KEY, WEBHOOK_TEST_SECRET, INSTAGRAM_HOOK_ID):
+        assert secret not in text
+    assert "<script>alert(1)</script>" not in text and "&lt;script&gt;" in text
+
+
+def test_settings_mantiene_il_qr_join_fino_al_ticket_09(auth_client):
+    text = auth_client.get("/merchant/settings").text
+    assert 'id="shop-qrcode"' in text and "/join/" in text
 
 
 def test_gestione_card_mostra_pool_del_mese(auth_client, session, merchant, card):

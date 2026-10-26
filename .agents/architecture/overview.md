@@ -120,9 +120,12 @@ registrazione merchant (invariata) → incolla chiave Zernio
    → chiave salvata cifrata, scelta dell'account Instagram
    → genera hook_id + secret → POST /v1/webhooks/settings {url /webhooks/zernio/<hook_id>, secret, events [message.received], accountIds}
    → menu persistente: vuoto? imposta "🌳 La mia carta" : lascia quello esistente e avvisa
+     (se c'è già la nostra voce vale come impostata; un errore sul menu non blocca il collegamento)
    → stato awaiting_test_dm: "scrivi CARTA al tuo negozio da un altro profilo"
    → primo invio riuscito → active      (standby → avviso "un'altra app gestisce i messaggi")
-Scollega: DELETE del webhook su Zernio + cancellazione di chiave, secret e campi Zernio (le carte restano).
+Se il webhook non si registra (502) non si salva nulla. Con un webhook già attivo si risponde 409: prima «Scollega».
+Scollega: DELETE del webhook su Zernio (un tentativo, errore solo nel log) + cancellazione di chiave, secret e campi
+Zernio (le carte restano; la voce di menu già impostata resta su Instagram).
 ```
 
 ### 3. Scan dal QR della pagina carta

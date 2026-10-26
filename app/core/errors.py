@@ -31,6 +31,10 @@ class AuthError(DomainError):
     """Credenziali o codice di accesso errati (HTTP 401)."""
 
 
+class ExternalServiceError(DomainError):
+    """Un servizio esterno (Zernio) non risponde o dà un errore inatteso (HTTP 502). Messaggio senza dettagli né segreti."""
+
+
 class MessageTooLongError(InvalidInputError):
     """Un campo della card supera il limite della piattaforma (HTTP 400)."""
 
