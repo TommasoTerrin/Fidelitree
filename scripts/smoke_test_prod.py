@@ -1,7 +1,10 @@
 """
 Smoke test per l'applicazione Fidelitree in produzione.
-Verifica che API, database, pagine principali e PWA siano operativi.
-NON pianta alberi: niente scan e niente chiusura del periodo (crea e cancella solo un merchant di prova).
+Verifica che API, database, pagine principali, PWA merchant e webhook siano al loro posto e che le pagine del
+vecchio flusso cliente non esistano più.
+NON pianta alberi e NON invia messaggi: niente scan, niente chiusura del periodo, nessuna chiamata a Zernio
+(il webhook si prova con un `hook_id` inesistente: risponde 404 prima di leggere firma o corpo). Crea e cancella
+solo un merchant di prova tramite l'API admin.
 
 Utilizzo:
     python scripts/smoke_test_prod.py [URL_BASE] [ADMIN_SECRET_KEY]
@@ -15,6 +18,10 @@ import random
 import sys
 
 import requests
+
+# Versione che la release deve esporre su /health. Va aggiornata a ogni bump di `pyproject.toml`
+# (un test la confronta con la versione letta da lì).
+EXPECTED_VERSION = "0.3.0"
 
 
 def _is_html(resp) -> bool:
@@ -44,28 +51,51 @@ def run_smoke_test(base_url: str, admin_key: str, http=requests) -> bool:
         resp = http.get(f"{base_url}/health", timeout=10)
         data = resp.json()
         check("Health check", resp.status_code == 200 and data.get("status") == "ok", resp.text)
-        check(f"Versione esposta ({data.get('version')})", bool(data.get("version")), resp.text)
+        check(f"Versione esposta {EXPECTED_VERSION}", data.get("version") == EXPECTED_VERSION,
+              f"trovata {data.get('version')}")
     except Exception as e:
         print(f"[ERROR] Health check fallito: {e}")
         return False
 
-    # 2. Pagine pubbliche (privacy del cliente e merchant) e PWA
+    # 2. Pagine pubbliche (informativa del cliente, accesso merchant)
     for page in ["/privacy", "/merchant/login", "/merchant/register"]:
         try:
             resp = http.get(f"{base_url}{page}", timeout=10)
             check(f"Pagina {page} raggiungibile", _is_html(resp), f"status {resp.status_code}")
         except Exception as e:
             check(f"Pagina {page} raggiungibile", False, str(e))
+
+    # 3. Carta del cliente e webhook: un token o un hook sconosciuti non rivelano nulla (404)
+    try:
+        resp = http.get(f"{base_url}/c/token-inesistente", timeout=10)
+        check("Pagina carta con token sconosciuto: 404", resp.status_code == 404, f"status {resp.status_code}")
+        resp = http.post(f"{base_url}/webhooks/zernio/hook-inesistente", json={}, timeout=10)
+        check("Webhook con hook sconosciuto: 404", resp.status_code == 404, f"status {resp.status_code}")
+    except Exception as e:
+        check("Carta e webhook sconosciuti: 404", False, str(e))
+
+    # 4. PWA merchant
     try:
         resp = http.get(f"{base_url}/sw.js", timeout=10)
         check("Service worker /sw.js con scope /merchant/", resp.status_code == 200
               and resp.headers.get("Service-Worker-Allowed") == "/merchant/", f"status {resp.status_code}")
         resp = http.get(f"{base_url}/static/manifest.webmanifest", timeout=10)
-        check("Manifest PWA raggiungibile", resp.status_code == 200, f"status {resp.status_code}")
+        start_url = resp.json().get("start_url") if resp.status_code == 200 else None
+        check("Manifest PWA con start_url /merchant/scanner",
+              resp.status_code == 200 and start_url == "/merchant/scanner",
+              f"status {resp.status_code}, start_url {start_url}")
     except Exception as e:
         check("File PWA raggiungibili", False, str(e))
 
-    # 3. Ciclo di vita merchant via API admin (crea -> leggi -> elimina)
+    # 5. Il vecchio flusso cliente non esiste più
+    for page in ["/join/1", "/wallet"]:
+        try:
+            resp = http.get(f"{base_url}{page}", timeout=10)
+            check(f"Pagina vecchia {page} rimossa", resp.status_code == 404, f"status {resp.status_code} (atteso 404)")
+        except Exception as e:
+            check(f"Pagina vecchia {page} rimossa", False, str(e))
+
+    # 6. Ciclo di vita merchant via API admin (crea -> leggi -> elimina)
     print("--- Test API & Database ---")
     m_id = None
     try:

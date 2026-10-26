@@ -79,7 +79,7 @@ python -m pytest tests/unit      # solo core puro, velocissimi
 # Utilità DB (ATTENZIONE: agiscono sul DATABASE_URL in .env, che può essere il DB vero:
 # per il collaudo locale usa un SQLite usa-e-getta, vedi .agents/workflows/deploy.md)
 python -m scripts.reset_db      # drop + ricrea schema (chiede conferma)
-python -m scripts.seed_db       # 2 merchant, carte "Instagram" finte con link /c/... e scan di prova (solo AUTH_PROVIDER=dev)
+python -m scripts.seed_db [--links]  # 2 merchant, carte "Instagram" finte e scan di prova; --links stampa anche i link /c/<token> (segreti) (solo AUTH_PROVIDER=dev)
 
 # Chiusura mensile: pianta gli alberi del pool (anteprima, conferma, idempotente)
 python -m scripts.close_period [--month AAAA-MM] [--cap N] [--yes]

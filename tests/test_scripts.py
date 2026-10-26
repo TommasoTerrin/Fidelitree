@@ -4,6 +4,7 @@ Tutto su SQLite in-memory (fixture `session`/`client`), senza rete e senza Ecolo
 """
 
 import json
+import re
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -14,12 +15,16 @@ from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.core.config import settings
 from app.core.clock import utc_now
-from app.core.enums import Level, WebhookOutcome
+from app.core.crypto import encrypt_secret
+from app.core.dependencies import get_session
+from app.core.enums import InstagramStatus, Level, WebhookOutcome
+from app.main import app
 from app.models.models import (
-    Card, Merchant, MerchantPool, PointTransaction, ProcessedWebhookEvent,
+    Card, Merchant, MerchantPool, PointTransaction, ProcessedWebhookEvent, ZernioSendCounter,
 )
 from app.services import ecologi_service, instagram_service, tree_service, zernio_service
-from scripts import ecologi_check, replay_webhook, reset_db, seed_db, zernio_check
+from app.version import get_version
+from scripts import ecologi_check, replay_webhook, reset_db, seed_db, smoke_test_prod, zernio_check
 from scripts.smoke_test_prod import run_smoke_test
 from tests.conftest import WEBHOOK_TEST_SECRET, ZERNIO_TEST_KEY
 
@@ -81,18 +86,54 @@ def test_seed_produce_pool_coerenti_e_un_piano_utile_al_collaudo(session):
     assert not plan.exceeds_cap
 
 
-def test_main_del_seed_stampa_credenziali_e_id_delle_carte(monkeypatch, capsys):
+@pytest.fixture()
+def seed_engine(monkeypatch):
+    """Engine SQLite in-memory con lo schema, installato come `seed_db.engine` (il DB vero non si tocca)."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     SQLModel.metadata.create_all(engine)
     monkeypatch.setattr(seed_db, "engine", engine)
+    yield engine
+    engine.dispose()
 
-    seed_db.main()  # stampa a sessione aperta: fuori da essa i modelli sarebbero scollegati
+
+def test_main_del_seed_stampa_credenziali_e_id_delle_carte_senza_link(seed_engine, capsys, caplog):
+    seed_db.main([])  # stampa a sessione aperta: fuori da essa i modelli sarebbero scollegati
 
     out = capsys.readouterr().out
     assert settings.DEV_AUTH_PASSWORD in out and "demo@fidelitree.it" in out
     assert "Carta di anna: id " in out
-    assert "/join" not in out and "/wallet" not in out and "/c/" not in out  # nessun token del link stampato
-    engine.dispose()
+    assert "/join" not in out and "/wallet" not in out and "/c/" not in out  # il token del link è un segreto
+    with Session(seed_engine) as s:
+        for card in s.exec(select(Card)).all():
+            assert instagram_service.card_link_url(card).rsplit("/", 1)[1] not in out + caplog.text
+
+
+def test_la_stampa_del_seed_si_codifica_nella_console_windows(seed_engine, capsys):
+    """Su una console cp1252 un carattere come la freccia darebbe `UnicodeEncodeError`."""
+    seed_db.main(["--links"])
+
+    out = capsys.readouterr().out
+    out.encode("cp1252")
+
+
+def test_main_del_seed_con_links_stampa_i_link_che_aprono_la_pagina_carta(seed_engine, client, capsys, caplog):
+    def override_get_session():
+        with Session(seed_engine) as s:
+            yield s
+
+    app.dependency_overrides[get_session] = override_get_session
+
+    seed_db.main(["--links"])
+
+    out = capsys.readouterr().out
+    links = re.findall(r"(?<=Link: )\S+/c/\S+", out)
+    assert len(links) == 4  # due carte per ciascuno dei due negozi
+    for link in links:
+        assert client.get(link[link.index("/c/"):]).status_code == 200
+    with Session(seed_engine) as s:
+        assert set(links) == {instagram_service.card_link_url(c) for c in s.exec(select(Card)).all()}
+        # il token non passa dal logger, solo da stdout
+        assert all(link.rsplit("/", 1)[1] not in caplog.text for link in links)
 
 
 def test_seed_rifiuta_provider_diversi_da_dev(session, monkeypatch):
@@ -133,6 +174,65 @@ def test_smoke_test_su_app_locale_passa_e_non_pianta_alberi(client, mock_ecologi
 
 def test_smoke_test_con_chiave_admin_sbagliata_fallisce(client, mock_ecologi):
     assert run_smoke_test("", "chiave-sbagliata", http=client) is False
+
+
+def test_smoke_test_non_invia_nulla_a_zernio_e_non_crea_carte(client, zernio_mock, mock_ecologi, session):
+    assert run_smoke_test("", settings.ADMIN_SECRET_KEY, http=client) is True
+
+    assert zernio_mock.requests == []
+    assert mock_ecologi == []
+    assert _count(session, Card) == 0
+    assert _count(session, ProcessedWebhookEvent) == 0  # il webhook di prova si ferma prima di ogni scrittura
+
+
+def test_la_versione_attesa_dallo_smoke_test_e_quella_di_pyproject():
+    """Al prossimo bump questo test ricorda di aggiornare `EXPECTED_VERSION`."""
+    assert smoke_test_prod.EXPECTED_VERSION == get_version()
+
+
+class _SmokeHttp:
+    """Client che inoltra al `TestClient` ma risponde con `fake` per i percorsi indicati (metodo, percorso)."""
+
+    def __init__(self, client, fake: dict):
+        self.client, self.fake = client, fake
+
+    def _call(self, method: str, url: str, **kwargs):
+        if (method, url) in self.fake:
+            return self.fake[(method, url)]
+        return getattr(self.client, method.lower())(url, **kwargs)
+
+    def get(self, url, **kwargs):
+        return self._call("GET", url, **kwargs)
+
+    def post(self, url, **kwargs):
+        return self._call("POST", url, **kwargs)
+
+    def delete(self, url, **kwargs):
+        return self._call("DELETE", url, **kwargs)
+
+
+@pytest.mark.parametrize("method, path, response", [
+    ("GET", "/wallet", httpx.Response(200, text="<html></html>", headers={"Content-Type": "text/html"})),
+    ("GET", "/join/1", httpx.Response(200, text="<html></html>", headers={"Content-Type": "text/html"})),
+    ("GET", "/static/manifest.webmanifest", httpx.Response(200, json={"start_url": "/wallet"})),
+    ("GET", "/c/token-inesistente", httpx.Response(200, text="<html></html>", headers={"Content-Type": "text/html"})),
+    ("POST", "/webhooks/zernio/hook-inesistente", httpx.Response(200, json={"status": "ok"})),
+    ("GET", "/privacy", httpx.Response(404)),
+    ("GET", "/sw.js", httpx.Response(404)),
+    ("GET", "/health", httpx.Response(200, json={"status": "ok", "version": "0.2.1"})),
+])
+def test_smoke_test_fallisce_se_una_risposta_non_e_quella_attesa(client, method, path, response):
+    http = _SmokeHttp(client, {(method, path): response})
+
+    assert run_smoke_test("", settings.ADMIN_SECRET_KEY, http=http) is False
+
+
+def test_smoke_test_stampa_quale_controllo_e_fallito(client, capsys):
+    wallet = httpx.Response(200, text="<html></html>", headers={"Content-Type": "text/html"})
+
+    run_smoke_test("", settings.ADMIN_SECRET_KEY, http=_SmokeHttp(client, {("GET", "/wallet"): wallet}))
+
+    assert "[FAIL] Pagina vecchia /wallet rimossa" in capsys.readouterr().out
 
 
 # --- reset_db ---
@@ -368,6 +468,100 @@ def test_zernio_check_url_non_https_non_chiama_zernio(zernio_http, capsys):
 def test_zernio_check_non_apre_sessioni_db(zernio_http, session):
     assert zernio_check.main(["accounts"]) == 0
     assert _count(session, Merchant) == 0
+
+
+def test_zernio_check_senza_merchant_l_account_id_e_obbligatorio_per_conversazioni_e_invii(zernio_http, capsys):
+    assert zernio_check.main(["send-card", "--conversation-id", "conv_1"]) == 1
+
+    assert zernio_http == []
+    assert "--account-id" in capsys.readouterr().err
+
+
+# --- zernio_check --merchant-id ---
+
+def _check_merchant(session, merchant_id, *argv):
+    return zernio_check.main([*argv, "--merchant-id", str(merchant_id)], session=session)
+
+
+def test_zernio_check_merchant_mostra_stato_e_chiave_mascherata(zernio_http, instagram_merchant, session, capsys):
+    session.add(ZernioSendCounter(quota_scope="account:acc-1", period=utc_now().strftime("%Y-%m"), sent=7))
+    session.commit()
+
+    assert _check_merchant(session, instagram_merchant.id, "accounts") == 0
+
+    captured = capsys.readouterr()
+    shown = captured.out + captured.err
+    assert "active" in captured.out and "@bar_demo" in captured.out
+    assert "…ef56" in captured.out and "Invii del mese: 7" in captured.out
+    assert ZERNIO_TEST_KEY not in shown and ZERNIO_KEY not in shown
+    assert "Bar Demo" not in shown  # il nome può contenere emoji: la console Windows non le stampa
+    # la chiamata usa la chiave salvata del negozio, non quella dell'ambiente
+    assert zernio_http[0].headers["Authorization"] == f"Bearer {ZERNIO_TEST_KEY}"
+
+
+def test_zernio_check_merchant_non_chiede_la_chiave_a_video(zernio_http, instagram_merchant, session, monkeypatch):
+    monkeypatch.delenv("ZERNIO_CHECK_API_KEY")
+
+    def no_prompt(prompt=""):
+        raise AssertionError("la chiave del negozio non si chiede a video")
+
+    monkeypatch.setattr(zernio_check.getpass, "getpass", no_prompt)
+
+    assert _check_merchant(session, instagram_merchant.id, "accounts") == 0
+
+
+def test_zernio_check_merchant_invia_sull_account_del_negozio(zernio_http, instagram_merchant, session):
+    argv = ["--conversation-id", "conv_1", "--name", "Bar Demo", "--url", "https://fidelitree.example/c/x"]
+
+    assert _check_merchant(session, instagram_merchant.id, "send-card", *argv) == 0
+
+    request = zernio_http[0]
+    assert request.url.path == "/api/v1/inbox/conversations/conv_1/messages"
+    assert json.loads(request.read())["accountId"] == "acc-1"
+    assert request.headers["Authorization"] == f"Bearer {ZERNIO_TEST_KEY}"
+
+
+def test_zernio_check_merchant_con_account_id_esplicito_lo_preferisce(zernio_http, instagram_merchant, session):
+    assert _check_merchant(session, instagram_merchant.id, "conversations", "--account-id", "altro") == 0
+
+    assert dict(zernio_http[0].url.params)["accountId"] == "altro"
+
+
+def test_zernio_check_merchant_con_chiave_ma_senza_account_puo_elencare_gli_account(zernio_http, merchant, session, capsys):
+    merchant.zernio_api_key_enc = encrypt_secret(ZERNIO_TEST_KEY)
+    merchant.instagram_status = InstagramStatus.NOT_CONNECTED
+    session.add(merchant)
+    session.commit()
+
+    assert _check_merchant(session, merchant.id, "accounts") == 0
+
+    assert "not_connected" in capsys.readouterr().out
+    assert zernio_http[0].headers["Authorization"] == f"Bearer {ZERNIO_TEST_KEY}"
+
+
+def test_zernio_check_merchant_senza_chiave_esce_con_errore_chiaro(zernio_http, merchant, session, capsys):
+    assert _check_merchant(session, merchant.id, "accounts") == 1
+
+    captured = capsys.readouterr()
+    assert zernio_http == []
+    assert "not_connected" in captured.out  # lo stato si mostra comunque
+    assert "chiave Zernio" in captured.err and "non" in captured.err
+
+
+def test_zernio_check_merchant_inesistente(zernio_http, session, capsys):
+    assert _check_merchant(session, 999, "accounts") == 1
+
+    assert zernio_http == []
+    assert "999" in capsys.readouterr().err
+
+
+def test_zernio_check_merchant_non_modifica_il_db(zernio_http, instagram_merchant, session):
+    before = (instagram_merchant.instagram_status, _count(session, ZernioSendCounter), _count(session, Card))
+
+    _check_merchant(session, instagram_merchant.id, "accounts")
+
+    session.refresh(instagram_merchant)
+    assert before == (instagram_merchant.instagram_status, _count(session, ZernioSendCounter), _count(session, Card))
 
 
 # --- replay_webhook ---

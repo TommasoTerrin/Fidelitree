@@ -92,7 +92,7 @@ Per il collaudo usa un SQLite su file, sovrascrivendo la variabile solo nel term
 ```powershell
 $env:DATABASE_URL = "sqlite:///collaudo.db"     # file ignorato da git (*.db)
 python -m scripts.reset_db --force
-python -m scripts.seed_db                        # stampa link e credenziali di prova
+python -m scripts.seed_db --links                # stampa credenziali, id delle carte e link /c/<token> di prova
 python local_main.py                             # http://127.0.0.1:8001
 ```
 

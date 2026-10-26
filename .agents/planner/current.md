@@ -28,7 +28,7 @@ Contesto di riferimento: decisioni in [AGENTS.md](../../AGENTS.md), vincoli Zern
 | 07 | Onboarding Instagram del merchant | ✅ codice 2026-10-26 (739 test); collaudo 2026-10-26 fatto per onboarding e DM da follower (timeout invio 4 s); non follower/Requests, ManyChat, menu e «Scollega» rimandati al ticket 11 |
 | 08 | Pagina carta, QR, scan e PWA merchant | ✅ 2026-10-26 (793 test); prova manuale del founder riuscita (link `/c/<token>`, scan dalla PWA con aggiunta di punti, PWA installata, redirect al login) |
 | 09 | Rimozione del vecchio flusso cliente (OTP, wallet, `/join`, `Customer`) | ✅ 2026-10-26 (744 test) |
-| 10 | Seed, smoke test e script | |
+| 10 | Seed, smoke test e script | ✅ 2026-10-26 (766 test) |
 | 11 | Documentazione, collaudo end-to-end e release | |
 
 Suite di partenza: 360 test. I ticket 02-08 **aggiungono** il nuovo flusso accanto al vecchio (che continua a
@@ -119,6 +119,22 @@ Note sui ticket fatti:
   seed). Nota per il 10: la stampa del seed contiene `→`, che su una console Windows cp1252 dà
   `UnicodeEncodeError` (già così prima del 09; con `PYTHONIOENCODING=utf-8` funziona).
 
+- **10**: script riallineati. `seed_db`: `main(argv)` con `--links`; di default stampa solo credenziali merchant e id
+  delle carte, **con `--links` anche il link `/c/<token>`** (via `card_link_url`, quindi con `PUBLIC_BASE_URL`; solo
+  stdout, mai nel logger): il ticket chiedeva di stamparli sempre, ma il token è un segreto, quindi è opt-in (`print_links`
+  è ora `print_access`). Problema di encoding risolto alla radice: la stampa è solo ASCII (`->` al posto di `→`) e un
+  test verifica che l'output si codifichi in cp1252. Gli IGSID finti restano `igsid-seed-anna`/`igsid-seed-luca`.
+  `smoke_test_prod`: `EXPECTED_VERSION = "0.3.0"` (un test la confronta con `pyproject.toml`: al prossimo bump fallisce
+  finché non si aggiorna), `/c/token-inesistente` 404, `POST /webhooks/zernio/hook-inesistente` 404 (risponde prima di
+  firma, corpo e scritture: nessun invio a Zernio, nessuna riga evento), manifest con `start_url` `/merchant/scanner`,
+  `/join/1` e `/wallet` 404, più i controlli di prima; resta senza scan né piantumazioni. `zernio_check`: `--merchant-id`
+  (per sotto-comando, con `session` iniettabile) stampa lo stato (`read_instagram_panel`: stato, `@username`, chiave
+  mascherata, invii del mese; mai il nome del negozio, per le emoji) e usa `zernio_credentials_for` come unico lettore
+  (anche per «chiave non salvata»: si intercetta `NOT_CONFIGURED`, senza leggere il campo cifrato); `--account-id` è
+  ora opzionale ovunque (si controlla dopo: obbligatorio senza `--merchant-id`, tranne `accounts`). Collaudo su SQLite
+  usa-e-getta (porta 8011): `reset_db --force`, seed (idempotente), 4 link `/c/<token>` → 200, login del merchant del seed,
+  scan +5 (10→15, pool 105→110), carta di un altro negozio 404, smoke test contro il server locale tutto OK.
+
 ### Prossimo passo
 
 1. ~~Ticket 05~~ codice fatto; **chiuderlo** dopo il collaudo.
@@ -131,7 +147,7 @@ Note sui ticket fatti:
    card/risposta a un **non follower** e DM in **Requests** via webhook (serve un profilo che non segue il negozio),
    `isFollower: null`, **ManyChat/standby**, tocco della voce di menu «🌳 La mia carta», «Scollega» da pannello.
 4. ~~Ticket 08~~ fatto, prova manuale del founder riuscita il 2026-10-26.
-5. ~~Ticket 09~~ fatto. Poi 10 → 11 in ordine, dopo l'approvazione.
+5. ~~Ticket 09~~ fatto. ~~Ticket 10~~ fatto. Poi 11, dopo l'approvazione.
 
 Esiti del collaudo del 05 (2026-10-26): `conversations` ha date in ritardo (la conversazione del founder risultava del
 giorno prima: per trovarla si legge il mittente dei messaggi, non si fida dell'ordine); `--folder requests` dà 400
