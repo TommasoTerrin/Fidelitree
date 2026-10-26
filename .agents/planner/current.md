@@ -23,7 +23,7 @@ Contesto di riferimento: decisioni in [AGENTS.md](../../AGENTS.md), vincoli Zern
 | 02 | Modelli, config ed errori | ✅ `865797d` |
 | 03 | Cifratura AES-GCM, indice cieco IGSID, token del link | ✅ `161850d` (414 test) |
 | 04 | Core dei messaggi: trigger, card, finestra 24 h, quota | ✅ 2026-10-23 `f4bb1b3` (459 test) |
-| 05 | Client Zernio, `zernio_check`, **collaudo anticipato** | 🟡 codice fatto 2026-10-23 (549 test), in attesa del collaudo manuale del founder |
+| 05 | Client Zernio, `zernio_check`, **collaudo anticipato** | ✅ 2026-10-26: passi 1-2 del collaudo fatti (base URL `https://zernio.com/api` ok, `send-card` consegnata e corretta su mobile al profilo del founder); passo 3 (non follower) rimandato al collaudo del 07/11 |
 | 06 | Webhook: dalla parola chiave alla card | ✅ 2026-10-23 (644 test) |
 | 07 | Onboarding Instagram del merchant | |
 | 08 | Pagina carta, QR, scan e PWA merchant | |
@@ -68,6 +68,13 @@ Note sui ticket fatti:
    Requests? Come si comporta ManyChat come app di default? Quale base URL Zernio vale? Se l'esito contraddice le
    ipotesi di `zernio-notes.md`: **fermarsi e chiedere**.
 3. Poi 07 → 11 in ordine.
+
+Esiti del collaudo del 05 (2026-10-26): `conversations` ha date in ritardo (la conversazione del founder risultava del
+giorno prima: per trovarla si legge il mittente dei messaggi, non si fida dell'ordine); `--folder requests` dà 400
+(limite già noto). Il founder ha notato una **latenza di circa 30 secondi** da qualche parte nel giro (non chiaro se
+Zernio→webhook o consegna Instagram): **da misurare nel collaudo del 07** con timestamp di `sentAt`, arrivo del webhook e
+consegna della card, perché in negozio il cliente aspetta al banco.
+La chiave Zernio per gli script sta in `.env` come `ZERNIO_CHECK_API_KEY` (una sola variabile).
 
 ### Decisione del 2026-10-23: carta solo a chi segue
 Il webhook (06) manda la card solo se `isFollower` è `true` o `null`; se `false` solo un testo di invito a seguire, senza
