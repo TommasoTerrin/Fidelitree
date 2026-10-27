@@ -71,6 +71,12 @@ def get_all_merchants(session: Session, skip: int = 0, limit: int = 100) -> List
     return session.exec(statement).all()
 
 
+def get_newest_merchants(session: Session, limit: int) -> List[Merchant]:
+    """I merchant dal più recente (per iscrizione, poi per id), al massimo `limit`."""
+    statement = select(Merchant).order_by(Merchant.created_at.desc(), Merchant.id.desc()).limit(limit)
+    return session.exec(statement).all()
+
+
 def update_merchant(session: Session, merchant: Merchant, update_data: dict) -> Merchant:
     """Aggiorna i dati di un merchant esistente (rivalidando il risultato)."""
     try:

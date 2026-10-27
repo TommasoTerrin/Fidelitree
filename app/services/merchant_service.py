@@ -6,13 +6,22 @@ Regole di business
 - Il merchant si registra con email + password tramite il provider di autenticazione: la tabella `merchant`
   non ha nessuna password, solo `auth_user_id` ed email (con il provider `local` l'hash sta in `AuthCredential`).
 - Il login ha un freno ai tentativi (5 errori in 15 minuti per email → 429, avviso dal 3° errore, vedi `auth.LoginThrottle`);
-  il merchant cambia la password dalle impostazioni, il reset lo fa il founder (ticket 13).
+  il merchant cambia la password dalle impostazioni, il reset lo fa il founder dalla dashboard con una password
+  temporanea (`reset_merchant_password`), che azzera anche il freno di quell'email.
 - Un merchant appena registrato è `is_approved=False` (**in attesa**): può collegare Instagram e fare il DM di
   prova, ma i clienti nuovi vedono la carta di prova e lo scanner può solo togliere saldo. Dopo l'approvazione
   manuale del founder è **attivo**; può essere messo **in pausa** (`is_paused`). Stato e permessi:
   `card_service.service_state` e `check_balance_change`.
 - Il merchant può modificare solo nome, telefono e impostazioni di conversione; approvazione,
   tipo e soglie dei livelli le decide l'admin (con soglie sempre coerenti: bronzo < argento < oro).
+
+Dashboard admin (ticket 13)
+---------------------------
+- Il founder entra in `/admin` con `ADMIN_SECRET_KEY` (`login_admin`: freno condiviso con il login dei merchant,
+  chiave fissa `admin`, 5 errori in 15 minuti → 429) e dalla lista dei merchant (`list_admin_merchants`) li avvia
+  (`approve`: imposta `is_approved` e toglie la pausa), li mette in pausa (`pause`, solo se approvati), li riattiva
+  (`resume`, solo se approvati) e reimposta la password (`reset_merchant_password`: password temporanea casuale,
+  mostrata una sola volta, mai salvata in chiaro né loggata). Il founder non crea né elimina profili da lì.
 
 Onboarding Instagram (v0.3.0)
 -----------------------------
@@ -34,15 +43,19 @@ La sezione `# --- Shell ---` in fondo parla con DB, provider di autenticazione e
 """
 
 import re
+import secrets
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Optional
+from typing import Callable, Optional
 
 from pydantic import BaseModel
 
-from app.core.auth import MIN_PASSWORD_LENGTH, validate_password  # noqa: F401  (MIN_PASSWORD_LENGTH: nome storico)
-from app.core.enums import InstagramStatus
-from app.core.errors import InvalidInputError
+from app.core.auth import (  # noqa: F401  (MIN_PASSWORD_LENGTH: nome storico)
+    LOGIN_FAILURE_WINDOW, LOGIN_MAX_FAILURES, LOGIN_WARN_AFTER, MIN_PASSWORD_LENGTH, admin_key_matches, validate_password,
+)
+from app.core.enums import InstagramStatus, ServiceState
+from app.core.errors import ConflictError, InvalidInputError
+from app.services.card_service import service_state
 from app.services.instagram_service import CARD_POSTBACK_PAYLOAD, QuotaStatus, quota_status
 
 # --- Core puro ---
@@ -109,6 +122,98 @@ def validate_registration(
 
     return RegistrationData(
         business_name=name, email=normalized_email, password=password, contact_phone=phone,
+    )
+
+
+# --- Core puro: dashboard admin ---
+
+ADMIN_THROTTLE_KEY = "admin"  # chiave fissa del freno del login admin (una sola password per tutti)
+ADMIN_LOCK_SUFFIX = "oppure accedi con l'header X-Admin-Key"  # chiude il messaggio 429 del login admin
+ADMIN_LIST_LIMIT = 200  # righe della lista: con ~100 merchant basta, nessuna paginazione
+TEMP_PASSWORD_LENGTH = 12
+# Senza caratteri ambigui (0/O, 1/l/I): la password si comunica a voce o per messaggio.
+TEMP_PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
+
+
+def admin_login_failure_message(failures: int) -> str:
+    """
+    Messaggio di un login admin fallito, dato il numero di errori recenti (quello appena avvenuto compreso):
+    dal 3° avvisa del blocco, al 5° dice che l'accesso si è fermato. Non nomina il founder (è lui che accede).
+    """
+    window = int(LOGIN_FAILURE_WINDOW.total_seconds() // 60)
+    if failures >= LOGIN_MAX_FAILURES:
+        return f"Password non valida. Accesso sospeso per {window} minuti"
+    if failures >= LOGIN_WARN_AFTER:
+        return f"Password non valida. Attenzione: dopo {LOGIN_MAX_FAILURES} errori l'accesso si ferma per {window} minuti"
+    return "Password non valida"
+
+
+def generate_temporary_password(choice: Callable[[str], str] = secrets.choice) -> str:
+    """
+    Password temporanea di 12 caratteri dell'alfabeto senza caratteri ambigui (~69 bit). Ogni carattere lo
+    sceglie `choice` (di default `secrets.choice`, casuale crittografico): nei test si inietta una funzione
+    deterministica. Rispetta sempre le regole di `validate_password` (8-128 caratteri).
+    """
+    return "".join(choice(TEMP_PASSWORD_ALPHABET) for _ in range(TEMP_PASSWORD_LENGTH))
+
+
+class AdminAction(str, Enum):
+    """Azioni della dashboard sullo stato del servizio di un merchant."""
+    APPROVE = "approve"  # avvia: approva e toglie la pausa
+    PAUSE = "pause"      # metti in pausa (prova finita, abbonamento non pagato)
+    RESUME = "resume"    # riattiva dalla pausa
+
+
+def apply_admin_action(action: AdminAction, is_approved: bool, is_paused: bool) -> tuple[bool, bool]:
+    """
+    Nuovo `(is_approved, is_paused)` dopo l'azione. `APPROVE` approva e toglie la pausa (da ogni stato);
+    `PAUSE` e `RESUME` valgono solo per un negozio già approvato (la pausa non conta su un negozio in attesa):
+    su uno in attesa solleva `ConflictError` (409). Ripetere un'azione già applicata non cambia nulla.
+    """
+    if action is AdminAction.APPROVE:
+        return True, False
+    if not is_approved:
+        verb = "metterlo in pausa" if action is AdminAction.PAUSE else "riattivarlo"
+        raise ConflictError(f"Il negozio è in attesa di approvazione: avvialo prima di {verb}")
+    return True, action is AdminAction.PAUSE
+
+
+class AdminMerchantRow(BaseModel):
+    """
+    Riga della lista admin. Solo dati che il founder deve vedere: **mai** chiave Zernio, secret del webhook,
+    `hook_id`, hash della password o id del provider. `can_reset_password` dice se il negozio ha una credenziale.
+    """
+
+    id: int
+    business_name: str
+    email: str
+    contact_phone: Optional[str] = None
+    created_at: datetime
+    service_state: ServiceState
+    instagram_status: InstagramStatus
+    instagram_username: Optional[str] = None
+    cards_count: int
+    month_points: int
+    can_reset_password: bool
+
+
+def admin_row(merchant, cards_count: int, month_points: int) -> AdminMerchantRow:
+    """
+    Riga della lista admin di un merchant (`Merchant` o qualunque oggetto con gli stessi attributi). Funzione pura:
+    conteggi e punti del mese arrivano già calcolati. `created_at` senza fuso (SQLite) vale UTC.
+    """
+    return AdminMerchantRow(
+        id=merchant.id,
+        business_name=merchant.business_name,
+        email=merchant.email,
+        contact_phone=merchant.contact_phone,
+        created_at=_as_utc(merchant.created_at),
+        service_state=service_state(merchant.is_approved, merchant.is_paused),
+        instagram_status=merchant.instagram_status,
+        instagram_username=merchant.instagram_username,
+        cards_count=cards_count,
+        month_points=month_points,
+        can_reset_password=bool(merchant.auth_user_id),
     )
 
 
@@ -285,7 +390,6 @@ def instagram_panel(
 # --- Shell ---
 
 import logging  # noqa: E402
-import secrets  # noqa: E402
 
 import httpx  # noqa: E402
 from sqlalchemy.exc import IntegrityError  # noqa: E402
@@ -295,12 +399,13 @@ from app.core import crypto  # noqa: E402
 from app.core.auth import AuthProvider, PasswordAdminProvider, login_failure_message, login_throttle, login_throttle_key  # noqa: E402
 from app.core.config import settings  # noqa: E402
 from app.core.errors import (  # noqa: E402
-    AuthError, ConflictError, DomainError, ExternalServiceError, ForbiddenError, NotFoundError,
+    AuthError, DomainError, ExternalServiceError, ForbiddenError, NotFoundError,
 )
 from app.core.money import euro_to_cents  # noqa: E402
+from app.core.security import create_admin_session_token  # noqa: E402
 from app.models.models import Merchant, ZernioSendCounter  # noqa: E402
 from app.services import tree_service, zernio_service  # noqa: E402
-from app.services.db_crud import merchant_crud  # noqa: E402
+from app.services.db_crud import card_crud, merchant_crud  # noqa: E402
 from app.services.instagram_service import MENU_ITEM_TITLE  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -419,6 +524,93 @@ def update_merchant_as_admin(session: Session, merchant: Merchant, changes: dict
     if overrides:
         tree_service.effective_thresholds(merchant, overrides)
     return merchant_crud.update_merchant(session, merchant, changes)
+
+
+# --- Shell: dashboard admin ---
+
+def login_admin(password: object, *, now: datetime, throttle=login_throttle) -> str:
+    """
+    Accesso alla dashboard con `ADMIN_SECRET_KEY` (confronto in tempo costante, `admin_key_matches`). Ritorna il
+    token di sessione admin (12 ore). Stesso freno del login dei merchant con chiave fissa `admin`: il controllo
+    precede la verifica (a soglia anche la password giusta riceve 429), ogni errore conta, il successo azzera.
+    Solleva `TooManyAttemptsError` (429) e `AuthError` (401); la password non finisce mai in messaggi o log.
+    """
+    throttle.check(ADMIN_THROTTLE_KEY, now, ADMIN_LOCK_SUFFIX)
+    if not admin_key_matches(password, settings.ADMIN_SECRET_KEY):
+        failures = throttle.record_failure(ADMIN_THROTTLE_KEY, now)
+        raise AuthError(admin_login_failure_message(failures))
+    throttle.clear(ADMIN_THROTTLE_KEY)
+    return create_admin_session_token()
+
+
+def get_merchant_for_admin(session: Session, merchant_id: int) -> Merchant:
+    """Il merchant per id; `NotFoundError` (404) se non esiste."""
+    merchant = merchant_crud.get_merchant_by_id(session, merchant_id)
+    if merchant is None:
+        raise NotFoundError("Merchant non trovato")
+    return merchant
+
+
+def _admin_rows(session: Session, merchants: list[Merchant], now: datetime) -> list[AdminMerchantRow]:
+    """Righe admin per i merchant dati: carte e punti del mese UTC con due sole query raggruppate."""
+    ids = [m.id for m in merchants]
+    cards = card_crud.count_cards_by_merchant(session, ids)
+    points = tree_service.pool_points_by_merchant(session, ids, tree_service.period_for(now))
+    return [admin_row(m, cards.get(m.id, 0), points.get(m.id, 0)) for m in merchants]
+
+
+def list_admin_merchants(session: Session, now: datetime) -> list[AdminMerchantRow]:
+    """Lista della dashboard: i merchant dal più recente (al massimo 200), con stato, carte e punti del mese."""
+    return _admin_rows(session, merchant_crud.get_newest_merchants(session, ADMIN_LIST_LIMIT), now)
+
+
+def admin_row_for(session: Session, merchant: Merchant, now: datetime) -> AdminMerchantRow:
+    """Riga admin di un solo merchant (risposta delle azioni, così la pagina aggiorna la riga)."""
+    return _admin_rows(session, [merchant], now)[0]
+
+
+def set_merchant_state(session: Session, merchant: Merchant, action: AdminAction) -> Merchant:
+    """
+    Applica un'azione della dashboard (`apply_admin_action`): salva `is_approved` e `is_paused` solo se
+    cambiano. `ConflictError` per pausa o riattivazione di un negozio in attesa.
+    """
+    is_approved, is_paused = apply_admin_action(action, merchant.is_approved, merchant.is_paused)
+    if (is_approved, is_paused) == (merchant.is_approved, merchant.is_paused):
+        return merchant
+    return merchant_crud.update_merchant(session, merchant, {"is_approved": is_approved, "is_paused": is_paused})
+
+
+def approve_merchant(session: Session, merchant: Merchant) -> Merchant:
+    """Approva un merchant e ne toglie la pausa (stessa azione «Avvia» della dashboard e dell'API admin)."""
+    return set_merchant_state(session, merchant, AdminAction.APPROVE)
+
+
+def reset_merchant_password(
+    provider: AuthProvider,
+    merchant: Merchant,
+    *,
+    throttle=login_throttle,
+    choice: Callable[[str], str] = secrets.choice,
+) -> str:
+    """
+    Reset da parte del founder: genera una password temporanea, la imposta col provider (`set_password`: le sessioni
+    aperte del merchant decadono) e ne azzera il freno del login, altrimenti chi si è bloccato (il 429 gli dice di
+    chiedere il reset) non potrebbe usarla per 15 minuti. Ritorna la password: l'unico posto dove esiste in chiaro
+    è la risposta; non si salva né si logga. `InvalidInputError` (400) se il provider non gestisce le password,
+    `ConflictError` (409) se il negozio non ha una credenziale (creato dall'API admin).
+    """
+    if not isinstance(provider, PasswordAdminProvider):
+        raise InvalidInputError("Il reset della password non è disponibile con questo provider di accesso")
+    no_credential = "Questo negozio non ha una credenziale (creato dall'API admin): non può accedere né reimpostare la password"
+    if not merchant.auth_user_id:
+        raise ConflictError(no_credential)
+    temporary = generate_temporary_password(choice)
+    try:
+        provider.set_password(merchant.auth_user_id, temporary)
+    except NotFoundError:
+        raise ConflictError(no_credential) from None
+    throttle.clear(login_throttle_key(merchant.email))
+    return temporary
 
 
 # --- Shell: onboarding Instagram ---

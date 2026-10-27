@@ -79,7 +79,7 @@
             {% elif ig_state == 'awaiting_test_dm' %}
             <div class="bg-green-50 rounded-2xl p-4 space-y-1">
                 <p class="text-sm font-bold text-green-800">Quasi fatto! Ultimo passo: la prova</p>
-                <p class="text-sm text-green-800">Scrivi {{ instagram.keyword }} al tuo negozio{% if instagram.username %} (@{{ instagram.username }}){% endif %} da un altro profilo Instagram: quando la carta arriva, la funzione è attiva.</p>
+                <p class="text-sm text-green-800">Scrivi {{ instagram.keyword }} al tuo negozio{% if instagram.username %} (@{{ instagram.username }}){% endif %} da un altro profilo Instagram: quando la carta arriva, il collegamento con Zernio è completo.</p>
             </div>
             {% if instagram.key_masked %}<p class="text-xs text-slate-400">Chiave Zernio <span class="font-mono">{{ instagram.key_masked }}</span></p>{% endif %}
             <div class="grid grid-cols-2 gap-3">
@@ -95,7 +95,7 @@
 
             {% elif ig_state == 'active' %}
             <div class="space-y-1">
-                <span class="inline-block text-xs font-bold px-3 py-1 rounded-full bg-green-100 text-green-700">Attivo ✅</span>
+                <span class="inline-block text-xs font-bold px-3 py-1 rounded-full bg-green-100 text-green-700">Collegato con Zernio ✅</span>
                 {% if instagram.username %}<p class="font-black text-slate-800">@{{ instagram.username }}</p>{% endif %}
                 {% if instagram.key_masked %}<p class="text-xs text-slate-400">Chiave Zernio <span class="font-mono">{{ instagram.key_masked }}</span></p>{% endif %}
             </div>

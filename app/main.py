@@ -20,6 +20,7 @@ from app.core.logging_filters import install_access_log_filter
 from app.version import get_version
 
 # Import dei router
+from app.routes.admin import router as admin_router
 from app.routes.consumer.views import router as consumer_views_router
 from app.routes.merchant.api import router as merchant_api_router
 from app.routes.merchant.auth import router as merchant_auth_router
@@ -83,6 +84,7 @@ engine = create_engine(
 
 
 # --- Router ---
+app.include_router(admin_router)                 # /admin: dashboard del founder (login, lista, azioni)
 app.include_router(consumer_views_router)        # GET /c/{token}, /privacy
 app.include_router(merchant_api_router, prefix="/api") # POST /api/merchant/create
 app.include_router(merchant_auth_router)         # POST /merchant/login, GET /merchant/logout

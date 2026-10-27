@@ -1,7 +1,8 @@
 """
 Chiamate reali a Zernio per il collaudo manuale: elenco account, conversazioni, invio della card e del testo
-di ripiego. La chiave arriva da `ZERNIO_CHECK_API_KEY` oppure da una richiesta a video (mai da argomento della
-riga di comando: finirebbe nella history), oppure è quella salvata di un negozio (`--merchant-id`). Si mostra
+di ripiego. La chiave arriva da `ZERNIO_CHECK_API_KEY` (campo opzionale di `Settings`: la legge pydantic-settings
+dall'ambiente o dal `.env`, quindi basta scriverla nel `.env`) oppure da una richiesta a video (mai da argomento
+della riga di comando: finirebbe nella history), oppure è quella salvata di un negozio (`--merchant-id`). Si mostra
 solo mascherata (`…1234`).
 
 Utilizzo (dalla root del progetto):
@@ -22,7 +23,6 @@ import argparse
 import asyncio
 import getpass
 import logging
-import os
 import sys
 import uuid
 from typing import Optional
@@ -73,8 +73,11 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _read_key() -> str:
-    """Chiave da env o da `getpass` (non si vede a video); stringa vuota se non fornita."""
-    return (os.environ.get(KEY_ENV) or "").strip() or getpass.getpass("Chiave Zernio: ").strip()
+    """
+    Chiave da `settings.ZERNIO_CHECK_API_KEY` (ambiente o `.env`, letta a ogni chiamata) o da `getpass` (non si
+    vede a video); stringa vuota se non fornita. Il valore non si stampa mai: solo `mask_secret` più avanti.
+    """
+    return settings.ZERNIO_CHECK_API_KEY.get_secret_value().strip() or getpass.getpass("Chiave Zernio: ").strip()
 
 
 def _print_merchant_status(session: Session, merchant: Merchant) -> None:

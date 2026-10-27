@@ -34,15 +34,18 @@ class AuthError(DomainError):
 class TooManyAttemptsError(DomainError):
     """
     Troppi tentativi di accesso falliti (HTTP 429). `retry_after` sono i secondi di attesa,
-    arrotondati per eccesso (finiscono nell'header `Retry-After`).
+    arrotondati per eccesso (finiscono nell'header `Retry-After`). `suffix` chiude il messaggio: di default
+    l'invito del merchant a chiedere il reset al founder; l'accesso admin ne passa uno suo.
     """
 
-    def __init__(self, retry_after: int) -> None:
+    DEFAULT_SUFFIX = "oppure chiedi al founder di reimpostare la password"
+
+    def __init__(self, retry_after: int, suffix: str = DEFAULT_SUFFIX) -> None:
         self.retry_after = max(1, int(retry_after))
         minutes = -(-self.retry_after // 60)
         super().__init__(
-            f"Troppi tentativi di accesso: riprova tra {minutes} minut{'o' if minutes == 1 else 'i'}, "
-            "oppure chiedi al founder di reimpostare la password"
+            f"Troppi tentativi di accesso: riprova tra {minutes} minut{'o' if minutes == 1 else 'i'}"
+            + (f", {suffix}" if suffix else "")
         )
 
 

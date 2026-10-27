@@ -1,7 +1,7 @@
 """
 Smoke test per l'applicazione Fidelitree in produzione.
-Verifica che API, database, pagine principali, PWA merchant e webhook siano al loro posto e che le pagine del
-vecchio flusso cliente non esistano più.
+Verifica che API, database, pagine principali, PWA merchant, webhook e dashboard admin (`/admin`) siano al loro
+posto e che le pagine del vecchio flusso cliente non esistano più.
 NON pianta alberi e NON invia messaggi: niente scan, niente chiusura del periodo, nessuna chiamata a Zernio
 (il webhook si prova con un `hook_id` inesistente: risponde 404 prima di leggere firma o corpo). Crea e cancella
 solo un merchant di prova tramite l'API admin.
@@ -94,6 +94,18 @@ def run_smoke_test(base_url: str, admin_key: str, http=requests) -> bool:
             check(f"Pagina vecchia {page} rimossa", resp.status_code == 404, f"status {resp.status_code} (atteso 404)")
         except Exception as e:
             check(f"Pagina vecchia {page} rimossa", False, str(e))
+
+    # 5b. Dashboard admin: login raggiungibile, API chiusa senza credenziali, aperta con X-Admin-Key
+    try:
+        resp = http.get(f"{base_url}/admin/login", timeout=10)
+        check("Pagina /admin/login raggiungibile", _is_html(resp), f"status {resp.status_code}")
+        resp = http.get(f"{base_url}/admin/api/merchants", timeout=10)
+        check("API admin: lista senza credenziali rifiutata", resp.status_code == 401,
+              f"status {resp.status_code} (atteso 401)")
+        resp = http.get(f"{base_url}/admin/api/merchants", headers=headers, timeout=10)
+        check("API admin: lista con X-Admin-Key", resp.status_code == 200, f"status {resp.status_code}")
+    except Exception as e:
+        check("Dashboard admin", False, str(e))
 
     # 6. Ciclo di vita merchant via API admin (crea -> leggi -> elimina)
     print("--- Test API & Database ---")

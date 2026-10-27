@@ -4,11 +4,13 @@ Tutto su SQLite in-memory (fixture `session`/`client`), senza rete e senza Ecolo
 """
 
 import json
+import os
 import re
 from datetime import datetime, timedelta, timezone
 
 import httpx
 import pytest
+from pydantic import SecretStr
 from sqlalchemy import inspect
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -220,6 +222,10 @@ class _SmokeHttp:
     ("GET", "/privacy", httpx.Response(404)),
     ("GET", "/sw.js", httpx.Response(404)),
     ("GET", "/health", httpx.Response(200, json={"status": "ok", "version": "0.2.1"})),
+    ("GET", "/admin/login", httpx.Response(404)),
+    ("GET", "/admin/login", httpx.Response(200, json={})),                    # 200 ma non HTML
+    ("GET", "/admin/api/merchants", httpx.Response(200, json={"merchants": []})),  # senza credenziali deve dare 401
+    ("GET", "/admin/api/merchants", httpx.Response(401, json={"detail": "x"})),    # con X-Admin-Key deve dare 200
 ])
 def test_smoke_test_fallisce_se_una_risposta_non_e_quella_attesa(client, method, path, response):
     http = _SmokeHttp(client, {(method, path): response})
@@ -342,8 +348,8 @@ ZERNIO_KEY = "sk_" + "cd34" * 16
 
 @pytest.fixture()
 def zernio_http(monkeypatch):
-    """Chiave da env e httpx mockato: ritorna la lista delle richieste viste da Zernio."""
-    monkeypatch.setenv("ZERNIO_CHECK_API_KEY", ZERNIO_KEY)
+    """Chiave da `settings.ZERNIO_CHECK_API_KEY` e httpx mockato: ritorna la lista delle richieste viste da Zernio."""
+    monkeypatch.setattr(settings, "ZERNIO_CHECK_API_KEY", SecretStr(ZERNIO_KEY))
     monkeypatch.setattr(zernio_check.getpass, "getpass", lambda prompt="": "")
     seen = []
 
@@ -381,7 +387,7 @@ def test_zernio_check_accounts_con_chiave_da_env(zernio_http, capsys):
 
 
 def test_zernio_check_accounts_401(monkeypatch, capsys):
-    monkeypatch.setenv("ZERNIO_CHECK_API_KEY", ZERNIO_KEY)
+    monkeypatch.setattr(settings, "ZERNIO_CHECK_API_KEY", SecretStr(ZERNIO_KEY))
     real = httpx.AsyncClient
     monkeypatch.setattr(
         zernio_service.httpx, "AsyncClient",
@@ -397,7 +403,7 @@ def test_zernio_check_accounts_401(monkeypatch, capsys):
 
 
 def test_zernio_check_chiave_mancante(zernio_http, monkeypatch, capsys):
-    monkeypatch.delenv("ZERNIO_CHECK_API_KEY")
+    monkeypatch.setattr(settings, "ZERNIO_CHECK_API_KEY", SecretStr(""))
 
     assert zernio_check.main(["accounts"]) == 1
 
@@ -406,13 +412,52 @@ def test_zernio_check_chiave_mancante(zernio_http, monkeypatch, capsys):
 
 
 def test_zernio_check_chiede_la_chiave_a_video_se_manca_l_env(zernio_http, monkeypatch, capsys):
-    monkeypatch.delenv("ZERNIO_CHECK_API_KEY")
+    monkeypatch.setattr(settings, "ZERNIO_CHECK_API_KEY", SecretStr(""))
     monkeypatch.setattr(zernio_check.getpass, "getpass", lambda prompt="": ZERNIO_KEY)
 
     assert zernio_check.main(["accounts"]) == 0
 
     assert zernio_http[0].headers["Authorization"] == f"Bearer {ZERNIO_KEY}"
     assert ZERNIO_KEY not in capsys.readouterr().out
+
+
+def _settings_from_env_file(tmp_path, monkeypatch, extra: str = ""):
+    """
+    `Settings` letta da un `.env` temporaneo con valori finti (mai il vero `.env`). Le env var vincono sul file,
+    quindi `ZERNIO_CHECK_API_KEY` si toglie dall'ambiente del test: così conta solo ciò che c'è nel file.
+    """
+    from app.core.config import Settings
+    monkeypatch.delenv("ZERNIO_CHECK_API_KEY", raising=False)
+    env_file = tmp_path / "prova.env"
+    env_file.write_text(
+        "DATABASE_URL=sqlite://\nJWT_SECRET_KEY=jwt-finta\nADMIN_SECRET_KEY=admin-finta\n"
+        "ENCRYPTION_KEY=dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcy0hISE=\nIGSID_HMAC_KEY=igsid-finta\n"
+        "CARD_LINK_KEY=link-finta\n" + extra,
+        encoding="utf-8",
+    )
+    return Settings(_env_file=str(env_file))
+
+
+def test_zernio_check_api_key_e_opzionale_e_segreta(tmp_path, monkeypatch):
+    loaded = _settings_from_env_file(tmp_path, monkeypatch)
+
+    assert isinstance(loaded.ZERNIO_CHECK_API_KEY, SecretStr)
+    assert loaded.ZERNIO_CHECK_API_KEY.get_secret_value() == ""  # senza valore l'app parte comunque
+
+
+def test_zernio_check_legge_la_chiave_dal_dotenv_e_non_la_mostra(tmp_path, monkeypatch, zernio_http, capsys):
+    """La chiave scritta nel `.env` (non nell'ambiente) arriva allo script, che non la chiede a video né la stampa."""
+    loaded = _settings_from_env_file(tmp_path, monkeypatch, extra=f"ZERNIO_CHECK_API_KEY={ZERNIO_KEY}\n")
+    assert "ZERNIO_CHECK_API_KEY" not in os.environ
+    assert ZERNIO_KEY not in repr(loaded) and ZERNIO_KEY not in str(loaded.model_dump())
+    monkeypatch.setattr(zernio_check, "settings", loaded)
+    monkeypatch.setattr(zernio_check.getpass, "getpass", lambda prompt="": pytest.fail("la chiave va letta dal .env"))
+
+    assert zernio_check.main(["accounts"]) == 0
+
+    assert zernio_http[0].headers["Authorization"] == f"Bearer {ZERNIO_KEY}"
+    captured = capsys.readouterr()
+    assert "…cd34" in captured.out and ZERNIO_KEY not in captured.out + captured.err
 
 
 def test_zernio_check_non_accetta_la_chiave_da_riga_di_comando(zernio_http, capsys):
@@ -500,7 +545,7 @@ def test_zernio_check_merchant_mostra_stato_e_chiave_mascherata(zernio_http, ins
 
 
 def test_zernio_check_merchant_non_chiede_la_chiave_a_video(zernio_http, instagram_merchant, session, monkeypatch):
-    monkeypatch.delenv("ZERNIO_CHECK_API_KEY")
+    monkeypatch.setattr(settings, "ZERNIO_CHECK_API_KEY", SecretStr(""))
 
     def no_prompt(prompt=""):
         raise AssertionError("la chiave del negozio non si chiede a video")
@@ -756,6 +801,15 @@ def test_replay_webhook_contro_l_app_vera_crea_la_carta(client, session, instagr
     assert code == 0
     assert _count(session, Card) == 1
     assert len(zernio_mock.requests) == 1
+
+
+def test_smoke_test_controlla_la_dashboard_admin(client, mock_ecologi, capsys):
+    assert run_smoke_test("", settings.ADMIN_SECRET_KEY, http=client) is True
+
+    out = capsys.readouterr().out
+    assert "[OK] Pagina /admin/login raggiungibile" in out
+    assert "[OK] API admin: lista senza credenziali rifiutata" in out
+    assert "[OK] API admin: lista con X-Admin-Key" in out
 
 
 def test_smoke_test_controlla_la_carta_di_prova(client, mock_ecologi, capsys):

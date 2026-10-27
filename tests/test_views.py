@@ -253,6 +253,22 @@ def test_settings_instagram_attivo_mostra_account_chiave_mascherata_e_quota(auth
     assert 'id="zernio-key"' not in section and "data-warning" not in section
 
 
+def test_settings_instagram_collegato_si_chiama_collegato_con_zernio_non_attivo(auth_client, session, merchant):
+    """«Attivo» è lo stato del SERVIZIO (approvato, non in pausa): lo stato Instagram si chiama «Collegato con Zernio»."""
+    _collega(session, merchant, InstagramStatus.ACTIVE)
+    section = _instagram_section(auth_client.get("/merchant/settings").text)
+
+    assert "Collegato con Zernio" in section and "Attivo" not in section
+    assert 'data-state="active"' in section  # il valore interno non cambia
+
+
+def test_settings_instagram_in_attesa_del_dm_non_dice_che_la_funzione_e_attiva(auth_client, session, merchant):
+    _collega(session, merchant, InstagramStatus.AWAITING_TEST_DM)
+    section = _instagram_section(auth_client.get("/merchant/settings").text)
+
+    assert "il collegamento con Zernio è completo" in section and "è attiva" not in section
+
+
 def test_settings_instagram_chiave_non_valida_banner_rosso_e_nuovo_campo(auth_client, session, merchant):
     _collega(session, merchant, InstagramStatus.KEY_INVALID)
     section = _instagram_section(auth_client.get("/merchant/settings").text)

@@ -216,11 +216,14 @@ async def approve_merchant(
     merchant_id: int,
     session: Session = Depends(get_session)
 ):
-    """Approva un merchant: da questo momento il suo pool conta per la piantumazione."""
+    """
+    Approva un merchant e ne toglie la pausa (come «Avvia» della dashboard `/admin`): da questo momento è attivo
+    e il suo pool conta per la piantumazione.
+    """
     merchant = merchant_crud.get_merchant_by_id(session, merchant_id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant non trovato")
-    return merchant_crud.update_merchant(session, merchant, {"is_approved": True})
+    return merchant_service.approve_merchant(session, merchant)
 
 
 @router.delete("/{merchant_id}", dependencies=[Depends(require_admin_key)])

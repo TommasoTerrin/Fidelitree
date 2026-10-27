@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, computed_f
 from typing import Annotated, Any, Optional, Literal
 
 from app.core.money import cents_to_euro
-from app.services.merchant_service import InstagramPanel
+from app.services.merchant_service import AdminMerchantRow, InstagramPanel
 from app.services.tree_service import LevelThresholds
 
 NonBlankStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
@@ -50,6 +50,7 @@ class MerchantUpdateRequest(BaseModel):
     contact_phone: Optional[str] = None
     type: Optional[Literal['test', 'free', 'pro']] = None
     is_approved: Optional[bool] = None
+    is_paused: Optional[bool] = None
     bronze_threshold: Optional[int] = Field(default=None, ge=1)
     silver_threshold: Optional[int] = Field(default=None, ge=1)
     gold_threshold: Optional[int] = Field(default=None, ge=1)
@@ -77,6 +78,7 @@ class MerchantResponse(BaseModel):
     contact_phone: Optional[str] = None
     type: str
     is_approved: bool
+    is_paused: bool
     conversion_enabled: bool
     conversion_threshold: int
     conversion_value_cents: int = Field(exclude=True)
@@ -94,6 +96,20 @@ class MerchantResponse(BaseModel):
 class MerchantProfileResponse(MerchantResponse):
     """Profilo del merchant autenticato: in più le soglie EFFETTIVE dei livelli (default + override)."""
     effective_thresholds: LevelThresholds
+
+
+class AdminMerchantsResponse(BaseModel):
+    """Lista della dashboard admin: una riga per merchant (`AdminMerchantRow`: nessun segreto)."""
+    merchants: list[AdminMerchantRow]
+
+
+class AdminResetPasswordResponse(BaseModel):
+    """
+    Risposta del reset della password: la password temporanea compare **solo qui**, una volta. Fuori dal
+    `repr` (un log accidentale dell'oggetto non la stampa).
+    """
+    merchant_id: int
+    temporary_password: str = Field(repr=False)
 
 
 class InstagramKeyRequest(BaseModel):

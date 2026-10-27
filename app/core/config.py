@@ -8,7 +8,7 @@ import base64
 import binascii
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     INSTAGRAM_CARD_KEYWORD: str = "CARTA"            # parola chiave di piattaforma che il cliente scrive in DM
     ZERNIO_MONTHLY_SEND_LIMIT: int = 10000           # invii gratuiti al mese per team Zernio (solo per l'avviso)
     ZERNIO_SEND_WARN_PERCENT: int = 75               # soglia di avviso nel pannello del merchant (%)
+    # Solo per `scripts.zernio_check` (collaudo locale): chiave Zernio di prova. Vuota = lo script la chiede a video.
+    # SecretStr: non compare in repr né nei log; non serve in produzione.
+    ZERNIO_CHECK_API_KEY: SecretStr = SecretStr("")
 
     @field_validator("ENCRYPTION_KEY")
     @classmethod

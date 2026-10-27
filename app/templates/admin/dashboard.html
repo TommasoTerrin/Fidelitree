@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex">
+    <title>Dashboard admin - Fidelitree</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-slate-50 min-h-screen p-6 font-sans">
+    <div class="max-w-3xl mx-auto space-y-6">
+
+        <div class="flex justify-between items-center">
+            <h1 class="text-xl font-black text-slate-800">Dashboard admin 🌳</h1>
+            <a href="/admin/logout" class="text-xs bg-slate-900 text-white px-4 py-2 rounded-xl font-bold">Esci</a>
+        </div>
+
+        <!-- Password temporanea: compare solo dopo un reset, una volta -->
+        <div id="reset-result" class="hidden bg-green-50 border border-green-200 rounded-2xl p-4 space-y-2" role="status">
+            <p class="text-sm font-bold text-green-800">Password temporanea per <span id="reset-name"></span></p>
+            <div class="flex items-center gap-2">
+                <code id="reset-password" class="flex-1 bg-white border border-green-200 rounded-xl px-3 py-2 font-mono text-lg tracking-wider text-slate-800 select-all"></code>
+                <button type="button" id="btn-copy-password"
+                    class="bg-green-600 text-white text-sm font-bold px-4 py-2 rounded-xl active:scale-95 transition-transform">Copia</button>
+            </div>
+            <p class="text-xs text-green-800">Si vede una sola volta: comunicala al merchant, che la cambierà da Impostazioni. Chiudendo questo riquadro sparisce.</p>
+            <button type="button" id="btn-close-password" class="text-xs font-bold text-green-800 underline">Chiudi</button>
+        </div>
+
+        <p id="message" class="hidden text-sm font-bold rounded-2xl p-3 border" role="alert"></p>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <input type="search" id="search" placeholder="Cerca per nome o email" autocomplete="off"
+                class="sm:col-span-2 w-full p-3 bg-white border-2 border-slate-100 rounded-xl text-sm focus:border-green-500 focus:outline-none">
+            <select id="state-filter"
+                class="w-full p-3 bg-white border-2 border-slate-100 rounded-xl text-sm focus:border-green-500 focus:outline-none">
+                <option value="">Tutti gli stati</option>
+                <option value="pending">In attesa</option>
+                <option value="active">Attivo</option>
+                <option value="paused">In pausa</option>
+            </select>
+        </div>
+
+        <p id="count" class="text-xs text-slate-400 font-bold uppercase tracking-wider"></p>
+        <div id="merchant-list" class="space-y-3"></div>
+    </div>
+
+    <script>
+        // I dati dei merchant (nome attività compreso) li scrive l'utente: la pagina costruisce il DOM solo con
+        // textContent (mai inserendo HTML da stringa), così nessun valore può eseguire codice.
+        const STATE_LABEL = { pending: 'In attesa', active: 'Attivo', paused: 'In pausa' };
+        const STATE_STYLE = {
+            pending: 'bg-yellow-100 text-yellow-800',
+            active: 'bg-green-100 text-green-700',
+            paused: 'bg-slate-200 text-slate-600',
+        };
+        const IG_LABEL = {
+            not_connected: 'Instagram non collegato',
+            awaiting_test_dm: 'Instagram: in attesa del DM di prova',
+            active: 'Collegato con Zernio',
+            key_invalid: 'Chiave Zernio non valida',
+        };
+
+        let merchants = [];
+        const listBox = document.getElementById('merchant-list');
+        const messageBox = document.getElementById('message');
+        const resetBox = document.getElementById('reset-result');
+
+        function el(tag, className, text) {
+            const node = document.createElement(tag);
+            if (className) node.className = className;
+            if (text !== undefined) node.textContent = text;
+            return node;
+        }
+
+        function showMessage(text, ok) {
+            messageBox.textContent = text;
+            messageBox.className = 'text-sm font-bold rounded-2xl p-3 border ' +
+                (ok ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-700');
+        }
+
+        function hideMessage() { messageBox.className = 'hidden'; }
+
+        function hidePassword() {
+            document.getElementById('reset-password').textContent = '';
+            document.getElementById('reset-name').textContent = '';
+            resetBox.classList.add('hidden');
+        }
+
+        // Chiamata alle API admin con il cookie di sessione. Sessione scaduta (401) → torna al login.
+        async function api(path, method) {
+            const response = await fetch(path, { method, headers: { 'Accept': 'application/json' } });
+            if (response.status === 401) {
+                window.location.href = '/admin/login';
+                throw new Error('Sessione scaduta');
+            }
+            let data = null;
+            try { data = await response.json(); } catch (e) { /* corpo non JSON */ }
+            if (!response.ok) {
+                const detail = data && typeof data.detail === 'string' ? data.detail : 'Operazione non riuscita';
+                throw new Error(detail);
+            }
+            return data;
+        }
+
+        function matchesFilters(row) {
+            const needle = document.getElementById('search').value.trim().toLowerCase();
+            const state = document.getElementById('state-filter').value;
+            if (state && row.service_state !== state) return false;
+            if (!needle) return true;
+            return row.business_name.toLowerCase().includes(needle) || row.email.toLowerCase().includes(needle);
+        }
+
+        function actionButton(label, className, onClick, disabled, title) {
+            const button = el('button', 'text-xs font-bold px-3 py-2 rounded-xl active:scale-95 transition-transform ' + className, label);
+            button.type = 'button';
+            button.disabled = !!disabled;
+            if (disabled) button.classList.add('opacity-40');
+            if (title) button.title = title;
+            button.addEventListener('click', onClick);
+            return button;
+        }
+
+        function renderRow(row) {
+            const card = el('div', 'bg-white p-5 rounded-[2rem] shadow-sm border border-slate-100 space-y-3');
+            card.dataset.merchantId = String(row.id);
+            card.dataset.state = row.service_state;
+
+            const head = el('div', 'flex justify-between items-start gap-3');
+            const who = el('div', 'min-w-0');
+            who.appendChild(el('h2', 'font-black text-slate-800 break-words', row.business_name));
+            who.appendChild(el('p', 'text-sm text-slate-500 break-all', row.email));
+            who.appendChild(el('p', 'text-sm text-slate-500', row.contact_phone || 'Telefono non indicato'));
+            head.appendChild(who);
+            head.appendChild(el('span', 'shrink-0 text-xs font-bold px-3 py-1 rounded-full ' + (STATE_STYLE[row.service_state] || ''),
+                STATE_LABEL[row.service_state] || row.service_state));
+            card.appendChild(head);
+
+            const created = new Date(row.created_at).toLocaleDateString('it-IT');
+            const instagram = (IG_LABEL[row.instagram_status] || row.instagram_status) +
+                (row.instagram_username ? ' (@' + row.instagram_username + ')' : '');
+            card.appendChild(el('p', 'text-xs text-slate-400',
+                'Iscritto il ' + created + ' · ' + instagram + ' · ' + row.cards_count + ' carte · ' + row.month_points + ' punti del mese'));
+
+            const actions = el('div', 'flex flex-wrap gap-2');
+            if (row.service_state === 'pending') {
+                actions.appendChild(actionButton('Avvia', 'bg-green-600 text-white', () => runAction(row, 'approve')));
+            } else if (row.service_state === 'active') {
+                actions.appendChild(actionButton('Metti in pausa', 'bg-slate-100 text-slate-700', () => runAction(row, 'pause',
+                    'Mettere in pausa ' + row.business_name + '? Potrà solo togliere punti e cashback.')));
+            } else {
+                actions.appendChild(actionButton('Riattiva', 'bg-green-600 text-white', () => runAction(row, 'resume')));
+            }
+            actions.appendChild(actionButton('Reimposta password', 'bg-slate-900 text-white', () => resetPassword(row),
+                !row.can_reset_password, row.can_reset_password ? '' : 'Questo negozio non ha una password (creato dall\'API admin)'));
+            card.appendChild(actions);
+            return card;
+        }
+
+        function render() {
+            const rows = merchants.filter(matchesFilters);
+            listBox.replaceChildren(...rows.map(renderRow));
+            document.getElementById('count').textContent = rows.length + ' di ' + merchants.length + ' merchant';
+            if (!rows.length) listBox.appendChild(el('p', 'text-sm text-slate-400 text-center py-8',
+                merchants.length ? 'Nessun merchant corrisponde ai filtri' : 'Nessun merchant iscritto'));
+        }
+
+        async function load() {
+            try {
+                merchants = (await api('/admin/api/merchants', 'GET')).merchants;
+                render();
+            } catch (error) {
+                showMessage(error.message, false);
+            }
+        }
+
+        async function runAction(row, action, confirmText) {
+            if (confirmText && !window.confirm(confirmText)) return;
+            hideMessage();
+            try {
+                const updated = await api('/admin/api/merchants/' + row.id + '/' + action, 'POST');
+                merchants = merchants.map((m) => (m.id === updated.id ? updated : m));
+                render();
+            } catch (error) {
+                showMessage(error.message, false);
+            }
+        }
+
+        async function resetPassword(row) {
+            if (!window.confirm('Reimpostare la password di ' + row.business_name + '? La vecchia password e le sessioni aperte smettono di valere.')) return;
+            hideMessage();
+            hidePassword();
+            try {
+                const data = await api('/admin/api/merchants/' + row.id + '/reset-password', 'POST');
+                document.getElementById('reset-name').textContent = row.business_name;
+                document.getElementById('reset-password').textContent = data.temporary_password;
+                resetBox.classList.remove('hidden');
+                resetBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } catch (error) {
+                showMessage(error.message, false);
+            }
+        }
+
+        document.getElementById('btn-copy-password').addEventListener('click', async () => {
+            const password = document.getElementById('reset-password').textContent;
+            try {
+                await navigator.clipboard.writeText(password);
+                showMessage('Password copiata', true);
+            } catch (e) {
+                // Senza permesso sulla clipboard: si seleziona il testo, basta Ctrl+C
+                const range = document.createRange();
+                range.selectNodeContents(document.getElementById('reset-password'));
+                const selection = window.getSelection();
+                selection.removeAllRanges();
+                selection.addRange(range);
+                showMessage('Copia non riuscita: la password è selezionata, premi Ctrl+C', false);
+            }
+        });
+        document.getElementById('btn-close-password').addEventListener('click', hidePassword);
+        document.getElementById('search').addEventListener('input', render);
+        document.getElementById('state-filter').addEventListener('change', render);
+
+        load();
+    </script>
+</body>
+
+</html>

@@ -30,7 +30,7 @@ from app.core.errors import AuthError, InvalidInputError, NotFoundError, TooMany
 from app.core.security import create_jwt_token, decode_jwt_token
 
 __all__ = [
-    "AuthError", "AuthIdentity", "AuthProvider", "DevAuthProvider", "LocalAuthProvider", "LoginThrottle",
+    "AuthError", "AuthIdentity", "AuthProvider", "DevAuthProvider", "LocalAuthProvider", "LoginThrottle", "admin_key_matches",
     "PasswordAdminProvider", "SupabaseAuthProvider", "dev_user_id", "get_auth_provider", "hash_password",
     "login_failure_message", "login_throttle", "login_throttle_key", "validate_password", "verify_password",
 ]
@@ -117,6 +117,20 @@ def verify_password(password: str, stored_hash: str) -> bool:
 def normalize_email(email: str) -> str:
     """Email in minuscolo e senza spazi ai lati (stessa regola di registrazione e login)."""
     return email.strip().lower()
+
+
+def admin_key_matches(provided: object, expected: object) -> bool:
+    """
+    `True` se la chiave presentata coincide con `ADMIN_SECRET_KEY`: confronto in tempo costante
+    (`hmac.compare_digest` sui byte UTF-8). Fallisce chiuso: se la chiave configurata è vuota o uno dei due
+    valori non è testo, ritorna `False` (una chiave vuota non deve far entrare una password vuota).
+    """
+    if not isinstance(provided, str) or not isinstance(expected, str) or not expected:
+        return False
+    try:
+        return hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8"))
+    except UnicodeEncodeError:  # surrogato isolato arrivato da un JSON: non può coincidere
+        return False
 
 
 def login_throttle_key(email: str) -> str:
@@ -439,11 +453,14 @@ class LoginThrottle:
         """Dimentica tutti gli errori (usato dai test)."""
         self._failures.clear()
 
-    def check(self, key: str, now: datetime) -> None:
-        """Solleva `TooManyAttemptsError` (429) con l'attesa se la chiave è a soglia."""
+    def check(self, key: str, now: datetime, suffix: str = TooManyAttemptsError.DEFAULT_SUFFIX) -> None:
+        """
+        Solleva `TooManyAttemptsError` (429) con l'attesa se la chiave è a soglia; `suffix` chiude il messaggio
+        (di default l'invito al reset del merchant, l'accesso admin ne passa uno suo).
+        """
         wait = login_retry_after(self._failures.get(key, []), now)
         if wait is not None:
-            raise TooManyAttemptsError(int(wait.total_seconds()) + 1)
+            raise TooManyAttemptsError(int(wait.total_seconds()) + 1, suffix)
 
     def record_failure(self, key: str, now: datetime) -> int:
         """Registra un errore sulla chiave, scartando quelli fuori finestra; ritorna gli errori recenti (questo compreso)."""
