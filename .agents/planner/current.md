@@ -12,10 +12,11 @@
 alberi), mai rilasciata. Dopo v0.3.0 l'app è funzionalmente quella descritta in AGENTS.md; la strada verso la
 versione "a regime" è nella [roadmap](roadmap.md).
 
-**Stato (2026-10-27)**: codice dei ticket 01-10 completo (767 test verdi). Il 2026-10-27 l'utente ha deciso di aggiungere
+**Stato (2026-10-27)**: codice dei ticket 01-11 completo (874 test verdi). Il 2026-10-27 l'utente ha deciso di aggiungere
 **tre ticket prima del pilota** (11 auth locale, 12 stato del servizio, 13 dashboard admin): in produzione i merchant non
 potevano accedere e il founder deve poter approvare, mettere in pausa e reimpostare le password. Il vecchio ticket 11 è il
-**14**. **Pronta al merge dopo** i ticket 11-13, il collaudo end-to-end del founder (procedura in
+**14**. **Il ticket 11 è fatto** (i merchant possono registrarsi, accedere e cambiare la password con `AUTH_PROVIDER=local`);
+restano 12 e 13. **Pronta al merge dopo** i ticket 12-13, il collaudo end-to-end del founder (procedura in
 [deploy.md](../workflows/deploy.md), esiti in [zernio-notes.md](../architecture/zernio-notes.md)) e l'ok esplicito
 dell'utente: nessun merge su `develop`/`main` e nessun tag prima. **v0.2.1 è assorbito da v0.3.0**: nessun merge
 separato, `develop` oggi è alla v0.2.1 mai rilasciata e verrà superata dal merge di `feature/instagram-cards`.
@@ -37,7 +38,7 @@ Contesto di riferimento: decisioni in [AGENTS.md](../../AGENTS.md), vincoli Zern
 | 08 | Pagina carta, QR, scan e PWA merchant | ✅ 2026-10-26 (793 test); prova manuale del founder riuscita (link `/c/<token>`, scan dalla PWA con aggiunta di punti, PWA installata, redirect al login) |
 | 09 | Rimozione del vecchio flusso cliente (OTP, wallet, `/join`, `Customer`) | ✅ 2026-10-26 (744 test) |
 | 10 | Seed, smoke test e script | ✅ 2026-10-26 (766 test) |
-| 11 | Autenticazione dei merchant: provider `local` (registrazione, login, cambio password) | da fare (ticket scritto 2026-10-27) |
+| 11 | Autenticazione dei merchant: provider `local` (registrazione, login, cambio password) | ✅ 2026-10-27 `d3a32d6` (874 test); smoke su SQLite usa-e-getta con `ENVIRONMENT=production` + `AUTH_PROVIDER=local`: registrazione, login, cambio password ok |
 | 12 | Stato del servizio: approvazione, pausa e carta di prova | da fare (ticket scritto, scelte confermate dall'utente il 2026-10-27) |
 | 13 | Dashboard admin | da fare (ticket scritto) |
 | 14 | Documentazione, collaudo end-to-end e release (era l'11) | 🔶 2026-10-27: documentazione generale fatta (`65caf34`) e `replay_webhook --event-id` (`b40401a`, 767 test). Restano: collaudo Instagram del founder (si può fare subito), verifiche dei ticket 11-13, esiti in `zernio-notes.md`, ok al merge |
@@ -146,6 +147,8 @@ Note sui ticket fatti:
   usa-e-getta (porta 8011): `reset_db --force`, seed (idempotente), 4 link `/c/<token>` → 200, login del merchant del seed,
   scan +5 (10→15, pool 105→110), carta di un altro negozio 404, smoke test contro il server locale tutto OK.
 
+- **11**: `app/core/auth.py` ha ora le sezioni `# --- Core puro ---` (hash `scrypt`, `validate_password` 8-128, `login_retry_after`) e `# --- Shell ---` (`LocalAuthProvider`, `LoginThrottle`, contratto `PasswordAdminProvider` con `set_password`, `change_password` e `delete_user`). Tabella `AuthCredential` (`password_hash` fuori dal `repr`). `login_merchant` prende `client_ip` e `now` e controlla il freno prima di verificare; `POST /api/merchant/me/password`; blocco «Cambia password» nelle impostazioni (solo se il provider è un `PasswordAdminProvider`); `TooManyAttemptsError` → 429 con `Retry-After`. **Scelte non previste dal ticket** (decise dall'agente, da rivedere): (1) il **Dockerfile** avvia uvicorn con `--proxy-headers --forwarded-allow-ips="*"`, altrimenti dietro il load balancer di DO il freno per IP sarebbe globale (5 errori di chiunque bloccano tutti); con `*` uvicorn si fida del primo `X-Forwarded-For`, che il client può falsificare, quindi **il freno per IP è un di più e quello per email è il vero freno**; verifica post-deploy in `deploy.md`; (2) `PasswordAdminProvider.delete_user` + compensazione in `register_merchant` (se la creazione del merchant fallisce la credenziale si elimina) + pulizia nel `DELETE` admin del merchant: senza, una credenziale orfana bloccherebbe l'email per sempre (409); (3) l'IP **non** si azzera al successo, solo l'email (altrimenti chi ha un account suo svuota il contatore); (4) il lifespan chiama `get_auth_provider()`: `dev` con `production` ora impedisce davvero l'avvio (prima falliva alla prima richiesta di auth, con un 500); (5) cookie `Secure` e `samesite=lax` con `ENVIRONMENT=production`; (6) `RegisterRequest` e `ChangePasswordRequest` senza campi obbligatori né tipi (`Any`): un 422 su un campo mancante rimanderebbe indietro il corpo, password comprese; la validazione è nel service (400), e `validate_registration`/`validate_business_name` accettano qualunque tipo (la registrazione con campo mancante passa da 422 a 400); (7) `change_password` valida la nuova password **prima** di verificare quella attuale (400 prima di 401) e ritorna il token riemesso; (8) password lunga oltre 128 al login = «Credenziali non valide» senza hash; (9) con `dev`/`supabase` `POST /me/password` risponde 400 e il blocco non compare; (10) fixture `autouse` `reset_login_throttle` e fixture `local_auth` in `conftest` (il provider usa la sessione di test: **non apre mai l'engine dell'app**; gli unici test che toccano il lifespan sostituiscono `app.main.engine` con SQLite in-memory). Limiti noti (in roadmap): freno in memoria per processo; `scrypt` blocca l'event loop ~60-130 ms a ogni login/registrazione; un login sbagliato mostra il JSON dell'errore (già così prima); chi conosce un'email può bloccarne il login per 15 minuti. `security.py` non è cambiato (il `ver` entra nel payload). Il debito «accesso dei merchant in produzione» è chiuso per la parte di auth; l'avviso in `deploy.md` resta finché non sono chiusi 12 e 13.
+
 - **14** (ex 11, parte già fatta): verifica della documentazione contro il codice. Discrepanze corrette: il flusso del webhook in `overview.md`
   non citava `isFollower` (invito a seguire, `follow_requested`); l'ambito di quota oggi è sempre `account:<id>`
   (`get_team_identity` → `None`), non `zernio:<team>`; ordine del lifespan; `deploy.md` elencava ancora la tabella
@@ -153,7 +156,7 @@ Note sui ticket fatti:
   descriveva il wallet. **Il passo 6 del collaudo (evento duplicato) non era fattibile**: `replay_webhook`
   generava un `event_id` nuovo a ogni esecuzione → aggiunto `--event-id` (con test). Segnalato a parte: in
   produzione i merchant non possono accedere (provider `dev` rifiutato con `ENVIRONMENT=production`, Supabase stub:
-  avviso in `deploy.md`), e il commento del `Dockerfile` cita ancora Railway (non toccato).
+  avviso in `deploy.md`; **risolto dal ticket 11**), e il commento del `Dockerfile` cita ancora Railway (corretto nel ticket 11).
 
 ### Prossimo passo
 
@@ -168,7 +171,7 @@ Note sui ticket fatti:
    `isFollower: null`, **ManyChat/standby**, tocco della voce di menu «🌳 La mia carta», «Scollega» da pannello.
 4. ~~Ticket 08~~ fatto, prova manuale del founder riuscita il 2026-10-26.
 5. ~~Ticket 09~~ fatto. ~~Ticket 10~~ fatto.
-6. **Ticket 11-13** (nuovi, da fare in ordine, uno alla volta, con approvazione a fine ticket), poi **ticket 14**: documentazione generale fatta. **Collaudo end-to-end a cura del founder** (checklist passo-passo in
+6. ~~Ticket 11~~ fatto. **Ticket 12-13** (nuovi, da fare in ordine, uno alla volta, con approvazione a fine ticket), poi **ticket 14**: documentazione generale fatta. **Collaudo end-to-end a cura del founder** (checklist passo-passo in
    `deploy.md`, «Collaudo end-to-end del flusso Instagram»). Da verificare e riportare in `zernio-notes.md`
    («Collaudo finale del ticket 11»): card a un non follower, DM in Requests via webhook, `isFollower` `null`,
    ManyChat/standby, tocco sulla voce di menu, «Scollega» da pannello, evento duplicato, log senza segreti, latenza
@@ -209,11 +212,14 @@ rivede nel collaudo finale. QR "apri la chat": a mano dal founder (ticket 14).
 
 ## Debito noto
 
-- **Accesso dei merchant in produzione**: con `ENVIRONMENT=production` il provider `dev` non parte e il provider
-  Supabase è uno stub, quindi su DigitalOcean nessun merchant può registrarsi o accedere. **Deciso il 2026-10-27**: provider
-  `local` (ticket 11), con stato del servizio (12) e dashboard admin (13); Supabase più avanti, DB su Neon.
+- **Accesso dei merchant in produzione**: con `AUTH_PROVIDER=local` (ticket 11, fatto) i merchant si registrano e accedono
+  anche con `ENVIRONMENT=production`. Mancano ancora lo stato del servizio (12) e la dashboard admin con approvazione, pausa
+  e reset password (13): **non fare il primo deploy prima**. Supabase più avanti, DB su Neon.
+- Freno ai tentativi di login: in memoria, un solo processo; per IP best-effort (`X-Forwarded-For` falsificabile). Dopo il
+  primo deploy fai la verifica del login in `deploy.md` («Primo deploy», passo 4).
 
-- Merchant creato dall'admin senza `auth_user_id`: la sua email non si può registrare (409). Si risolve con Supabase.
+- Merchant creato dall'admin senza `auth_user_id`: la sua email non si può registrare (409) e non può accedere (il reset
+  dalla dashboard riguarda solo i registrati). Si risolve con Supabase.
 - `create_all()` non migra: serve `scripts.reset_db` (nessun dato di produzione da preservare per ora).
 - `reset_db`/`seed_db` agiscono sul `DATABASE_URL` del `.env` (oggi Neon): per il collaudo usare un SQLite usa-e-getta
   (`.agents/workflows/deploy.md`).

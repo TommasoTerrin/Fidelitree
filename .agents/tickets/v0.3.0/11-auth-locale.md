@@ -51,8 +51,10 @@ il merchant per `auth_user_id`; `register_merchant` crea prima l'utente sul prov
    meccanismo serve al login admin (ticket 13).
 7. **Log**: nessuna password, hash o token in log, risposte o errori.
 8. **Docs**: AGENTS.md (voce «Auth merchant nel pilota: provider locale», quella su Supabase ridotta a «più avanti»;
-   Stack/Auth), overview.md (Autenticazione, endpoint, modello dati), roadmap, deploy.md (`AUTH_PROVIDER=local` in produzione,
-   tolto l'avviso sull'accesso dei merchant), `.env.example`, planner.
+   Stack/Auth), overview.md (Autenticazione, endpoint, modello dati), roadmap, deploy.md (`AUTH_PROVIDER=local` in produzione;
+   l'avviso sul primo deploy resta finché non sono chiusi anche i ticket 12 e 13), `.env.example`, planner.
+9. **Scelte dell'implementazione non previste qui** (Dockerfile con `--proxy-headers`, `delete_user`, lifespan, cookie
+   `Secure`, schemi senza vincoli): elenco nel planner, nota del ticket 11.
 
 ## File coinvolti
 `app/core/config.py`, `app/core/auth.py`, `app/core/security.py`, `app/models/models.py`, `app/services/merchant_service.py`,

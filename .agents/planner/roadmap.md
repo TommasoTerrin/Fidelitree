@@ -93,6 +93,14 @@ superano le poche decine (~100): `SupabaseAuthProvider` al posto di `local`, rec
 si reinvitano (gli hash non si migrano) e la tabella `AuthCredential` si elimina. Supabase Auth sostituisce anche le voci
 "Sicurezza password" e "Integrazione Clerk" (superate).
 
+### Rafforzare l'accesso dei merchant (provider `local`)
+Limiti accettati nel pilota (ticket 11): il freno ai tentativi sta **in memoria** (un solo processo, si azzera al riavvio) e
+chi sta dietro il proxy di DO è identificato da `X-Forwarded-For`, che il client può falsificare: il freno **per email** è
+quello che regge, quello per IP è un di più. Chi conosce l'email di un merchant può bloccarne il login per 15 minuti
+(5 errori). Se i merchant crescono: contatore condiviso (DB), recupero password via email, parametri di `scrypt`
+più alti (il formato salvato li porta già, la verifica legge quelli dell'hash), login e hash fuori dall'event loop
+(oggi `scrypt` blocca il loop ~60-130 ms a ogni login) e la pagina di login che mostra l'errore invece del JSON.
+
 ### Endpoint admin/cron per `close_period`
 Quando i negozi superano i 10-20, riusando lo stesso core di `scripts.close_period` (anteprima, idempotenza, cap).
 

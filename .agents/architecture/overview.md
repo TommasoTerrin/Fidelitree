@@ -14,7 +14,7 @@ Cliente (Instagram) ── DM "CARTA" / menu ──► Instagram ──► Zerni
 Browser cliente: /c/<token> (pagina carta + QR)        FastAPI (app/main.py)
 Browser merchant: PWA /merchant/* (scanner, gestione)    routes → services (core puro + shell) → db_crud
                                                           ▼
-                                       PostgreSQL (Neon oggi, Supabase al collegamento del provider auth)
+                                       PostgreSQL (Neon oggi, Supabase più avanti)
 
 Script a mano: reset_db · seed_db · close_period · ecologi_check · zernio_check · replay_webhook · smoke_test_prod
    └─ close_period ──► Ecologi Impact API (chiave unica di piattaforma)
@@ -36,6 +36,7 @@ Merchant 1 ──< Card >── (nessun Customer: il cliente è l'indice cieco d
    └──< ProcessedWebhookEvent (dedup dei webhook, 7 giorni)
 
 ZernioSendCounter (quota_scope, period) → invii riusciti del mese per team Zernio
+AuthCredential (user_id = Merchant.auth_user_id, nessuna FK) → hash della password, solo con il provider `local`
 ```
 
 | Tabella | Campi principali | Note |
@@ -47,6 +48,7 @@ ZernioSendCounter (quota_scope, period) → invii riusciti del mese per team Zer
 | **TreePlanting** | `merchant_id`, `period`, `level`, `tree_count`, `pool_points`, `ecologi_ref`, `test` | `UNIQUE(merchant_id, period, test)`: idempotenza della chiusura |
 | **ProcessedWebhookEvent** | PK `event_id` (`X-Zernio-Event-Id`), `merchant_id`, `received_at`, `outcome` (`received` → esito) | inserito **per primo**: i retry Zernio diventano no-op; conservato 7 giorni |
 | **ZernioSendCounter** | PK `(quota_scope, period)`, `sent` | quota Zernio di 10.000 invii al mese **per team** (oggi l'ambito è `account:<id>`); solo avviso, non blocca |
+| **AuthCredential** | PK `user_id` (uuid = `Merchant.auth_user_id`), `email` (unica, minuscola), `password_hash`, `token_version`, `created_at` | solo provider `local`; **nessuna FK** verso `merchant` (se si passa a Supabase la tabella si elimina); `password_hash` fuori dal `repr`. Si cancella con il merchant (API admin) o se la registrazione fallisce a metà |
 
 ⚠️ Nota SQLModel: con `table=True` i validatori pydantic **non girano sul costruttore**: per validare usa `Model.model_validate(...)` (come fanno i `db_crud`).
 
@@ -57,9 +59,10 @@ ZernioSendCounter (quota_scope, period) → invii riusciti del mese per team Zer
 | IGSID del cliente | solo `igsid_hash` = HMAC-SHA256(`IGSID_HMAC_KEY`, IGSID) | serve solo a ritrovare la carta; per rispondere basta `zernio_conversation_id`. La chiave **non è ruotabile** (scollegherebbe le carte) |
 | Token del link | **non si salva**: token = HMAC(`CARD_LINK_KEY`, id carta + versione), nel DB solo `SHA-256(token)` | stesso link a ogni messaggio; revoca = `link_version + 1` |
 | Chiave Zernio, secret del webhook | AES-256-GCM (`ENCRYPTION_KEY`), formato `<id chiave>:<nonce+cifrato>` | servono in chiaro per chiamare Zernio e verificare le firme; l'id della chiave prepara la rotazione |
+| Password del merchant (provider `local`) | solo l'hash `scrypt$n$r$p$salt$hash` in `AuthCredential` (salt casuale per password, parametri nella stringa) | la password in chiaro non si salva né si logga; confronto in tempo costante |
 | Testo dei messaggi, username, nome | **non si salvano** | minimizzazione |
 
-Nei log non compaiono chiave Zernio, secret, IGSID, token o testo. Un filtro su `uvicorn.access` maschera `/c/<token>` e
+Nei log non compaiono chiave Zernio, secret, IGSID, token del link, testo, password, hash o token di sessione. Un filtro su `uvicorn.access` maschera `/c/<token>` e
 `/webhooks/zernio/<hook_id>`. I log della piattaforma DigitalOcean sono fuori dal nostro controllo: trade-off accettato.
 
 ## Il pool del negozio (invariato da v0.2.0)
@@ -162,11 +165,14 @@ della chiave incollata).
 
 ## Autenticazione
 
-Tutto passa da `AuthProvider` (`app/core/auth.py`); nel DB non ci sono password, solo `auth_user_id` ed email del merchant.
+Tutto passa da `AuthProvider` (`app/core/auth.py`), scelto da `AUTH_PROVIDER`; la tabella `merchant` non ha password, solo `auth_user_id` ed email.
 
-- **Provider `dev`** (locale/test): utenti in memoria, password `DEV_AUTH_PASSWORD` per i merchant non registrati nel processo (così funzionano gli account del seed), token = JWT firmato con `JWT_SECRET_KEY`. Con `ENVIRONMENT=production` l'app **rifiuta** di usarlo.
+- **Provider `local`** (pilota, **ammesso in produzione**): email+password, hash `scrypt` della libreria standard (N=2^14, r=8, p=1, salt casuale per password) in `AuthCredential`, password di 8-128 caratteri. Il token è un JWT (`JWT_SECRET_KEY`) con `sub`, `email` e `ver` = `token_version`: `verify_token` controlla firma, scadenza, **esistenza della credenziale e `ver`**, quindi `set_password` (reset dell'admin, ticket 13) e `change_password` (il merchant, dalle impostazioni) invalidano le sessioni aperte. Email sconosciuta e password errata danno lo stesso `AuthError` («Credenziali non valide»; con email sconosciuta si verifica un hash fittizio). Accede al DB con una *session factory* iniettabile (default `Session(engine)`, import tardivo; i test usano SQLite in-memory). Contratto `PasswordAdminProvider` (`set_password`, `change_password`, `delete_user`): lo implementa solo `local`.
+- **Provider `dev`** (locale/test): utenti in memoria, password `DEV_AUTH_PASSWORD` per i merchant non registrati nel processo (così funzionano gli account del seed), token = JWT firmato con `JWT_SECRET_KEY` (senza `ver`: un token `dev` non vale con `local` e viceversa). Con `ENVIRONMENT=production` l'app **non parte** (`get_auth_provider()` è chiamato dal lifespan).
 - **Provider `supabase`**: stub, si collega in un rilascio successivo.
-- **Merchant**: `POST /merchant/register` (nasce non approvato, lavora subito) e `POST /merchant/login` (email + password) → cookie `access_token` httpOnly → `get_current_merchant`.
+- **Merchant**: `POST /merchant/register` (nasce non approvato, lavora subito) e `POST /merchant/login` (email + password) → cookie `access_token` (httpOnly, samesite lax, **Secure** con `ENVIRONMENT=production`) → `get_current_merchant`. Se la creazione del merchant fallisce dopo quella della credenziale, questa si elimina (altrimenti l'email resterebbe bloccata).
+- **Freno ai tentativi sul login** (`LoginThrottle`, core in `auth.py`): 5 errori in 15 minuti per email normalizzata **e** per IP → 429 con `Retry-After`. Il controllo precede ogni verifica (a soglia anche la password giusta riceve 429); email sconosciuta e password troppo lunga contano come errori; un accesso riuscito azzera solo la chiave dell'email, mai quella dell'IP; l'identità senza merchant (403) non conta. Contatore **in memoria** (un solo processo su DO; si azzera al riavvio). L'IP viene da `X-Forwarded-For` (il Dockerfile avvia uvicorn con `--proxy-headers --forwarded-allow-ips="*"`): un client può falsificarlo, quindi il freno per IP è un di più, quello per email regge. Lo riuserà il login admin (ticket 13).
+- **Cambio password del merchant**: `POST /api/merchant/me/password` (password attuale + nuova): 400 se la nuova non è di 8-128 caratteri (o il provider non gestisce le password), 401 se l'attuale è errata; riemette il cookie con il nuovo `ver`. Il blocco «Cambia password» delle impostazioni compare solo se il provider è un `PasswordAdminProvider`.
 - **Cliente**: **nessuna autenticazione**. La carta si vede solo con il link segreto `/c/<token>`.
 - **Zernio → app**: firma HMAC per negozio sul webhook.
 - **Admin**: header `X-Admin-Key` = `ADMIN_SECRET_KEY` → `require_admin_key`.
@@ -181,25 +187,26 @@ Tutto passa da `AuthProvider` (`app/core/auth.py`); nel DB non ci sono password,
 | GET /c/{token} | link segreto | pagina carta con QR (id carta), saldo e pool del negozio |
 | GET /privacy | pubblico | informativa per i clienti |
 | GET /merchant/login, /merchant/register | pubblico | pagine di accesso |
-| POST /merchant/register, POST /merchant/login, GET /merchant/logout | pubblico | auth merchant |
+| POST /merchant/register, POST /merchant/login, GET /merchant/logout | pubblico | auth merchant (login: 401 credenziali, 403 senza negozio, **429** troppi tentativi con `Retry-After`) |
 | GET /merchant/scanner, /merchant/settings, /merchant/card/{id}/manage | cookie merchant | pagine merchant (PWA) |
 | GET /api/merchant/me, PUT /api/merchant/me/settings | cookie merchant | profilo e impostazioni di conversione |
+| POST /api/merchant/me/password | cookie merchant | cambio password (400 nuova non valida, 401 attuale errata); riemette il cookie |
 | POST /api/merchant/instagram/key, GET /api/merchant/instagram/accounts, POST /api/merchant/instagram/account, GET /api/merchant/instagram, DELETE /api/merchant/instagram | cookie merchant | onboarding Instagram/Zernio e pannello |
 | POST /api/merchant/add-tree-points/{id} | cookie merchant | scan: tree points (+ conversione automatica) |
 | POST /api/merchant/add-point/{id} | cookie merchant | +/- cashback in euro |
 | DELETE /api/merchant/card/{id} | cookie merchant | elimina carta propria (cancellazione su richiesta del cliente) |
-| CRUD /api/merchant/…, POST /api/merchant/{id}/approve | X-Admin-Key | gestione merchant, approvazione, soglie |
+| CRUD /api/merchant/…, POST /api/merchant/{id}/approve | X-Admin-Key | gestione merchant, approvazione, soglie (il DELETE elimina anche la credenziale `local`) |
 
 Rimossi in v0.3.0: `/customer/login`, `/api/customer/otp/*`, `/customer/logout`, `/join/{id}`, `/wallet`,
 `/api/customer/*`, `/card/{id}`, `/api/card/{id}`.
 
 ## Scelte tecniche rilevanti
 
-- **Functional core / imperative shell** nello stesso modulo di `services/` (regole in AGENTS.md). Errori di dominio in `app/core/errors.py`, tradotti in HTTP da un handler globale (`ExternalServiceError` → 502).
+- **Functional core / imperative shell** nello stesso modulo di `services/` (regole in AGENTS.md). Errori di dominio in `app/core/errors.py`, tradotti in HTTP da un handler globale (`ExternalServiceError` → 502, `TooManyAttemptsError` → 429 con `Retry-After`).
 - **Zernio**: client httpx diretto (`zernio_service.py`), niente SDK. `httpx.AsyncClient` iniettato tramite dependency (`MockTransport` nei test). Timeout 4 s sugli invii (il webhook deve rispondere entro 5 s), nessun nuovo tentativo (un 5xx può aver già consegnato). Vincoli e fonti: [zernio-notes.md](zernio-notes.md).
 - **Cifratura**: `cryptography` (AES-256-GCM), tornata in v0.3.0 perché la chiave Zernio deve essere recuperabile. Le chiavi arrivano solo da env e l'app non parte se mancano o sono malformate.
 - **Engine DB** in `app/main.py` con `pool_pre_ping=True` e `pool_recycle=300` (timeout SSL di Neon).
 - **`get_session`** importa l'engine lazy da `app.main` (evita import circolari); nei test viene sostituita da SQLite in-memory (`tests/conftest.py`).
 - **QR code** generato client-side (niente dipendenze server).
-- **Lifespan**: validazione delle chiavi di cifratura, filtro dei log di accesso, `create_all` (niente Alembic: il DB si resetta con `scripts.reset_db`).
+- **Lifespan**: validazione delle chiavi di cifratura, scelta del provider di autenticazione (`dev` con `production` → l'app non parte), filtro dei log di accesso, `create_all` (niente Alembic: il DB si resetta con `scripts.reset_db`).
 - **Ecologi**: un solo URL (`ECOLOGI_BASE_URL`), due chiavi scelte da `ECOLOGI_TEST_MODE` (`ECOLOGI_TEST_API_KEY` / `ECOLOGI_API_KEY`, nessun fallback). Con `true` la richiesta porta `"test": true` (nessun addebito). Il `name` inviato è `<negozio> · <mese> <anno>` (`tree_service.planting_name`) e compare nella foresta pubblica; `TreePlanting.ecologi_ref` = `treeUrl` della risposta (non c'è un `id`).

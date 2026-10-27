@@ -27,8 +27,8 @@ Variabili **opzionali** (hanno un default), introdotte con v0.2.0:
 
 | Variabile | Default | Descrizione |
 |---|---|---|
-| `ENVIRONMENT` | `development` | mettere `production` in produzione (il login `dev` si rifiuta) |
-| `AUTH_PROVIDER` | `dev` | `dev` (solo locale/test) o `supabase` |
+| `ENVIRONMENT` | `development` | mettere `production` in produzione (con `AUTH_PROVIDER=dev` l'app **non parte**; il cookie di sessione diventa `Secure`) |
+| `AUTH_PROVIDER` | `dev` | `dev` (solo locale/test), **`local`** (password nel nostro DB, **da usare in produzione**) o `supabase` (stub). Con `local` serve solo questa variabile: nessun'altra chiave (i token usano `JWT_SECRET_KEY`) |
 | `DEV_AUTH_PASSWORD` | `dev-password` | **solo locale** (provider `dev`): password dei merchant creati dal seed. **Non impostarla in produzione** |
 | `ECOLOGI_BASE_URL` | `https://public.ecologi.com` | URL dell'API Ecologi, **unico** per test e produzione (non esiste un sandbox: la prova è il flag `"test": true`) |
 | `ECOLOGI_API_KEY` | vuota | chiave Ecologi **reale** di piattaforma (paga il founder); usata con `ECOLOGI_TEST_MODE=false` |
@@ -52,13 +52,13 @@ Eliminate da v0.2.0 (cancellabili da DO): `MERCHANT_PASSWORD`. Storiche non più
 
 > ⚠️ **Schema v0.3.0**: `create_all()` non modifica le tabelle esistenti. Il passaggio al nuovo modello (email, pool, carte con indice cieco, webhook...) richiede il reset del DB (`python -m scripts.reset_db`): i dati di v0.1.0 non si migrano. Vedi «Primo deploy di v0.3.0».
 
-> ⚠️ **Accesso dei merchant in produzione**: con `ENVIRONMENT=production` il provider `dev` non parte e il provider `supabase` è uno stub. **Deciso il 2026-10-27**: in produzione si usa `AUTH_PROVIDER=local` (ticket 11 di v0.3.0, password nel nostro DB su Neon), con approvazione/pausa/reset dalla dashboard admin (ticket 12-13). **Finché i ticket 11-13 non sono fatti, su DigitalOcean nessun merchant può registrarsi né accedere**: non fare il primo deploy prima.
+> ⚠️ **Accesso dei merchant in produzione**: con `ENVIRONMENT=production` il provider `dev` non parte e il provider `supabase` è uno stub; in produzione si usa **`AUTH_PROVIDER=local`** (ticket 11 di v0.3.0, **fatto**: i merchant si registrano da `/merchant/register`, accedono e cambiano la password dalle impostazioni). **Non fare comunque il primo deploy prima dei ticket 12-13**: senza la dashboard admin il founder non può approvare né mettere in pausa un merchant né reimpostargli la password, e senza lo stato del servizio un negozio in attesa non ha la carta di prova. Questo avviso si toglie quando 12 e 13 sono chiusi.
 
 ## Primo deploy di v0.3.0 (ordine delle operazioni)
 
 v0.3.0 è la prima release dopo v0.1.0: schema e variabili cambiano insieme. Ordine:
 
-1. **Env var su DigitalOcean, prima del merge**: genera da zero `ENCRYPTION_KEY`, `IGSID_HMAC_KEY` e `CARD_LINK_KEY` (tre valori diversi, comando sopra) e salvale nel password manager; imposta `PUBLIC_BASE_URL` = dominio https di produzione, `ENVIRONMENT=production`, `AUTH_PROVIDER` ≠ `dev`; lascia `DEV_AUTH_PASSWORD` non impostata. Senza le tre chiavi l'app non parte; la vecchia `ENCRYPTION_KEY` Fernet va sostituita.
+1. **Env var su DigitalOcean, prima del merge**: genera da zero `ENCRYPTION_KEY`, `IGSID_HMAC_KEY` e `CARD_LINK_KEY` (tre valori diversi, comando sopra) e salvale nel password manager; imposta `PUBLIC_BASE_URL` = dominio https di produzione, `ENVIRONMENT=production`, **`AUTH_PROVIDER=local`**; lascia `DEV_AUTH_PASSWORD` non impostata. Senza le tre chiavi l'app non parte; la vecchia `ENCRYPTION_KEY` Fernet va sostituita.
 2. **Reset del DB di produzione** (distruttivo: i dati di v0.1.0 non si migrano). In locale, in un terminale dedicato e solo dopo aver controllato **a quale DB punta**:
    ```powershell
    $env:DATABASE_URL = "<URL Postgres di produzione>"    # solo in questo terminale
@@ -67,9 +67,10 @@ v0.3.0 è la prima release dopo v0.1.0: schema e variabili cambiano insieme. Ord
    ```
    Il seed non è per la produzione (richiede `AUTH_PROVIDER=dev`). Eventuali tabelle di versioni precedenti non più nel modello (per esempio `customer`) restano nel DB come orfane, innocue: si possono eliminare a mano dalla console. Il reset lascia l'app vecchia senza schema valido fino al deploy: fallo subito prima del merge.
 3. Procedura di release (sotto): merge su `main`, deploy, smoke test.
-4. **Onboarding dei merchant pilota**: ogni merchant, dalle impostazioni, incolla la **propria** chiave Zernio e sceglie il suo account Instagram; il DM di prova lo rende attivo. Zernio deve poter raggiungere `PUBLIC_BASE_URL`. Se `PUBLIC_BASE_URL` cambia, ogni merchant deve rifare l'onboarding (scollega/ricollega): il webhook su Zernio punta al vecchio URL.
-5. **`/privacy`**: il testo è una bozza; il founder la fa verificare (e prepara il DPA, fuori scope) prima di dare il link ai primi clienti.
-6. **Istruzioni ai merchant, una riga sul QR in negozio**: per stampare un QR che apre la chat, contattare il founder, che lo prepara a mano da `https://ig.me/m/<username>`.
+4. **Verifica del login (dopo il deploy)**: il `Dockerfile` avvia uvicorn con `--proxy-headers --forwarded-allow-ips="*"` perché il freno dei tentativi di login conosca l'IP del client (senza, dietro il load balancer di DO tutti avrebbero lo stesso IP e 5 errori di chiunque bloccherebbero tutti per 15 minuti). Controlla su un merchant di prova: registra un negozio, **6 password sbagliate** dal tuo PC → il 6° dà 429; poi, **dalla rete mobile del telefono** (altro IP), accedi con la password giusta: deve funzionare. Se invece anche dal telefono arriva 429, l'IP letto è quello del proxy: il freno per IP è globale, segnalalo (si può alzare la soglia per IP o toglierla: quello per email regge da solo). Nota: `X-Forwarded-For` lo può falsificare chi chiama, quindi il freno per IP è un di più; il contatore sta in memoria (un solo processo, si azzera al riavvio).
+5. **Onboarding dei merchant pilota**: ogni merchant, dalle impostazioni, incolla la **propria** chiave Zernio e sceglie il suo account Instagram; il DM di prova lo rende attivo. Zernio deve poter raggiungere `PUBLIC_BASE_URL`. Se `PUBLIC_BASE_URL` cambia, ogni merchant deve rifare l'onboarding (scollega/ricollega): il webhook su Zernio punta al vecchio URL.
+6. **`/privacy`**: il testo è una bozza; il founder la fa verificare (e prepara il DPA, fuori scope) prima di dare il link ai primi clienti.
+7. **Istruzioni ai merchant, una riga sul QR in negozio**: per stampare un QR che apre la chat, contattare il founder, che lo prepara a mano da `https://ig.me/m/<username>`.
 
 ## Procedura di release
 
@@ -77,7 +78,7 @@ v0.3.0 è la prima release dopo v0.1.0: schema e variabili cambiano insieme. Ord
 2. `git checkout main && git merge develop && git push` → parte il deploy automatico.
 3. Attendi il deploy dalla console DO (build + health check su `/health`).
 4. Smoke test: `python scripts/smoke_test_prod.py https://<app>.ondigitalocean.app <ADMIN_SECRET_KEY>` (controlla versione `0.3.0`, `/privacy`, `/c/<inesistente>` 404, webhook con hook sconosciuto 404, manifest e service worker, pagine del vecchio flusso 404, API admin).
-5. Verifica il DB (console Neon/Supabase → tabelle `merchant`, `card`, `pointtransaction`, `merchantpool`, `treeplanting`, `processedwebhookevent`, `zerniosendcounter` presenti).
+5. Verifica il DB (console Neon/Supabase → tabelle `merchant`, `authcredential`, `card`, `pointtransaction`, `merchantpool`, `treeplanting`, `processedwebhookevent`, `zerniosendcounter` presenti).
 6. Tag: `git tag vX.Y.Z && git push --tags`.
 7. Riallinea develop: `git checkout develop && git merge main && git push`.
 

@@ -8,9 +8,10 @@
 > v0.1.0: assorbe v0.2.x (pool del negozio, auth merchant), mai rilasciata. Storia di v0.2.0:
 > [`.agents/tickets/v0.2.0/`](.agents/tickets/v0.2.0/README.md). Lo stato del lavoro è in
 > [`.agents/planner/current.md`](.agents/planner/current.md).
-> ⚠️ **Decisioni del 2026-10-27 non ancora implementate** (ticket 11-13 di v0.3.0, vedi «Vincoli e trade-off»): auth locale
-> dei merchant, stato del servizio (in attesa / attivo / in pausa, carta di prova) e dashboard admin. Finché non sono chiusi,
-> «Come funziona», Stack e Mappa del codice descrivono ancora lo stato precedente. Il marcatore si toglie nel ticket 14.
+> ⚠️ **Decisioni del 2026-10-27 non ancora implementate** (ticket 12-13 di v0.3.0, vedi «Vincoli e trade-off»): stato del
+> servizio (in attesa / attivo / in pausa, carta di prova) e dashboard admin (approvazione, pausa, reset password). Finché non
+> sono chiusi, «Come funziona», Stack e Mappa del codice descrivono ancora lo stato precedente su questi punti. L'auth locale
+> dei merchant (ticket 11) **è implementata**. Il marcatore si toglie nel ticket 14.
 
 ## Contesto di business
 
@@ -51,7 +52,7 @@
 | Backend | FastAPI + SQLModel (Python 3.12) |
 | Frontend | Template Jinja2 + Vanilla JS (Tailwind via CDN, QR client-side); **PWA solo per il merchant** (scanner e gestione); pagina carta del cliente = pagina web semplice |
 | Database | PostgreSQL su **Neon** oggi, **Supabase** in un rilascio successivo / SQLite in-memory (test) e su file (collaudo locale) |
-| Auth | Merchant: **Supabase Auth** in arrivo (email+password), oggi interfaccia + provider `dev` (locale/test; rifiutato con `ENVIRONMENT=production`). Cliente: **nessuna auth**, link segreto |
+| Auth | Merchant: interfaccia `AuthProvider` con provider **`local`** (email+password, hash `scrypt` stdlib in `AuthCredential` nel nostro DB, **ammesso in produzione**), `dev` (locale/test; l'app **non parte** con `ENVIRONMENT=production`) e `supabase` (stub, più avanti). Cliente: **nessuna auth**, link segreto |
 | Instagram | **Zernio** (API unificata social): webhook `message.received` + invio card; client httpx diretto. Pilota: **chiave Zernio del merchant**, cifrata |
 | Cifratura | `cryptography` (AES-256-GCM) per chiave Zernio e secret del webhook; HMAC per indice cieco dell'IGSID e token del link |
 | Alberi | Ecologi Impact API, **chiave unica di piattaforma** (env) |
@@ -108,11 +109,11 @@ app/
   main.py               # FastAPI app, engine DB, lifespan (chiavi di cifratura, filtro dei log, create_all), router, /sw.js, /health
   core/
     config.py           # Settings da .env — variabili obbligatorie: vedi .env.example
-    auth.py             # interfaccia AuthProvider + provider dev (Supabase: stub) — solo merchant
-    security.py         # JWT (sessione, usato dal provider dev)
+    auth.py             # AuthProvider + provider dev/local (Supabase: stub); core puro: hash scrypt, regole password, freno ai tentativi
+    security.py         # JWT (sessione, usato dai provider dev e local)
     crypto.py           # AES-GCM (chiave Zernio, secret webhook), indice cieco IGSID, token del link, mask_secret
-    dependencies.py     # get_session, get_auth_identity, get_current_merchant, require_admin_key
-    errors.py enums.py money.py clock.py   # errori di dominio, enum (Level, InstagramStatus...), centesimi↔euro, utc_now
+    dependencies.py     # get_session, get_auth_identity, get_current_merchant, require_admin_key, set_session_cookie (Secure in produzione)
+    errors.py enums.py money.py clock.py   # errori di dominio (anche TooManyAttemptsError → 429), enum (Level, InstagramStatus...), centesimi↔euro, utc_now
     logging_filters.py  # filtro di uvicorn.access: maschera /c/<token> e /webhooks/zernio/<hook_id> nei log
   models/models.py      # tabelle SQLModel
   version.py            # versione letta da pyproject.toml (esposta da /health)
@@ -121,7 +122,7 @@ app/
     card_service.py     # carte, cashback, conversione tree points → cashback
     instagram_service.py # trigger, card di risposta, finestra 24 h, quota, webhook → carta, link della carta
     zernio_service.py   # client API Zernio + zernio_credentials_for (UNICO punto che sa da dove arriva la chiave)
-    merchant_service.py # registrazione, impostazioni, onboarding Instagram
+    merchant_service.py # registrazione, login con freno, cambio password, impostazioni, onboarding Instagram
     tree_service.py     # pool del negozio, livelli, chiusura periodo
     ecologi_service.py  # client Impact API Ecologi
     db_crud/            # accesso DB puro
@@ -161,7 +162,7 @@ tests/                  # pytest + conftest (SQLite in-memory); tests/unit/ = co
 - **Cap globale sforato → blocco, non ripartizione** (2026-10-09): lo script mostra lo sforamento e chiede al founder se procedere.
 - **Gli errori Ecologi non bloccano mai lo scan**: lo scan non chiama più Ecologi. Durante la chiusura, un errore su un negozio non blocca gli altri; il negozio resta non chiuso e si ritenta.
 - **Auth merchant: interfaccia con provider** (2026-10-09): la verifica del token è dietro `AuthProvider` con provider `dev` (locale/test). ~~Supabase in un rilascio successivo, niente password nel nostro DB~~ — **superato il 2026-10-27**: provider `local` nel pilota (voce sopra), Supabase più avanti. Dal 2026-10-22 l'auth serve solo ai merchant.
-- **Auth merchant nel pilota: provider `local`** (2026-10-27, ticket 11; **sostituisce** «niente password nel nostro DB»): `AUTH_PROVIDER=local` (ammesso in produzione), email+password con hash `scrypt` (stdlib) in una tabella `AuthCredential` **separata** dai dati del negozio, sessione JWT con `token_version` (un reset invalida le sessioni). Nessun OTP, nessun invio di email, **nessun link di invito o a scadenza**: il merchant si registra da solo da `/merchant/register` (il founder gli manda quel link) e il founder lo avvia dalla dashboard; se dimentica la password la reimposta il founder con una password temporanea, che il merchant cambia dalle impostazioni. Il DB resta **Neon**; Supabase (Auth e/o DB) si valuta più avanti, oltre ~100 merchant.
+- **Auth merchant nel pilota: provider `local`** (2026-10-27, ticket 11 — **implementato**; **sostituisce** «niente password nel nostro DB»): `AUTH_PROVIDER=local` (ammesso in produzione), email+password (8-128 caratteri) con hash `scrypt` (stdlib, N=2^14 r=8 p=1, salt per password, formato `scrypt$n$r$p$salt$hash`) in una tabella `AuthCredential` **separata** dai dati del negozio (nessuna FK: `Merchant.auth_user_id == AuthCredential.user_id`), sessione JWT con `ver` = `token_version` (un reset o un cambio password invalida le sessioni; `verify_token` legge la credenziale a ogni richiesta). Stesso errore «Credenziali non valide» per email sconosciuta e password errata (con hash fittizio per tempi simili). **Freno ai tentativi** sul login: 5 errori in 15 minuti per email **e** per IP → 429 con `Retry-After`, contatore in memoria (un solo processo), controllato prima di ogni verifica; il successo azzera solo l'email. Il cookie è `Secure` con `ENVIRONMENT=production`. Il merchant cambia la password da `/merchant/settings` (`POST /api/merchant/me/password`); se cancelli un merchant dall'API admin se ne va anche la credenziale. Nessun OTP, nessun invio di email, **nessun link di invito o a scadenza**: il merchant si registra da solo da `/merchant/register` (il founder gli manda quel link) e il founder lo avvia dalla dashboard (ticket 13); se dimentica la password la reimposta il founder con una password temporanea (`set_password`, ticket 13), che il merchant cambia dalle impostazioni. Il DB resta **Neon**; Supabase (Auth e/o DB) si valuta più avanti, oltre ~100 merchant.
 - **Stato del servizio: in attesa / attivo / in pausa** (2026-10-27, ticket 12): derivato da `is_approved` e `is_paused`. **In attesa** (iscritto, non approvato): può collegare Instagram e fare il DM di prova, ma a un cliente nuovo la card porta a `/carta-di-prova` (carta fittizia, nessun dato, nessuna riga `Card`); un cliente che ha già una carta la apre vera. **In attesa o in pausa** (prova finita o abbonamento non pagato, deciso a mano): lo scanner può solo **togliere** cashback e tree points, nessun accredito né conversione; l'avviso sta solo nello scanner e nelle pagine del merchant, **il cliente non vede nessuna differenza**. La chiusura mensile non cambia (conta `is_approved`): un negozio in pausa partecipa con i punti raccolti prima. Nessuno stato «sospeso dal merchant»: per fermarsi usa «Scollega» e chiede la pausa. Il cambio di stato è manuale dalla dashboard; nessun pagamento in app.
 - **Dashboard admin `/admin`** (2026-10-27, ticket 13): accesso con `ADMIN_SECRET_KEY` (cookie httpOnly di 12 ore, nessun account admin, nessuna modifica allo schema per l'accesso; l'header `X-Admin-Key` resta per script e API). Lista dei merchant (nome attività, email, telefono, stato), approva/pausa/riattiva e reimposta password. Il founder non crea profili e non elimina né modifica i dati del negozio da lì.
 - ~~**Iscrizione cliente obbligatoria, niente carte anonime né WhatsApp** (2026-10-09)~~ — **ANNULLATO il 2026-10-22**: la carta nasce da un DM Instagram, il cliente non ha account né autenticazione e vede la carta con un link segreto. Spariscono OTP cliente, wallet, QR `/join/{negozio}` e `Customer`. WhatsApp resta escluso.
