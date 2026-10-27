@@ -88,7 +88,7 @@ L'`IGSID_HMAC_KEY` invece non è ruotabile senza scollegare le carte.
 
 ### Collegare Supabase (più avanti, opzionale)
 Deciso il 2026-10-27: nel pilota i merchant accedono con il provider `local` (ticket 11 di v0.3.0, password in una tabella
-del nostro DB su **Neon**, link monouso dalla dashboard admin). Supabase (Auth e/o DB) si valuta quando i merchant
+del nostro DB su **Neon**, reset dalla dashboard admin). Supabase (Auth e/o DB) si valuta quando i merchant
 superano le poche decine (~100): `SupabaseAuthProvider` al posto di `local`, recupero password via email; i merchant
 si reinvitano (gli hash non si migrano) e la tabella `AuthCredential` si elimina. Supabase Auth sostituisce anche le voci
 "Sicurezza password" e "Integrazione Clerk" (superate).

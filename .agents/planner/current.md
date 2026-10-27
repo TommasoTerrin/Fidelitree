@@ -37,7 +37,7 @@ Contesto di riferimento: decisioni in [AGENTS.md](../../AGENTS.md), vincoli Zern
 | 08 | Pagina carta, QR, scan e PWA merchant | ✅ 2026-10-26 (793 test); prova manuale del founder riuscita (link `/c/<token>`, scan dalla PWA con aggiunta di punti, PWA installata, redirect al login) |
 | 09 | Rimozione del vecchio flusso cliente (OTP, wallet, `/join`, `Customer`) | ✅ 2026-10-26 (744 test) |
 | 10 | Seed, smoke test e script | ✅ 2026-10-26 (766 test) |
-| 11 | Autenticazione dei merchant: provider `local` e link password | da fare (ticket scritto 2026-10-27) |
+| 11 | Autenticazione dei merchant: provider `local` (registrazione, login, cambio password) | da fare (ticket scritto 2026-10-27) |
 | 12 | Stato del servizio: approvazione, pausa e carta di prova | da fare (ticket scritto; scelte da confermare in testa al ticket) |
 | 13 | Dashboard admin | da fare (ticket scritto) |
 | 14 | Documentazione, collaudo end-to-end e release (era l'11) | 🔶 2026-10-27: documentazione generale fatta (`65caf34`) e `replay_webhook --event-id` (`b40401a`, 767 test). Restano: collaudo Instagram del founder (si può fare subito), verifiche dei ticket 11-13, esiti in `zernio-notes.md`, ok al merge |

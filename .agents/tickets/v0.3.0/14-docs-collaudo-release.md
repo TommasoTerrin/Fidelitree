@@ -44,11 +44,11 @@ collaudo, vedi sotto).
 7. **README** del repo, se descrive ancora il wallet o l'OTP.
 8. **Nuove voci dei ticket 11-13**: verifica contro il codice (non contro i ticket) di AGENTS.md, overview.md, deploy.md,
    `.env.example` e pre-release.md per `AUTH_PROVIDER=local`, tabella `AuthCredential`, flag `is_paused`/`created_at`, stati del
-   servizio, `/carta-di-prova`, `/merchant/password/<token>`, `/admin`; mappa del codice e endpoint; nessun avviso residuo sul
+   servizio, `/carta-di-prova`, `/admin`, cambio password; mappa del codice e endpoint; nessun avviso residuo sul
    «merchant non può accedere in produzione» e nessun marcatore di «decisione non ancora implementata».
-9. **Procedure del founder** in `deploy.md`: «nuovo merchant su richiesta» (crea profilo, approva, manda il link), «password
-   dimenticata» (nuovo link), «periodo di prova finito/abbonamento non pagato» (pausa/riattiva), «iscrizione spontanea» (il
-   merchant ti scrive, lo approvi), e quale testo dare ai merchant.
+9. **Procedure del founder** in `deploy.md`: «nuovo merchant» (gli mandi il link di registrazione, ti scrive, lo avvii dalla
+   dashboard), «password dimenticata» (reset dalla dashboard, password temporanea), «periodo di prova finito/abbonamento non
+   pagato» (pausa/riattiva), e quale testo dare ai merchant.
 10. **QR in negozio**: nelle istruzioni ai merchant una sola riga: per stampare un QR che apre la chat, contattare il
    founder (lo prepara a mano da `https://ig.me/m/<username>`).
 
@@ -59,9 +59,9 @@ I passi 1-8 sono quelli del flusso Instagram; **da dopo il ticket 12** vanno fat
    porta alla **carta di prova** (nessuna carta vera, nessun dato); dalla dashboard lo approvi, il nuovo `CARTA` dà la carta vera;
    lo metti in pausa: dalla PWA non puoi aggiungere punti né cashback ma puoi toglierli, la pagina carta mostra l'avviso; lo
    riattivi.
-10. **Account**: crei un profilo dalla dashboard, il merchant sceglie la password col link (monouso, scade dopo 7 giorni) e accede;
-    reimposti la password dal pannello, il vecchio link e la vecchia sessione non valgono più; login sbagliato ripetuto → 429.
-11. **Log**: nessun token del link password, password o `ADMIN_SECRET_KEY` nel log del server.
+10. **Account**: il merchant si registra da `/merchant/register` e accede; reimposti la sua password dalla dashboard (password
+    temporanea): la vecchia e le sessioni aperte non valgono più, lui la cambia dalle impostazioni; login sbagliato ripetuto → 429.
+11. **Log**: nessuna password, hash o `ADMIN_SECRET_KEY` nel log del server.
 
 Passi 1-8 del flusso Instagram:
 1. SQLite usa-e-getta: `reset_db --force`, server locale, `cloudflared tunnel --url http://127.0.0.1:8001` e

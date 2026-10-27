@@ -7,7 +7,7 @@ Il founder decide **chi usa davvero la carta**:
 - un merchant **in pausa** (periodo di prova finito o abbonamento non pagato) non può più **aggiungere** tree points o cashback,
   ma solo **togliere** quelli esistenti.
 
-I comandi per cambiare stato sono nel ticket 13 (dashboard); qui nasce il modello e il comportamento di app, webhook e pagine.
+Il merchant si iscrive da solo e viene **avviato** (approvato) dal founder. I comandi per cambiare stato sono nel ticket 13 (dashboard); qui nasce il modello e il comportamento di app, webhook e pagine.
 
 ## Contesto
 Decisioni del 2026-10-27 (utente). Oggi `is_approved` conta solo per la chiusura del pool (`tree_service`); un merchant non
