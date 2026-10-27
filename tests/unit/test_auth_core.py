@@ -7,7 +7,7 @@ import pytest
 from app.core import auth
 from app.core.auth import (
     LOGIN_FAILURE_WINDOW, LOGIN_MAX_FAILURES, MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, hash_password,
-    login_retry_after, login_throttle_keys, recent_failures, validate_password, verify_password,
+    login_failure_message, login_retry_after, login_throttle_key, recent_failures, validate_password, verify_password,
 )
 from app.core.errors import InvalidInputError, TooManyAttemptsError
 
@@ -137,9 +137,17 @@ def test_nessun_errore():
     assert login_retry_after([], NOW) is None
 
 
-def test_chiavi_normalizzate_come_il_provider():
-    assert login_throttle_keys("  Bar@Sole.IT ", "1.2.3.4") == ("email:bar@sole.it", "ip:1.2.3.4")
-    assert login_throttle_keys("a@b.it", None) == ("email:a@b.it", "ip:unknown")
+def test_chiave_normalizzata_come_il_provider():
+    assert login_throttle_key("  Bar@Sole.IT ") == "email:bar@sole.it"
+
+
+@pytest.mark.parametrize("failures, warned", [(1, False), (2, False), (3, True), (4, True), (5, False)])  # al 5°: «sospeso»
+def test_avviso_solo_tra_il_terzo_e_il_quarto_errore(failures, warned):
+    message = login_failure_message(failures)
+    assert message.startswith("Credenziali non valide")
+    assert ("Attenzione" in message) is warned
+    if warned:
+        assert "5 errori" in message and "15 minuti" in message
 
 
 def test_errore_troppi_tentativi_porta_l_attesa_e_non_il_valore():

@@ -287,46 +287,45 @@ def test_l_app_non_parte_con_dev_in_produzione(monkeypatch):
 
 # --- Freno ai tentativi (stato in memoria) ---------------------------------------------------------------------
 
+KEY = "email:a@b.it"
+
+
 def test_throttle_blocca_alla_soglia_e_si_scioglie_con_la_finestra():
     throttle, now = LoginThrottle(), utc_now()
-    keys = ("email:a@b.it", "ip:1.1.1.1")
     for i in range(4):
-        throttle.record_failure(keys, now + timedelta(seconds=i))
-    throttle.check(keys, now + timedelta(seconds=4))  # 4 errori: ancora ammesso
-    throttle.record_failure(keys, now + timedelta(seconds=4))
+        assert throttle.record_failure(KEY, now + timedelta(seconds=i)) == i + 1
+    throttle.check(KEY, now + timedelta(seconds=4))  # 4 errori: ancora ammesso
+    throttle.record_failure(KEY, now + timedelta(seconds=4))
     with pytest.raises(TooManyAttemptsError) as exc:
-        throttle.check(keys, now + timedelta(seconds=10))
+        throttle.check(KEY, now + timedelta(seconds=10))
     assert 14 * 60 < exc.value.retry_after <= 15 * 60
-    throttle.check(keys, now + timedelta(minutes=15, seconds=5))  # scaduta la finestra
+    assert "founder" in str(exc.value)
+    throttle.check(KEY, now + timedelta(minutes=15, seconds=5))  # scaduta la finestra
 
 
-def test_throttle_una_chiave_a_soglia_basta_a_bloccare():
+def test_throttle_e_per_chiave():
     throttle, now = LoginThrottle(), utc_now()
     for _ in range(5):
-        throttle.record_failure(("email:a@b.it", "ip:1.1.1.1"), now)
+        throttle.record_failure(KEY, now)
     with pytest.raises(TooManyAttemptsError):
-        throttle.check(("email:a@b.it", "ip:2.2.2.2"), now)  # stessa email, IP nuovo
-    with pytest.raises(TooManyAttemptsError):
-        throttle.check(("email:altra@b.it", "ip:1.1.1.1"), now)  # stesso IP, email nuova
-    throttle.check(("email:altra@b.it", "ip:2.2.2.2"), now)
+        throttle.check(KEY, now)
+    throttle.check("email:altra@b.it", now)
 
 
-def test_throttle_clear_azzera_solo_la_chiave_indicata():
+def test_throttle_clear_azzera_la_chiave():
     throttle, now = LoginThrottle(), utc_now()
     for _ in range(5):
-        throttle.record_failure(("email:a@b.it", "ip:1.1.1.1"), now)
-    throttle.clear("email:a@b.it")
-    with pytest.raises(TooManyAttemptsError):
-        throttle.check(("email:a@b.it", "ip:1.1.1.1"), now)  # l'IP resta a soglia
-    throttle.check(("email:a@b.it", "ip:9.9.9.9"), now)
+        throttle.record_failure(KEY, now)
+    throttle.clear(KEY)
+    throttle.check(KEY, now)
 
 
 def test_throttle_butta_le_chiavi_scadute_quando_sono_troppe(monkeypatch):
     throttle, now = LoginThrottle(), utc_now()
     monkeypatch.setattr(LoginThrottle, "_PURGE_ABOVE", 3)
     for i in range(3):
-        throttle.record_failure((f"email:{i}@b.it",), now - timedelta(hours=1))
-    throttle.record_failure(("email:nuovo@b.it",), now)
+        throttle.record_failure(f"email:{i}@b.it", now - timedelta(hours=1))
+    throttle.record_failure("email:nuovo@b.it", now)
     assert set(throttle._failures) == {"email:nuovo@b.it"}
 
 
@@ -340,64 +339,72 @@ def registered(local_auth, session):
     return "bar@sole.it"
 
 
-def _login(session, provider, email, password, ip="1.1.1.1", now=None):
-    return merchant_service.login_merchant(session, provider, email, password, client_ip=ip, now=now or utc_now())
+def _login(session, provider, email, password, now=None):
+    return merchant_service.login_merchant(session, provider, email, password, now=now or utc_now())
 
 
-def test_sesto_tentativo_bloccato_anche_con_la_password_giusta(session, local_auth, registered):
+def _fail(session, provider, email, now):
+    """Un login sbagliato: ritorna il messaggio dell'errore."""
+    with pytest.raises(AuthError) as exc:
+        _login(session, provider, email, "sbagliata-1234", now=now)
+    return str(exc.value)
+
+
+def test_avviso_dal_terzo_errore_e_blocco_al_sesto_tentativo(session, local_auth, registered):
     now = utc_now()
-    for i in range(5):
-        with pytest.raises(AuthError):
-            _login(session, local_auth, registered, "sbagliata-1234", ip=f"10.0.0.{i}", now=now)  # IP sempre diversi
+    messages = [_fail(session, local_auth, registered, now) for _ in range(5)]
+    assert messages[0] == messages[1] == "Credenziali non valide"
+    for warned in messages[2:4]:
+        assert warned.startswith("Credenziali non valide. Attenzione: dopo 5 errori")
+        assert "15 minuti" in warned
+    assert messages[4].startswith("Credenziali non valide. Accesso sospeso per 15 minuti")  # al 5° il blocco è scattato
     with pytest.raises(TooManyAttemptsError):
-        _login(session, local_auth, registered, PASSWORD, ip="10.0.0.99", now=now)
+        _login(session, local_auth, registered, PASSWORD, now=now)  # anche con la password giusta
     # passata la finestra si rientra
-    assert _login(session, local_auth, registered, PASSWORD, ip="10.0.0.99", now=now + timedelta(minutes=16))
+    assert _login(session, local_auth, registered, PASSWORD, now=now + timedelta(minutes=16))
+
+
+def test_l_avviso_non_rivela_se_l_account_esiste(session, local_auth, registered):
+    now = utc_now()
+    known = [_fail(session, local_auth, registered, now) for _ in range(3)]
+    unknown = [_fail(session, local_auth, "nessuno@sole.it", now) for _ in range(3)]
+    assert known == unknown
 
 
 def test_il_freno_normalizza_l_email(session, local_auth, registered):
     now = utc_now()
-    variants = ["BAR@sole.it", " bar@sole.it", "Bar@Sole.it", "bar@SOLE.it", "bar@sole.it "]
-    for i, email in enumerate(variants):
-        with pytest.raises(AuthError):
-            _login(session, local_auth, email, "sbagliata-1234", ip=f"10.0.0.{i}", now=now)
+    for email in ["BAR@sole.it", " bar@sole.it", "Bar@Sole.it", "bar@SOLE.it", "bar@sole.it "]:
+        _fail(session, local_auth, email, now)
     with pytest.raises(TooManyAttemptsError):
-        _login(session, local_auth, "bar@sole.it", PASSWORD, ip="10.0.0.99", now=now)
+        _login(session, local_auth, "bar@sole.it", PASSWORD, now=now)
 
 
 def test_email_sconosciuta_conta_come_errore(session, local_auth):
     now = utc_now()
-    for i in range(5):
-        with pytest.raises(AuthError):
-            _login(session, local_auth, "nessuno@sole.it", PASSWORD, ip=f"10.0.0.{i}", now=now)
+    for _ in range(5):
+        _fail(session, local_auth, "nessuno@sole.it", now)
     with pytest.raises(TooManyAttemptsError):
-        _login(session, local_auth, "nessuno@sole.it", PASSWORD, ip="10.0.0.99", now=now)
+        _login(session, local_auth, "nessuno@sole.it", PASSWORD, now=now)
 
 
-def test_il_successo_azzera_il_contatore_dell_email(session, local_auth, registered):
+def test_il_successo_azzera_il_contatore(session, local_auth, registered):
     now = utc_now()
-    for i in range(4):
-        with pytest.raises(AuthError):
-            _login(session, local_auth, registered, "sbagliata-1234", ip=f"10.0.0.{i}", now=now)
-    assert _login(session, local_auth, registered, PASSWORD, ip="10.0.1.1", now=now)
-    for i in range(4):  # altri 4 errori: senza l'azzeramento sarebbero 8
-        with pytest.raises(AuthError):
-            _login(session, local_auth, registered, "sbagliata-1234", ip=f"10.0.2.{i}", now=now)
-    assert _login(session, local_auth, registered, PASSWORD, ip="10.0.3.1", now=now)
+    for _ in range(4):
+        _fail(session, local_auth, registered, now)
+    assert _login(session, local_auth, registered, PASSWORD, now=now)
+    for _ in range(4):  # altri 4 errori: senza l'azzeramento sarebbero 8
+        _fail(session, local_auth, registered, now)
+    assert _login(session, local_auth, registered, PASSWORD, now=now)
 
 
-def test_il_successo_non_azzera_l_ip(session, local_auth, registered):
-    """Chi ha un account suo non può svuotare il contatore dell'IP con un accesso riuscito tra un tentativo e l'altro."""
+def test_il_freno_non_dipende_dall_ip(session, local_auth, registered):
+    """Un solo contatore per email: nessun parametro IP, quindi nessun blocco globale dietro un proxy."""
+    import inspect
+    assert "client_ip" not in inspect.signature(merchant_service.login_merchant).parameters
     now = utc_now()
     for i in range(5):
-        with pytest.raises(AuthError):
-            _login(session, local_auth, f"altro{i}@sole.it", "sbagliata-1234", ip="7.7.7.7", now=now)
-    with pytest.raises(TooManyAttemptsError):
-        _login(session, local_auth, registered, PASSWORD, ip="7.7.7.7", now=now)
-
-
-def test_ip_sconosciuto_non_rompe_il_login(session, local_auth, registered):
-    assert _login(session, local_auth, registered, PASSWORD, ip=None)
+        _fail(session, local_auth, f"altro{i}@sole.it", now)  # 5 errori su email diverse: nessuno è bloccato
+    assert _login(session, local_auth, registered, PASSWORD, now=now)
 
 
 def test_identita_senza_merchant_resta_403_e_non_conta_come_errore(session, local_auth):
@@ -464,19 +471,17 @@ def test_registrazione_email_gia_usata_e_dati_non_validi(prod_client, session, m
 def test_sesto_login_sbagliato_da_429_con_attesa(prod_client):
     _register(prod_client)
     prod_client.cookies.clear()
+    details = []
     for _ in range(5):
-        assert _login_form(prod_client, password="sbagliata-1234").status_code == 401
+        wrong = _login_form(prod_client, password="sbagliata-1234")
+        assert wrong.status_code == 401
+        details.append(wrong.json()["detail"])
+    assert "Attenzione" not in details[1] and "Attenzione" in details[2]  # l'avviso parte dal 3° errore
     blocked = _login_form(prod_client, password=PASSWORD)  # anche la password giusta
     assert blocked.status_code == 429
-    assert "Troppi tentativi" in blocked.json()["detail"]
+    assert "Troppi tentativi" in blocked.json()["detail"] and "founder" in blocked.json()["detail"]
     assert 1 <= int(blocked.headers["retry-after"]) <= 15 * 60
     assert PASSWORD not in blocked.text
-
-
-def test_429_per_ip_con_email_sempre_diverse(prod_client):
-    for i in range(5):
-        assert _login_form(prod_client, email=f"nessuno{i}@sole.it").status_code == 401
-    assert _login_form(prod_client, email="ancora-un-altro@sole.it").status_code == 429
 
 
 def test_il_freno_vale_anche_con_il_provider_dev(client, auth_provider):

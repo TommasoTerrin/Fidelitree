@@ -32,7 +32,7 @@ from app.core.security import create_jwt_token, decode_jwt_token
 __all__ = [
     "AuthError", "AuthIdentity", "AuthProvider", "DevAuthProvider", "LocalAuthProvider", "LoginThrottle",
     "PasswordAdminProvider", "SupabaseAuthProvider", "dev_user_id", "get_auth_provider", "hash_password",
-    "login_throttle", "login_throttle_keys", "validate_password", "verify_password",
+    "login_failure_message", "login_throttle", "login_throttle_key", "validate_password", "verify_password",
 ]
 
 # --- Core puro ---
@@ -54,6 +54,7 @@ MAX_PASSWORD_LENGTH = 128
 
 LOGIN_MAX_FAILURES = 5                           # errori ammessi...
 LOGIN_FAILURE_WINDOW = timedelta(minutes=15)     # ...in questa finestra: al successivo → 429
+LOGIN_WARN_AFTER = 3                             # dal 3° errore la risposta avvisa del blocco imminente
 
 
 def validate_password(password: object) -> str:
@@ -118,12 +119,30 @@ def normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
-def login_throttle_keys(email: str, client_ip: Optional[str]) -> tuple[str, str]:
+def login_throttle_key(email: str) -> str:
     """
-    Chiavi del freno ai tentativi: `(email:<normalizzata>, ip:<indirizzo>)`. L'email è normalizzata come fa il
-    provider (maiuscole e spazi non aggirano il freno); un IP sconosciuto (`None`) vale `ip:unknown`.
+    Chiave del freno ai tentativi: `email:<normalizzata>`. L'email è normalizzata come fa il provider (maiuscole
+    e spazi non aggirano il freno). Il freno è solo per email: l'IP non si usa (dietro il proxy di DigitalOcean
+    sarebbe falsificabile o uguale per tutti).
     """
-    return f"email:{normalize_email(email)}", f"ip:{client_ip or 'unknown'}"
+    return f"email:{normalize_email(email)}"
+
+
+def login_failure_message(failures: int, *, max_failures: int = LOGIN_MAX_FAILURES, warn_after: int = LOGIN_WARN_AFTER) -> str:
+    """
+    Messaggio di un login fallito, dato il numero di errori recenti (quello appena avvenuto compreso). Dal
+    `warn_after`-esimo errore avvisa che al `max_failures`-esimo l'accesso si ferma; al `max_failures`-esimo
+    dice che si è fermato. Vale anche per le email sconosciute (il conteggio è per email digitata), quindi non
+    rivela se un account esiste.
+    """
+    window = int(LOGIN_FAILURE_WINDOW.total_seconds() // 60)
+    if failures >= max_failures:
+        return f"Credenziali non valide. Accesso sospeso per {window} minuti: riprova dopo, oppure chiedi al founder di reimpostare la password"
+    if failures < warn_after:
+        return "Credenziali non valide"
+    return (
+        f"Credenziali non valide. Attenzione: dopo {max_failures} errori l'accesso si ferma per {window} minuti"
+    )
 
 
 def recent_failures(failures: list[datetime], now: datetime, window: timedelta = LOGIN_FAILURE_WINDOW) -> list[datetime]:
@@ -405,10 +424,10 @@ class SupabaseAuthProvider:
 
 class LoginThrottle:
     """
-    Freno ai tentativi di accesso: contatore **in memoria** degli errori per chiave (email e IP, vedi
-    `login_throttle_keys`). Un solo processo su DigitalOcean: basta per il pilota (non è condiviso tra processi
-    e si azzera al riavvio). Le regole (soglia, finestra, attesa) sono nel core: `login_retry_after`.
-    Riusabile dal login admin.
+    Freno ai tentativi di accesso: contatore **in memoria** degli errori per chiave (l'email, vedi
+    `login_throttle_key`). Vale finché c'è un solo processo (oggi su DigitalOcean è così): non è condiviso tra
+    processi e si azzera al riavvio, quindi con più processi il limite si moltiplica. Le regole (soglia,
+    finestra, attesa) sono nel core: `login_retry_after`. Riusabile dal login admin.
     """
 
     _PURGE_ABOVE = 10_000  # chiavi in memoria oltre le quali si buttano quelle senza errori recenti
@@ -420,26 +439,24 @@ class LoginThrottle:
         """Dimentica tutti gli errori (usato dai test)."""
         self._failures.clear()
 
-    def check(self, keys: tuple[str, ...], now: datetime) -> None:
-        """Solleva `TooManyAttemptsError` (429) con l'attesa più lunga se una delle chiavi è a soglia."""
-        waits = [
-            wait for key in keys
-            if (wait := login_retry_after(self._failures.get(key, []), now)) is not None
-        ]
-        if waits:
-            raise TooManyAttemptsError(int(max(waits).total_seconds()) + 1)
+    def check(self, key: str, now: datetime) -> None:
+        """Solleva `TooManyAttemptsError` (429) con l'attesa se la chiave è a soglia."""
+        wait = login_retry_after(self._failures.get(key, []), now)
+        if wait is not None:
+            raise TooManyAttemptsError(int(wait.total_seconds()) + 1)
 
-    def record_failure(self, keys: tuple[str, ...], now: datetime) -> None:
-        """Registra un errore su ogni chiave, scartando quelli fuori finestra."""
-        for key in keys:
-            self._failures[key] = recent_failures(self._failures.get(key, []), now) + [now]
+    def record_failure(self, key: str, now: datetime) -> int:
+        """Registra un errore sulla chiave, scartando quelli fuori finestra; ritorna gli errori recenti (questo compreso)."""
+        recent = recent_failures(self._failures.get(key, []), now) + [now]
+        self._failures[key] = recent
         if len(self._failures) > self._PURGE_ABOVE:
             self._failures = {
                 k: kept for k, v in self._failures.items() if (kept := recent_failures(v, now))
             }
+        return len(recent)
 
     def clear(self, key: str) -> None:
-        """Azzera una chiave (dopo un accesso riuscito si azzera solo quella dell'email, mai quella dell'IP)."""
+        """Azzera una chiave (dopo un accesso riuscito)."""
         self._failures.pop(key, None)
 
 

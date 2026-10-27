@@ -4,9 +4,9 @@ Gestione dell'autenticazione per gli esercenti: registrazione, login, logout e c
 L'identità è verificata dal provider di autenticazione (`app/core/auth.py`); la logica di
 registrazione e login vive in `merchant_service`. Un merchant appena registrato può lavorare
 subito ma resta non approvato finché il founder non lo approva. Il login ha un freno ai tentativi
-(429 dopo 5 errori in 15 minuti per email e per IP).
+(avviso dal 3° errore, 429 al 6° tentativo dopo 5 errori in 15 minuti, per email).
 """
-from fastapi import APIRouter, Form, Depends, Request
+from fastapi import APIRouter, Form, Depends
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlmodel import Session
 
@@ -44,20 +44,16 @@ async def register(
 
 @router.post("/login")
 async def login(
-    request: Request,
     email: str = Form(...),
     password: str = Form(...),
     session: Session = Depends(get_session),
 ):
     """
     Login del merchant con email e password. Errori: 401 credenziali errate (stesso messaggio per email
-    sconosciuta e password errata), 403 identità valida ma non collegata a un merchant, 429 troppi tentativi
-    (header `Retry-After`).
+    sconosciuta e password errata; dal 3° errore il testo avvisa del blocco), 403 identità valida ma non collegata
+    a un merchant, 429 troppi tentativi (header `Retry-After`).
     """
-    client_ip = request.client.host if request.client else None
-    token = merchant_service.login_merchant(
-        session, get_auth_provider(), email, password, client_ip=client_ip, now=utc_now(),
-    )
+    token = merchant_service.login_merchant(session, get_auth_provider(), email, password, now=utc_now())
 
     # Redirect al frontend dello scanner con il cookie inserito
     response = RedirectResponse(url="/merchant/scanner", status_code=303)

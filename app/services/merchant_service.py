@@ -5,7 +5,7 @@ Regole di business
 ------------------
 - Il merchant si registra con email + password tramite il provider di autenticazione: la tabella `merchant`
   non ha nessuna password, solo `auth_user_id` ed email (con il provider `local` l'hash sta in `AuthCredential`).
-- Il login ha un freno ai tentativi (5 errori in 15 minuti per email e per IP → 429, vedi `auth.LoginThrottle`);
+- Il login ha un freno ai tentativi (5 errori in 15 minuti per email → 429, avviso dal 3° errore, vedi `auth.LoginThrottle`);
   il merchant cambia la password dalle impostazioni, il reset lo fa il founder (ticket 13).
 - Un merchant appena registrato **lavora subito** (scan, tree points) ma è `is_approved=False`:
   il suo pool conta per la piantumazione solo dopo l'approvazione manuale del founder.
@@ -290,7 +290,7 @@ from sqlalchemy.exc import IntegrityError  # noqa: E402
 from sqlmodel import Session  # noqa: E402
 
 from app.core import crypto  # noqa: E402
-from app.core.auth import AuthProvider, PasswordAdminProvider, login_throttle, login_throttle_keys  # noqa: E402
+from app.core.auth import AuthProvider, PasswordAdminProvider, login_failure_message, login_throttle, login_throttle_key  # noqa: E402
 from app.core.config import settings  # noqa: E402
 from app.core.errors import (  # noqa: E402
     AuthError, ConflictError, DomainError, ExternalServiceError, ForbiddenError, NotFoundError,
@@ -357,25 +357,25 @@ def login_merchant(
     email: str,
     password: str,
     *,
-    client_ip: Optional[str],
     now: datetime,
     throttle=login_throttle,
 ) -> str:
     """
     Verifica email+password col provider e ritorna il token di sessione, con il freno ai tentativi:
     il controllo è PRIMA di ogni verifica (a soglia anche la password giusta riceve 429), ogni errore di
-    credenziali (anche email sconosciuta) conta sull'email e sull'IP, un accesso riuscito azzera solo l'email.
+    credenziali (anche email sconosciuta) conta sull'email e dal 3° errore il messaggio avvisa del blocco;
+    un accesso riuscito azzera il contatore.
     Solleva `TooManyAttemptsError` (429), `AuthError` se le credenziali sono errate, `ForbiddenError` se
     l'identità è valida ma non è collegata a un merchant (es. un account rimasto senza negozio).
     """
-    keys = login_throttle_keys(email, client_ip)
-    throttle.check(keys, now)
+    key = login_throttle_key(email)
+    throttle.check(key, now)
     try:
         token = provider.sign_in_password(email, password)
-    except AuthError:
-        throttle.record_failure(keys, now)
-        raise
-    throttle.clear(keys[0])
+    except AuthError as error:
+        failures = throttle.record_failure(key, now)
+        raise AuthError(login_failure_message(failures)) from error
+    throttle.clear(key)
     identity = provider.verify_token(token)
     if identity is None or merchant_crud.get_merchant_by_auth_user_id(session, identity.user_id) is None:
         raise ForbiddenError("Account non registrato come esercente")

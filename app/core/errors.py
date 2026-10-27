@@ -41,7 +41,8 @@ class TooManyAttemptsError(DomainError):
         self.retry_after = max(1, int(retry_after))
         minutes = -(-self.retry_after // 60)
         super().__init__(
-            f"Troppi tentativi di accesso: riprova tra {minutes} minut{'o' if minutes == 1 else 'i'}"
+            f"Troppi tentativi di accesso: riprova tra {minutes} minut{'o' if minutes == 1 else 'i'}, "
+            "oppure chiedi al founder di reimpostare la password"
         )
 
 
