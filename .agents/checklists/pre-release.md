@@ -35,6 +35,8 @@ Prerequisito: SQLite usa-e-getta (`DATABASE_URL=sqlite:///...` solo nel terminal
 - [ ] **Dashboard admin** (`/admin`): login con `ADMIN_SECRET_KEY`; il merchant appena registrato compare «In attesa»; «Avvia» → «Attivo» (lo scanner aggiunge, un cliente nuovo riceve `/c/<token>`); «Metti in pausa» → lo scanner solo toglie e la pagina carta del cliente resta identica; «Riattiva»; sesto tentativo di password sbagliata → 429; «Esci» chiude la sessione
 - [ ] **Reset password dalla dashboard**: la password temporanea compare una volta sola con «Copia»; il merchant accede con quella e non con la vecchia, la sua sessione aperta decade, la cambia da Impostazioni; un merchant fermato dal 429 rientra subito dopo il reset; nessuna password né `ADMIN_SECRET_KEY` nel log del server
 
+> Verifica parziale del 2026-10-27 (ticket 14, via HTTP su un processo vero con SQLite usa-e-getta, non nel browser): stato in attesa/attivo/pausa dello scanner, azioni della dashboard (con controllo `Origin`), reset password, cambio password, freni 429 di merchant e admin, nessun segreto nel log. Le voci sopra restano da spuntare dal founder nel browser e con Instagram.
+
 ## Produzione
 - [ ] Env vars su DigitalOcean allineate (vedi `deploy.md`), **prima** del merge
 - [ ] DB di produzione resettato (i dati di v0.1.0 non si migrano: «Primo deploy di v0.3.0» in `deploy.md`)
