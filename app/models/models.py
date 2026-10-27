@@ -84,7 +84,7 @@ class Merchant(SQLModel, table=True):
     zernio_api_key_enc: Optional[str] = Field(default=None)  # AES-256-GCM "<key_id>:<base64(nonce+cifrato)>"
     zernio_account_id: Optional[str] = Field(default=None, unique=True)  # account Instagram scelto
     zernio_profile_id: Optional[str] = Field(default=None)
-    zernio_team_id: Optional[str] = Field(default=None)      # team Zernio della chiave: ambito della quota
+    zernio_team_id: Optional[str] = Field(default=None)      # team Zernio della chiave (oggi sempre vuoto: Zernio non lo espone)
     instagram_username: Optional[str] = Field(default=None)  # handle PUBBLICO del negozio, per il pannello
     webhook_hook_id: Optional[str] = Field(default=None, unique=True, index=True)  # id opaco nel path del webhook
     webhook_secret_enc: Optional[str] = Field(default=None)  # secret del webhook del negozio, cifrato
@@ -215,8 +215,9 @@ class ProcessedWebhookEvent(SQLModel, table=True):
 class ZernioSendCounter(SQLModel, table=True):
     """
     Invii riusciti del mese per ambito di quota (team Zernio che invia). Serve solo
-    all'avviso di quota: è Zernio a fermare gli invii. `quota_scope` oggi è
-    "zernio:<team_id>" (ripiego "account:<account_id>"), domani "platform"; nessuna FK.
+    all'avviso di quota: è Zernio a fermare gli invii. `quota_scope` oggi è sempre
+    "account:<account_id>" (Zernio non espone l'id del team: `zernio_team_id` resta vuoto; il ramo
+    "zernio:<team_id>" scatterebbe solo se comparisse), domani "platform"; nessuna FK.
     """
     quota_scope: str = Field(primary_key=True)
     period: str = Field(primary_key=True)  # 'YYYY-MM' (mese UTC)

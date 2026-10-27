@@ -85,9 +85,9 @@ engine = create_engine(
 
 # --- Router ---
 app.include_router(admin_router)                 # /admin: dashboard del founder (login, lista, azioni)
-app.include_router(consumer_views_router)        # GET /c/{token}, /privacy
-app.include_router(merchant_api_router, prefix="/api") # POST /api/merchant/create
-app.include_router(merchant_auth_router)         # POST /merchant/login, GET /merchant/logout
+app.include_router(consumer_views_router)        # GET /c/{token}, /carta-di-prova, /privacy
+app.include_router(merchant_api_router, prefix="/api") # /api/merchant/...: API del merchant, onboarding Instagram, API admin (X-Admin-Key)
+app.include_router(merchant_auth_router)         # POST /merchant/register, POST /merchant/login, GET /merchant/logout
 app.include_router(merchant_views_router)        # GET /merchant/... pagine HTML
 app.include_router(webhooks_router)              # POST /webhooks/zernio/{hook_id}
 
