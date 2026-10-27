@@ -173,6 +173,16 @@ def test_chiave_admin_vuota_non_fa_entrare_nessuno(client, monkeypatch):
     assert client.get("/admin", headers={"X-Admin-Key": ""}, follow_redirects=False).status_code == 303
 
 
+def test_vecchia_api_admin_con_chiave_vuota_o_errata_resta_chiusa(client, monkeypatch, admin_headers):
+    """`require_admin_key` usa `admin_key_matches`: con chiave vuota un header vuoto non apre `/api/merchant/*`."""
+    assert client.get("/api/merchant/", headers={"X-Admin-Key": "sbagliata"}).status_code == 403
+    assert client.get("/api/merchant/", headers={"X-Admin-Key": ""}).status_code == 403
+
+    monkeypatch.setattr(settings, "ADMIN_SECRET_KEY", "")
+    assert client.get("/api/merchant/", headers={"X-Admin-Key": ""}).status_code == 403
+    assert client.get("/api/merchant/").status_code == 403
+
+
 def test_login_con_origine_estranea_o_assente_e_403(client):
     for headers in ({"Origin": "https://evil.example"}, {"Origin": "null"}, {}, {"Referer": "https://evil.example/x"}):
         response = admin_login(client, headers=headers)
@@ -262,7 +272,7 @@ def test_header_errato_e_rifiutato_anche_con_un_cookie_valido(admin_client, sess
 
 
 def test_la_vecchia_api_admin_resta_com_era(client, session, admin_headers):
-    """`require_admin_key` (403 senza header) protegge ancora `/api/merchant/*`; il cookie della dashboard non la apre."""
+    """`require_admin_key` (403 senza header, stesso esito di prima) protegge ancora `/api/merchant/*`; il cookie della dashboard non la apre."""
     assert admin_login(client).status_code == 303
     assert client.get("/api/merchant/").status_code == 403
     assert client.get("/api/merchant/", headers=admin_headers).status_code == 200

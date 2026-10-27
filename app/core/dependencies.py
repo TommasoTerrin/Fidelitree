@@ -76,8 +76,11 @@ def set_session_cookie(response: Response, token: str) -> None:
     )
 
 def require_admin_key(x_admin_key: str = Header(default=None)):
-    """Protegge gli endpoint amministrativi: richiede l'header X-Admin-Key."""
-    if x_admin_key != settings.ADMIN_SECRET_KEY:
+    """
+    Protegge gli endpoint amministrativi: richiede l'header X-Admin-Key (confronto in tempo costante;
+    con `ADMIN_SECRET_KEY` vuota nessun header è valido).
+    """
+    if not admin_key_matches(x_admin_key, settings.ADMIN_SECRET_KEY):
         raise HTTPException(status_code=403, detail="Non autorizzato")
 
 ADMIN_COOKIE = "admin_session"
