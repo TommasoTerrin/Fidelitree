@@ -387,3 +387,16 @@ def test_close_period_include_un_negozio_approvato_in_pausa(session, approved_me
     ))
 
     assert [call["name"].split(" · ")[0] for call in mock_ecologi] == ["Pausa"]
+
+
+@pytest.mark.parametrize("state", NOT_ACTIVE)
+def test_carta_di_un_altro_negozio_da_404_prima_del_403(auth_client, session, merchant, state):
+    """La proprietà della carta si verifica prima dello stato: nessun 403 su una carta non propria."""
+    altro = merchant_crud.create_merchant(session, {
+        "business_name": "Altro", "email": "altro@test.it", "is_approved": True,
+    })
+    altrui = make_card(session, altro, igsid="igsid-altrui")
+    _set_state(session, merchant, state)
+
+    assert auth_client.post(f"/api/merchant/add-tree-points/{altrui.id}", json={"tree_points": 5}).status_code == 404
+    assert auth_client.post(f"/api/merchant/add-point/{altrui.id}", json={"cb_points": 5}).status_code == 404

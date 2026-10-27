@@ -181,11 +181,11 @@ def add_tree_points(
     """
     now = now or utc_now()
     state = merchant_state(merchant)
-    check_balance_change(state, points)
     try:
         card = session.exec(select(Card).where(Card.id == card_id).with_for_update()).first()
         if card is None or card.merchant_id != merchant.id:
             raise NotFoundError(_CARD_NOT_VALID)
+        check_balance_change(state, points)  # dopo la proprietà della carta, prima di ogni scrittura
 
         card.tree_points = apply_tree_points_delta(card.tree_points, points)
         period = period_for(now)
