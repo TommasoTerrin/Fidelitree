@@ -11,7 +11,8 @@ Cliente (Instagram) ── DM "CARTA" / menu ──► Instagram ──► Zerni
         ▲                                                                              │
         └──── card "Apri la carta" ◄── Zernio ◄── POST messages (chiave del merchant) ─┤
                                                                                        ▼
-Browser cliente: /c/<token> (pagina carta + QR)        FastAPI (app/main.py)
+Browser cliente: /c/<token> (pagina carta + QR),         FastAPI (app/main.py)
+                 /carta-di-prova (negozio in attesa)
 Browser merchant: PWA /merchant/* (scanner, gestione)    routes → services (core puro + shell) → db_crud
                                                           ▼
                                        PostgreSQL (Neon oggi, Supabase più avanti)
@@ -41,7 +42,7 @@ AuthCredential (user_id = Merchant.auth_user_id, nessuna FK) → hash della pass
 
 | Tabella | Campi principali | Note |
 |---|---|---|
-| **Merchant** | campi v0.2.0 + `zernio_api_key_enc`, `zernio_account_id` (unico), `zernio_profile_id`, `zernio_team_id`, `instagram_username`, `webhook_hook_id` (unico), `webhook_secret_enc`, `zernio_webhook_id`, `instagram_status`, `persistent_menu_set`, `standby_detected_at`, `standby_owner_app_id` | chiave e secret cifrati, mai restituiti |
+| **Merchant** | campi v0.2.0 + `is_paused` (default `False`), `created_at` (iscrizione, UTC) + `zernio_api_key_enc`, `zernio_account_id` (unico), `zernio_profile_id`, `zernio_team_id`, `instagram_username`, `webhook_hook_id` (unico), `webhook_secret_enc`, `zernio_webhook_id`, `instagram_status`, `persistent_menu_set`, `standby_detected_at`, `standby_owner_app_id` | chiave e secret cifrati, mai restituiti. **Stato del servizio** derivato da `is_approved` + `is_paused` (nessuna colonna di stato): vedi «Stato del servizio» |
 | **Card** | `id` UUID (= contenuto del QR per lo scan), `merchant_id`, `igsid_hash`, `link_version`, `link_token_hash` (unico), `zernio_conversation_id`, `last_inbound_at`, `cashback_cents`, `tree_points`, `created_at` | `UNIQUE(merchant_id, igsid_hash)`: una carta per (negozio, profilo Instagram) |
 | **PointTransaction** | `merchant_id`, `card_id` (non FK), `kind` (`scan`\|`conversion`), `delta`, `period`, `created_at` | **registro = fonte di verità** e audit |
 | **MerchantPool** | PK `(merchant_id, period)`, `points` | contatore del pool, aggiornato nella **stessa transazione** dello scan |
@@ -100,9 +101,11 @@ un errore su un negozio non blocca gli altri (resta non chiuso e si ritenta).
 6. trigger: testo normalizzato == INSTAGRAM_CARD_KEYWORD  oppure  postback FIDELITREE_CARD   no → 200 (ignorato)
 7. isFollower == false? → NESSUNA carta: testo fisso "segui @negozio, poi riscrivi CARTA" (outcome follow_requested,
    stessa finestra di 24 h, stessa quota). true o null (dato non disponibile) → si prosegue con la carta
-8. carta = get_or_create(merchant, HMAC(IGSID)); salva conversation.id e last_inbound_at = message.sentAt
+8. negozio ATTIVO o IN PAUSA: carta = get_or_create(merchant, HMAC(IGSID)); salva conversation.id e last_inbound_at = message.sentAt
+   negozio IN ATTESA: carta = solo ricerca (mai creata). Se esiste → come sopra; se non esiste → nessuna riga Card, nulla salvato
 9. can_reply(sentAt, ora) (< 24 h)?                                                  no → 200 (fuori finestra)
 10. card generic template: titolo = nome negozio, sottotitolo fisso, bottone "Apri la carta" → <PUBLIC_BASE_URL>/c/<token>
+    (cliente nuovo di un negozio in attesa: → <PUBLIC_BASE_URL>/carta-di-prova, anche nel testo di ripiego)
     POST /v1/inbox/conversations/{conversation.id}/messages (Idempotency-Key = event id, timeout 4 s, nessun nuovo tentativo)
     └─ errore Meta 2/1545133 (Meta rifiuta la card) → testo fisso con il link (rete di sicurezza)
     └─ 401/403 chiave → instagram_status = key_invalid · 409 not_thread_owner → come standby · altri → send_failed, log
@@ -138,7 +141,7 @@ Zernio (le carte restano; la voce di menu già impostata resta su Instagram).
 Il cliente apre `/c/<token>` dal link della card: vede tree points, cashback, avanzamento della conversione, livello
 del pool e un **QR che contiene solo l'id della carta** (non il token: una foto del QR non apre la carta). Il merchant
 lo inquadra da `/merchant/scanner` (PWA) → `/merchant/card/<id>/manage` (cookie merchant + carta del suo negozio) →
-+tree points → registro, pool e conversione come in v0.2.0.
++tree points → registro, pool e conversione come in v0.2.0 (solo se il negozio è **attivo**: vedi «Stato del servizio»).
 
 La pagina carta risponde con `Cache-Control: no-store` e `Referrer-Policy: no-referrer` (il saldo cambia a ogni scan,
 l'URL è il segreto); token sconosciuto o revocato → stessa 404 amichevole. Le pagine HTML merchant senza sessione valida
@@ -163,6 +166,26 @@ quota_scope)` è l'**unico** codice che sa da dove arriva la chiave.
 Service, modelli, webhook e contatore non cambiano: cambiano solo questa funzione e l'onboarding (connect al posto
 della chiave incollata).
 
+## Stato del servizio
+
+Derivato da `Merchant.is_approved` e `Merchant.is_paused` (nessun enum in DB): `card_service.service_state(is_approved, is_paused)`
+→ `ServiceState` (`app/core/enums.py`). Un negozio non approvato è sempre **in attesa**; la pausa conta solo se è approvato.
+Core puro in `card_service`: `can_add_balance` (solo `active`), `can_remove_balance` (sempre), `check_balance_change(state, delta)`
+(`ForbiddenError` → 403 per un delta positivo, prima di ogni scrittura; delta 0 sempre ammesso).
+
+| Stato (`is_approved`, `is_paused`) | Webhook | Scanner (merchant) | Pagina carta `/c/<token>` |
+|---|---|---|---|
+| **In attesa** (`False`, —) | cliente con carta → link vero; **cliente nuovo → `/carta-di-prova`**, nessuna riga `Card` né indice cieco | solo togliere, nessuna conversione | identica |
+| **Attivo** (`True`, `False`) | come sempre | tutto | identica |
+| **In pausa** (`True`, `True`) | come sempre | solo togliere, nessuna conversione | identica |
+
+- La conversione tree points → cashback si salta se il negozio non è attivo, anche con un delta negativo: il merchant può abbassare
+  la soglia dalle impostazioni e un `-1` farebbe scattare una conversione, cioè un accredito.
+- L'avviso sta solo nelle pagine del merchant (partial `service_banner`: scanner, gestione carta, impostazioni); il cliente non vede
+  nessuna differenza. `/carta-di-prova` è una pagina statica (stessi header no-store/no-referrer della pagina carta, `noindex`), senza QR vero.
+- `tree_service.close_period` non cambia: conta solo `is_approved` (un negozio approvato in pausa partecipa con i punti già raccolti).
+- Il cambio di stato è manuale: dashboard admin nel ticket 13; fino ad allora `POST /api/merchant/{id}/approve` o il DB.
+
 ## Autenticazione
 
 Tutto passa da `AuthProvider` (`app/core/auth.py`), scelto da `AUTH_PROVIDER`; la tabella `merchant` non ha password, solo `auth_user_id` ed email.
@@ -170,7 +193,7 @@ Tutto passa da `AuthProvider` (`app/core/auth.py`), scelto da `AUTH_PROVIDER`; l
 - **Provider `local`** (pilota, **ammesso in produzione**): email+password, hash `scrypt` della libreria standard (N=2^14, r=8, p=1, salt casuale per password) in `AuthCredential`, password di 8-128 caratteri. Il token è un JWT (`JWT_SECRET_KEY`) con `sub`, `email` e `ver` = `token_version`: `verify_token` controlla firma, scadenza, **esistenza della credenziale e `ver`**, quindi `set_password` (reset dell'admin, ticket 13) e `change_password` (il merchant, dalle impostazioni) invalidano le sessioni aperte. Email sconosciuta e password errata danno lo stesso `AuthError` («Credenziali non valide»; con email sconosciuta si verifica un hash fittizio). Accede al DB con una *session factory* iniettabile (default `Session(engine)`, import tardivo; i test usano SQLite in-memory). Contratto `PasswordAdminProvider` (`set_password`, `change_password`, `delete_user`): lo implementa solo `local`.
 - **Provider `dev`** (locale/test): utenti in memoria, password `DEV_AUTH_PASSWORD` per i merchant non registrati nel processo (così funzionano gli account del seed), token = JWT firmato con `JWT_SECRET_KEY` (senza `ver`: un token `dev` non vale con `local` e viceversa). Con `ENVIRONMENT=production` l'app **non parte** (`get_auth_provider()` è chiamato dal lifespan).
 - **Provider `supabase`**: stub, si collega in un rilascio successivo.
-- **Merchant**: `POST /merchant/register` (nasce non approvato, lavora subito) e `POST /merchant/login` (email + password) → cookie `access_token` (httpOnly, samesite lax, **Secure** con `ENVIRONMENT=production`) → `get_current_merchant`. Se la creazione del merchant fallisce dopo quella della credenziale, questa si elimina (altrimenti l'email resterebbe bloccata).
+- **Merchant**: `POST /merchant/register` (nasce non approvato, quindi **in attesa**: vedi «Stato del servizio») e `POST /merchant/login` (email + password) → cookie `access_token` (httpOnly, samesite lax, **Secure** con `ENVIRONMENT=production`) → `get_current_merchant`. Se la creazione del merchant fallisce dopo quella della credenziale, questa si elimina (altrimenti l'email resterebbe bloccata).
 - **Freno ai tentativi sul login** (`LoginThrottle`, core in `auth.py`): 5 errori in 15 minuti **per email normalizzata** (nessun freno per IP: dietro il proxy di DO sarebbe lo stesso per tutti o falsificabile via `X-Forwarded-For`, quindi il Dockerfile non cambia). Dal 3° errore il 401 aggiunge «Attenzione: dopo 5 errori l'accesso si ferma per 15 minuti», al 5° «Accesso sospeso», poi 429 con `Retry-After` e l'invito a chiedere al founder di reimpostare la password. Il controllo precede ogni verifica (a soglia anche la password giusta riceve 429); l'email sconosciuta conta come errore, con gli stessi messaggi (l'avviso non rivela se l'account esiste); un accesso riuscito azzera il contatore; l'identità senza merchant (403) non conta. Contatore **in memoria**: corretto con un solo processo (oggi su DO), si azzera al riavvio, con più processi/worker ciascuno ha il suo (limite × N). Lo riuserà il login admin (ticket 13).
 - **Cambio password del merchant**: `POST /api/merchant/me/password` (password attuale + nuova): 400 se la nuova non è di 8-128 caratteri (o il provider non gestisce le password), 401 se l'attuale è errata; riemette il cookie con il nuovo `ver`. Il blocco «Cambia password» delle impostazioni compare solo se il provider è un `PasswordAdminProvider`.
 - **Cliente**: **nessuna autenticazione**. La carta si vede solo con il link segreto `/c/<token>`.
@@ -185,15 +208,16 @@ Tutto passa da `AuthProvider` (`app/core/auth.py`), scelto da `AUTH_PROVIDER`; l
 | GET /sw.js | pubblico | service worker della PWA merchant (scope `/merchant/`) |
 | POST /webhooks/zernio/{hook_id} | firma HMAC del negozio | DM Instagram → carta → card di risposta |
 | GET /c/{token} | link segreto | pagina carta con QR (id carta), saldo e pool del negozio |
+| GET /carta-di-prova | pubblico | carta fittizia per i clienti nuovi di un negozio in attesa (nessun dato, `noindex`, no-store) |
 | GET /privacy | pubblico | informativa per i clienti |
 | GET /merchant/login, /merchant/register | pubblico | pagine di accesso |
 | POST /merchant/register, POST /merchant/login, GET /merchant/logout | pubblico | auth merchant (login: 401 credenziali, 403 senza negozio, **429** troppi tentativi con `Retry-After`) |
-| GET /merchant/scanner, /merchant/settings, /merchant/card/{id}/manage | cookie merchant | pagine merchant (PWA) |
+| GET /merchant/scanner, /merchant/settings, /merchant/card/{id}/manage | cookie merchant | pagine merchant (PWA); banner di stato e pulsanti di aggiunta disattivati se il negozio è in attesa o in pausa |
 | GET /api/merchant/me, PUT /api/merchant/me/settings | cookie merchant | profilo e impostazioni di conversione |
 | POST /api/merchant/me/password | cookie merchant | cambio password (400 nuova non valida, 401 attuale errata); riemette il cookie |
 | POST /api/merchant/instagram/key, GET /api/merchant/instagram/accounts, POST /api/merchant/instagram/account, GET /api/merchant/instagram, DELETE /api/merchant/instagram | cookie merchant | onboarding Instagram/Zernio e pannello |
-| POST /api/merchant/add-tree-points/{id} | cookie merchant | scan: tree points (+ conversione automatica) |
-| POST /api/merchant/add-point/{id} | cookie merchant | +/- cashback in euro |
+| POST /api/merchant/add-tree-points/{id} | cookie merchant | scan: tree points (+ conversione automatica); **403** se il negozio non è attivo e il delta è positivo |
+| POST /api/merchant/add-point/{id} | cookie merchant | +/- cashback in euro; **403** se il negozio non è attivo e l'importo è positivo |
 | DELETE /api/merchant/card/{id} | cookie merchant | elimina carta propria (cancellazione su richiesta del cliente) |
 | CRUD /api/merchant/…, POST /api/merchant/{id}/approve | X-Admin-Key | gestione merchant, approvazione, soglie (il DELETE elimina anche la credenziale `local`) |
 

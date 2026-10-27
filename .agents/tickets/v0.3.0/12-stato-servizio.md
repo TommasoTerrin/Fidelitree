@@ -92,3 +92,9 @@ stato «sospeso dal merchant», personalizzazione del testo della carta di prova
 Un merchant appena registrato con Instagram collegato fa vedere ai nuovi clienti la carta di prova; dopo l'approvazione (via API
 admin esistente `POST /api/merchant/{id}/approve`, la dashboard arriva nel ticket 13) la carta è vera; in pausa lo scanner non
 aggiunge nulla; docs e planner aggiornati; commit «... (ticket 12)».
+
+## Esito (2026-10-27)
+Fatto nei commit `f5df96c` e `86f00dd`. Una sola differenza di forma rispetto alle «Modifiche»: il core (`ServiceState`, `service_state`,
+`can_add_balance`, `can_remove_balance`, più `check_balance_change`) sta in `card_service` e `ServiceState` in `app/core/enums.py`, non in
+`merchant_service`, per evitare un import circolare con `instagram_service`. Le scelte non previste dal ticket e le discrepanze trovate sono
+nel [planner](../../planner/current.md) (nota del ticket 12).

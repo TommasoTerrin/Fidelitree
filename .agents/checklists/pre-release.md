@@ -28,7 +28,7 @@ Prerequisito: SQLite usa-e-getta (`DATABASE_URL=sqlite:///...` solo nel terminal
 - [ ] **Log del server senza segreti**: né chiave Zernio, secret, IGSID, token del link, né testo dei messaggi (`/c/***` e `/webhooks/zernio/***` mascherati)
 - [ ] «Scollega» → il webhook sparisce da Zernio
 - [ ] Merchant: login (password giusta e sbagliata) → `/merchant/scanner`; aggiunta/rimozione cashback, tentativo sotto zero (respinto), «usa intero cashback»
-- [ ] Merchant non approvato: registra un nuovo account, verifica che lavori ma **non** compaia nell'anteprima di `close_period`
+- [ ] Merchant non approvato: registra un nuovo account, verifica che lo scanner si apra ma non aggiunga nulla (403, banner «In attesa di approvazione», pulsanti di aggiunta disattivati; togliere funziona) e che **non** compaia nell'anteprima di `close_period`; un cliente nuovo di quel negozio vede `/carta-di-prova`
 - [ ] `python -m scripts.close_period --month AAAA-MM` (mese del seed, `ECOLOGI_TEST_MODE=true`): anteprima corretta, conferma, **seconda esecuzione senza effetti**; con `--cap` basso vedi il blocco
 - [ ] `python -m scripts.ecologi_check` lanciato con la chiave di test (`ECOLOGI_TEST_MODE=true`) e con quella reale (`ECOLOGI_TEST_MODE=false`): entrambe OK, nulla sul profilo Ecologi
 - [ ] Logout del merchant

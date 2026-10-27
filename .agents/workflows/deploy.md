@@ -5,7 +5,7 @@
 - L'app su **DigitalOcean App Platform** builda il `Dockerfile` e fa **auto-deploy a ogni push su `main`**.
 - Il container ascolta su `$PORT` (iniettata da DO; default 8000 in locale).
 - Il database è **PostgreSQL** (Neon oggi, Supabase in un rilascio successivo): l'app lo raggiunge tramite `DATABASE_URL`.
-- Lo schema viene creato/aggiornato da `create_all()` all'avvio (solo tabelle/colonne NUOVE: non elimina né modifica colonne esistenti).
+- Lo schema viene creato da `create_all()` all'avvio: crea **solo le tabelle mancanti**. Non aggiunge colonne a una tabella già esistente, né la modifica o la elimina (verificato: su una tabella `merchant` creata prima, una colonna nuova come `is_paused` non compare). Un DB già creato con un modello precedente va resettato con `python -m scripts.reset_db`.
 
 ## Env vars richieste su DigitalOcean
 
@@ -50,9 +50,9 @@ Eliminate da v0.2.0 (cancellabili da DO): `MERCHANT_PASSWORD`. Storiche non più
 > è rimasta la vecchia chiave Fernet di v0.1.0, **sostituiscila con una generata da zero**: ha lo stesso formato e
 > verrebbe accettata in silenzio. Lo stesso vale per `IGSID_HMAC_KEY` e `CARD_LINK_KEY`: tre valori nuovi e diversi.
 
-> ⚠️ **Schema v0.3.0**: `create_all()` non modifica le tabelle esistenti. Il passaggio al nuovo modello (email, pool, carte con indice cieco, webhook...) richiede il reset del DB (`python -m scripts.reset_db`): i dati di v0.1.0 non si migrano. Vedi «Primo deploy di v0.3.0».
+> ⚠️ **Schema v0.3.0**: `create_all()` non modifica le tabelle esistenti. Il passaggio al nuovo modello (email, pool, carte con indice cieco, webhook, `AuthCredential`, `Merchant.is_paused` e `Merchant.created_at`...) richiede il reset del DB (`python -m scripts.reset_db`): i dati di v0.1.0 non si migrano. **Anche un DB di sviluppo o di collaudo creato prima del ticket 12** (Neon di sviluppo, `collaudo*.db`) va resettato: senza le colonne nuove l'app dà errore alla prima lettura dei merchant. Vedi «Primo deploy di v0.3.0».
 
-> ⚠️ **Accesso dei merchant in produzione**: con `ENVIRONMENT=production` il provider `dev` non parte e il provider `supabase` è uno stub; in produzione si usa **`AUTH_PROVIDER=local`** (ticket 11 di v0.3.0, **fatto**: i merchant si registrano da `/merchant/register`, accedono e cambiano la password dalle impostazioni). **Non fare comunque il primo deploy prima dei ticket 12-13**: senza la dashboard admin il founder non può approvare né mettere in pausa un merchant né reimpostargli la password, e senza lo stato del servizio un negozio in attesa non ha la carta di prova. Questo avviso si toglie quando 12 e 13 sono chiusi.
+> ⚠️ **Accesso dei merchant in produzione**: con `ENVIRONMENT=production` il provider `dev` non parte e il provider `supabase` è uno stub; in produzione si usa **`AUTH_PROVIDER=local`** (ticket 11 di v0.3.0, **fatto**: i merchant si registrano da `/merchant/register`, accedono e cambiano la password dalle impostazioni). **Non fare comunque il primo deploy prima del ticket 13**: senza la dashboard admin il founder non può mettere in pausa né riattivare un merchant né reimpostargli la password (l'approvazione si può fare con `POST /api/merchant/{id}/approve` e `X-Admin-Key`). Lo stato del servizio (ticket 12, **fatto**) c'è già: un negozio in attesa mostra la carta di prova ai clienti nuovi e il suo scanner può solo togliere saldo. Questo avviso si toglie quando il 13 è chiuso.
 
 ## Primo deploy di v0.3.0 (ordine delle operazioni)
 
@@ -77,7 +77,7 @@ v0.3.0 è la prima release dopo v0.1.0: schema e variabili cambiano insieme. Ord
 1. Completa la checklist `.agents/checklists/pre-release.md` e i passi 1-2 di «Primo deploy di v0.3.0» (solo la prima volta).
 2. `git checkout main && git merge develop && git push` → parte il deploy automatico.
 3. Attendi il deploy dalla console DO (build + health check su `/health`).
-4. Smoke test: `python scripts/smoke_test_prod.py https://<app>.ondigitalocean.app <ADMIN_SECRET_KEY>` (controlla versione `0.3.0`, `/privacy`, `/c/<inesistente>` 404, webhook con hook sconosciuto 404, manifest e service worker, pagine del vecchio flusso 404, API admin).
+4. Smoke test: `python scripts/smoke_test_prod.py https://<app>.ondigitalocean.app <ADMIN_SECRET_KEY>` (controlla versione `0.3.0`, `/privacy`, `/carta-di-prova`, `/c/<inesistente>` 404, webhook con hook sconosciuto 404, manifest e service worker, pagine del vecchio flusso 404, API admin).
 5. Verifica il DB (console Neon/Supabase → tabelle `merchant`, `authcredential`, `card`, `pointtransaction`, `merchantpool`, `treeplanting`, `processedwebhookevent`, `zerniosendcounter` presenti).
 6. Tag: `git tag vX.Y.Z && git push --tags`.
 7. Riallinea develop: `git checkout develop && git merge main && git push`.
@@ -154,6 +154,8 @@ chiave Zernio, «COLLEGA ZERNIO», scegli l'account, «COLLEGA ACCOUNT». Contro
 (dashboard) compare un webhook con URL `<tunnel>/webhooks/zernio/…`; nella chat del negozio su Instagram (mobile)
 compare il menu «🌳 La mia carta». Poi, nel terminale 3: `python -m scripts.zernio_check conversations --merchant-id 1`
 (stampa lo stato del negozio con la chiave mascherata e le conversazioni: `id  data`).
+
+**Passo 2b — approva il negozio** (dal ticket 12): un negozio appena registrato è «in attesa», quindi il DM `CARTA` di un cliente nuovo porta alla **carta di prova** (`/carta-di-prova`), non a `/c/<token>`, e lo scanner non aggiunge nulla. Per provare la carta vera approva il negozio con l'API admin (finché non c'è la dashboard del ticket 13): `POST http://127.0.0.1:8001/api/merchant/1/approve` con l'header `X-Admin-Key` = `ADMIN_SECRET_KEY` del tuo `.env` (non incollarla in chat né nei log). Se vuoi provare anche la carta di prova, fai prima il passo 3 **senza** approvare: deve aprirsi `/carta-di-prova` con l'etichetta «CARTA DI PROVA», senza QR e senza dati; poi approva e riscrivi `CARTA`.
 
 **Passo 3 — DM da un follower**: da **A** scrivi `CARTA` al negozio. Annota l'ora sul telefono in cui invii, l'ora
 della riga `Webhook: negozio=1 evento=… esito=sent` nel terminale 2 e l'ora in cui la card compare sul telefono (per

@@ -12,11 +12,11 @@
 alberi), mai rilasciata. Dopo v0.3.0 l'app è funzionalmente quella descritta in AGENTS.md; la strada verso la
 versione "a regime" è nella [roadmap](roadmap.md).
 
-**Stato (2026-10-27)**: codice dei ticket 01-11 completo (878 test verdi). Il 2026-10-27 l'utente ha deciso di aggiungere
+**Stato (2026-10-27)**: codice dei ticket 01-12 completo (936 test verdi). Il 2026-10-27 l'utente ha deciso di aggiungere
 **tre ticket prima del pilota** (11 auth locale, 12 stato del servizio, 13 dashboard admin): in produzione i merchant non
 potevano accedere e il founder deve poter approvare, mettere in pausa e reimpostare le password. Il vecchio ticket 11 è il
-**14**. **Il ticket 11 è fatto** (i merchant possono registrarsi, accedere e cambiare la password con `AUTH_PROVIDER=local`);
-restano 12 e 13. **Pronta al merge dopo** i ticket 12-13, il collaudo end-to-end del founder (procedura in
+**14**. **I ticket 11 e 12 sono fatti** (i merchant possono registrarsi, accedere e cambiare la password con `AUTH_PROVIDER=local`;
+lo stato in attesa / attivo / in pausa governa carta di prova e scanner); resta il 13. **Pronta al merge dopo** il ticket 13, il collaudo end-to-end del founder (procedura in
 [deploy.md](../workflows/deploy.md), esiti in [zernio-notes.md](../architecture/zernio-notes.md)) e l'ok esplicito
 dell'utente: nessun merge su `develop`/`main` e nessun tag prima. **v0.2.1 è assorbito da v0.3.0**: nessun merge
 separato, `develop` oggi è alla v0.2.1 mai rilasciata e verrà superata dal merge di `feature/instagram-cards`.
@@ -34,12 +34,12 @@ Contesto di riferimento: decisioni in [AGENTS.md](../../AGENTS.md), vincoli Zern
 | 04 | Core dei messaggi: trigger, card, finestra 24 h, quota | ✅ 2026-10-23 `f4bb1b3` (459 test) |
 | 05 | Client Zernio, `zernio_check`, **collaudo anticipato** | ✅ 2026-10-26: passi 1-2 del collaudo fatti (base URL `https://zernio.com/api` ok, `send-card` consegnata e corretta su mobile al profilo del founder); passo 3 (non follower) rimandato al collaudo del 07/11 |
 | 06 | Webhook: dalla parola chiave alla card | ✅ 2026-10-23 (644 test) |
-| 07 | Onboarding Instagram del merchant | ✅ codice 2026-10-26 (739 test); collaudo 2026-10-26 fatto per onboarding e DM da follower (timeout invio 4 s); non follower/Requests, ManyChat, menu e «Scollega» rimandati al ticket 11 |
+| 07 | Onboarding Instagram del merchant | ✅ codice 2026-10-26 (739 test); collaudo 2026-10-26 fatto per onboarding e DM da follower (timeout invio 4 s); non follower/Requests, ManyChat, menu e «Scollega» rimandati al ticket 14 |
 | 08 | Pagina carta, QR, scan e PWA merchant | ✅ 2026-10-26 (793 test); prova manuale del founder riuscita (link `/c/<token>`, scan dalla PWA con aggiunta di punti, PWA installata, redirect al login) |
 | 09 | Rimozione del vecchio flusso cliente (OTP, wallet, `/join`, `Customer`) | ✅ 2026-10-26 (744 test) |
 | 10 | Seed, smoke test e script | ✅ 2026-10-26 (766 test) |
 | 11 | Autenticazione dei merchant: provider `local` (registrazione, login, cambio password) | ✅ 2026-10-27 `d3a32d6` + `9ae5b3e` (freno solo per email) (878 test); smoke su SQLite usa-e-getta con `ENVIRONMENT=production` + `AUTH_PROVIDER=local`: registrazione, login, cambio password ok |
-| 12 | Stato del servizio: approvazione, pausa e carta di prova | da fare (ticket scritto, scelte confermate dall'utente il 2026-10-27) |
+| 12 | Stato del servizio: approvazione, pausa e carta di prova | ✅ 2026-10-27 `f5df96c` + `86f00dd` (936 test); avvio verificato su SQLite usa-e-getta (reset, seed, colonne `is_paused` e `created_at`) |
 | 13 | Dashboard admin | da fare (ticket scritto) |
 | 14 | Documentazione, collaudo end-to-end e release (era l'11) | 🔶 2026-10-27: documentazione generale fatta (`65caf34`) e `replay_webhook --event-id` (`b40401a`, 767 test). Restano: collaudo Instagram del founder (si può fare subito), verifiche dei ticket 11-13, esiti in `zernio-notes.md`, ok al merge |
 
@@ -149,6 +149,35 @@ Note sui ticket fatti:
 
 - **11**: `app/core/auth.py` ha ora le sezioni `# --- Core puro ---` (hash `scrypt`, `validate_password` 8-128, `login_retry_after`) e `# --- Shell ---` (`LocalAuthProvider`, `LoginThrottle`, contratto `PasswordAdminProvider` con `set_password`, `change_password` e `delete_user`). Tabella `AuthCredential` (`password_hash` fuori dal `repr`). `login_merchant` prende `client_ip` e `now` e controlla il freno prima di verificare; `POST /api/merchant/me/password`; blocco «Cambia password» nelle impostazioni (solo se il provider è un `PasswordAdminProvider`); `TooManyAttemptsError` → 429 con `Retry-After`. **Scelte non previste dal ticket** (decise dall'agente, da rivedere): (1) **freno solo per email, senza IP** (deciso con l'utente a fine ticket: prima era per email e per IP con `--proxy-headers` nel Dockerfile; tolti entrambi perché dietro il proxy di DO l'IP sarebbe globale o falsificabile): dal 3° errore il messaggio avvisa («Attenzione: dopo 5 errori l'accesso si ferma per 15 minuti»), al 5° «Accesso sospeso», dal 6° 429 con invito a chiedere il reset al founder; il `Dockerfile` è com'era (corretto solo il commento su Railway); `login_merchant` non ha più `client_ip`; (2) `PasswordAdminProvider.delete_user` + compensazione in `register_merchant` (se la creazione del merchant fallisce la credenziale si elimina) + pulizia nel `DELETE` admin del merchant: senza, una credenziale orfana bloccherebbe l'email per sempre (409); (3) il successo azzera il contatore dell'email; (4) il lifespan chiama `get_auth_provider()`: `dev` con `production` ora impedisce davvero l'avvio (prima falliva alla prima richiesta di auth, con un 500); (5) cookie `Secure` e `samesite=lax` con `ENVIRONMENT=production`; (6) `RegisterRequest` e `ChangePasswordRequest` senza campi obbligatori né tipi (`Any`): un 422 su un campo mancante rimanderebbe indietro il corpo, password comprese; la validazione è nel service (400), e `validate_registration`/`validate_business_name` accettano qualunque tipo (la registrazione con campo mancante passa da 422 a 400); (7) `change_password` valida la nuova password **prima** di verificare quella attuale (400 prima di 401) e ritorna il token riemesso; (8) password lunga oltre 128 al login = «Credenziali non valide» senza hash; (9) con `dev`/`supabase` `POST /me/password` risponde 400 e il blocco non compare; (10) fixture `autouse` `reset_login_throttle` e fixture `local_auth` in `conftest` (il provider usa la sessione di test: **non apre mai l'engine dell'app**; gli unici test che toccano il lifespan sostituiscono `app.main.engine` con SQLite in-memory). Limiti noti (in roadmap): freno in memoria per processo; `scrypt` blocca l'event loop ~60-130 ms a ogni login/registrazione; un login sbagliato mostra il JSON dell'errore (già così prima); chi conosce un'email può bloccarne il login per 15 minuti. `security.py` non è cambiato (il `ver` entra nel payload). Il debito «accesso dei merchant in produzione» è chiuso per la parte di auth; l'avviso in `deploy.md` resta finché non sono chiusi 12 e 13.
 
+- **12**: `Merchant.is_paused` (default `False`) e `Merchant.created_at` (UTC, per la lista admin del 13). Stato derivato, nessun enum
+  in DB: `ServiceState` in `app/core/enums.py`; `service_state`, `can_add_balance`, `can_remove_balance` e `check_balance_change`
+  (`ForbiddenError` → 403) nel core di `card_service`; `merchant_state(merchant)` nella shell. **Scelte non previste dal ticket**:
+  (1) il core sta in `card_service` e non in `merchant_service` come dice il ticket: `merchant_service` importa `instagram_service`
+  in cima al core, quindi il webhook non può importarlo senza un ciclo (il ticket ammette `card_service`, che non importa nessuno
+  dei due; con `merchant_service` l'ordine di import avrebbe deciso se l'app parte); (2) la conversione si salta **per stato**, non per
+  segno del delta: un negozio non attivo può abbassare la soglia dalle impostazioni e un `-1` farebbe scattare una conversione, cioè un
+  accredito di cashback (test dedicato); (3) per il cashback il segno si guarda sui **centesimi** dopo `euro_to_cents` (0,004 € = 0, non è
+  un'aggiunta); il controllo viene prima di ogni scrittura e dopo la verifica della proprietà della carta (carta altrui = 404 prima di 403);
+  (4) webhook in attesa: `_reply_with_card` cerca la carta **senza crearla** con `card_crud.get_card_by_igsid_hash` (l'indice cieco si calcola
+  solo in memoria); se la carta manca l'URL è `demo_card_url()` (`<PUBLIC_BASE_URL>/carta-di-prova`, anche per il testo di ripiego 2/1545133);
+  fuori finestra di 24 h un cliente nuovo non salva nulla; il resto (contatore, `AWAITING_TEST_DM` → `ACTIVE`, esiti) è invariato; la funzione
+  si chiama `demo_card_url` e non `test_card_url`, perché importata in un test pytest la raccoglierebbe come test; (5) `/carta-di-prova` è una
+  pagina statica (nessuna dipendenza da sessione o DB), con gli stessi header della pagina carta (no-store, no-referrer) più `noindex`; il nome
+  del negozio non compare (titolo «Il tuo negozio»), il «QR» è un riquadro segnaposto: niente `qrcode.min.js`, niente `<img>`/`<canvas>`;
+  (6) banner come partial `partials/service_banner.html` (macro con variante scura per lo scanner), nelle tre pagine merchant; i pulsanti
+  «AGGIUNGI TREE POINTS» e «AGGIUNGI CASHBACK» hanno `disabled` (con id `btn-add-tree`/`btn-cashback`), «TOGLI…» e «USA INTERO CASHBACK» restano
+  attivi; il badge «Approvato ✅» delle impostazioni compare solo se attivo e il vecchio testo «Puoi usare le carte fin da subito» è tolto
+  (anche dalla pagina di registrazione); (7) **test riscritto**: `test_merchant_non_approvato_puo_lavorare` (ticket 11) descriveva il vecchio
+  «lavora subito» → ora `test_merchant_non_approvato_vede_lo_scanner_ma_puo_solo_togliere` (scanner 200, aggiunta 403); (8) **`is_paused` non è
+  esposto dall'API admin** (`MerchantUpdateRequest`, `/approve` invariato): spetta al ticket 13; finora la pausa si imposta solo dal DB (e nei
+  test con `merchant_crud.update_merchant`), e `POST /{id}/approve` non toglie la pausa (lo farà l'azione della dashboard); (9) la pagina carta
+  `/c/<token>` è verificata **a byte** identica nei tre stati; (10) tra i test, `pool_mismatches` resta vuoto dopo una rimozione in pausa e
+  `close_period` include un negozio approvato in pausa ed esclude uno in attesa; (11) smoke test: `/carta-di-prova` 200 HTML; `seed_db` invariato
+  (approvati e attivi). Discrepanze della documentazione corrette: `deploy.md` diceva che `create_all` aggiunge le colonne nuove (falso, verificato:
+  crea solo le tabelle mancanti; contraddiceva anche la nota di «Schema v0.3.0»); `pre-release.md` chiedeva di verificare che un merchant non
+  approvato «lavori»; «lavora subito» in `overview.md`, `merchant_service`, `routes/merchant/auth.py`, `settings.html` e pagina di registrazione.
+  Limite noto: `ZernioSendCounter` (docstring in `models.py`) cita ancora l'ambito `zernio:<team_id>`, oggi sempre `account:<id>` (non toccato).
+  **Il passo 2 del collaudo** (`deploy.md`) ora richiede un passo 2b: approvare il negozio (API admin) prima di aspettarsi `/c/<token>`.
 - **14** (ex 11, parte già fatta): verifica della documentazione contro il codice. Discrepanze corrette: il flusso del webhook in `overview.md`
   non citava `isFollower` (invito a seguire, `follow_requested`); l'ambito di quota oggi è sempre `account:<id>`
   (`get_team_identity` → `None`), non `zernio:<team>`; ordine del lifespan; `deploy.md` elencava ancora la tabella
@@ -160,7 +189,7 @@ Note sui ticket fatti:
 
 ### Prossimo passo
 
-1. ~~Ticket 05~~ fatto (passi 1-2 del collaudo; il passo 3, non follower, è nel collaudo del 11).
+1. ~~Ticket 05~~ fatto (passi 1-2 del collaudo; il passo 3, non follower, è nel collaudo del 14).
 2. ~~Ticket 06~~ fatto. ~~Collaudo anticipato del 05~~ passi 1-2 fatti il 2026-10-26 (esiti sotto). Restano da verificare,
    nel collaudo del 07: card a un non follower, DM in Requests via webhook, ManyChat/standby. Se ManyChat risulta ancora
    collegato all'account, scollegarlo. Se l'esito contraddice le ipotesi di `zernio-notes.md`: **fermarsi e chiedere**.
@@ -171,12 +200,12 @@ Note sui ticket fatti:
    `isFollower: null`, **ManyChat/standby**, tocco della voce di menu «🌳 La mia carta», «Scollega» da pannello.
 4. ~~Ticket 08~~ fatto, prova manuale del founder riuscita il 2026-10-26.
 5. ~~Ticket 09~~ fatto. ~~Ticket 10~~ fatto.
-6. ~~Ticket 11~~ fatto. **Ticket 12-13** (nuovi, da fare in ordine, uno alla volta, con approvazione a fine ticket), poi **ticket 14**: documentazione generale fatta. **Collaudo end-to-end a cura del founder** (checklist passo-passo in
+6. ~~Ticket 11~~ fatto. ~~Ticket 12~~ fatto. **Ticket 13** (da fare, con approvazione a fine ticket), poi **ticket 14**: documentazione generale fatta. **Collaudo end-to-end a cura del founder** (checklist passo-passo in
    `deploy.md`, «Collaudo end-to-end del flusso Instagram»). Da verificare e riportare in `zernio-notes.md`
-   («Collaudo finale del ticket 11»): card a un non follower, DM in Requests via webhook, `isFollower` `null`,
+   («Collaudo finale del ticket 14»): card a un non follower, DM in Requests via webhook, `isFollower` `null`,
    ManyChat/standby, tocco sulla voce di menu, «Scollega» da pannello, evento duplicato, log senza segreti, latenza
    (~30 s osservati; webhook ~11,5 s dopo `sentAt`). Poi: aggiornare gli esiti, rimuovere o riformulare le righe
-   «non verificato» che il collaudo ha chiuso, marcare il 11 come ✅ e attendere l'ok al merge.
+   «non verificato» che il collaudo ha chiuso, marcare il 14 come ✅ e attendere l'ok al merge.
 
 Esiti del collaudo del 05 (2026-10-26): `conversations` ha date in ritardo (la conversazione del founder risultava del
 giorno prima: per trovarla si legge il mittente dei messaggi, non si fida dell'ordine); `--folder requests` dà 400
@@ -213,15 +242,15 @@ rivede nel collaudo finale. QR "apri la chat": a mano dal founder (ticket 14).
 ## Debito noto
 
 - **Accesso dei merchant in produzione**: con `AUTH_PROVIDER=local` (ticket 11, fatto) i merchant si registrano e accedono
-  anche con `ENVIRONMENT=production`. Mancano ancora lo stato del servizio (12) e la dashboard admin con approvazione, pausa
-  e reset password (13): **non fare il primo deploy prima**. Supabase più avanti, DB su Neon.
+  anche con `ENVIRONMENT=production`; lo stato del servizio (12, fatto) governa carta di prova e scanner. Manca ancora la dashboard
+  admin con approvazione, pausa e reset password (13): **non fare il primo deploy prima**. Supabase più avanti, DB su Neon.
 - **Punto aperto: freno ai tentativi in memoria** (solo per email). Giusto con un solo processo (oggi); si azzera al riavvio e
   con più processi/container il limite si moltiplica (5 × N): spostarlo su DB **prima** di scalare (dettagli in `roadmap.md`).
   Dopo il primo deploy fai la verifica del login in `deploy.md` («Primo deploy», passo 4).
 
 - Merchant creato dall'admin senza `auth_user_id`: la sua email non si può registrare (409) e non può accedere (il reset
   dalla dashboard riguarda solo i registrati). Si risolve con Supabase.
-- `create_all()` non migra: serve `scripts.reset_db` (nessun dato di produzione da preservare per ora).
+- `create_all()` non migra: serve `scripts.reset_db` (nessun dato di produzione da preservare per ora). Con il ticket 12 la tabella `merchant` ha due colonne nuove (`is_paused`, `created_at`): ogni DB già creato (Neon di sviluppo, `collaudo*.db`) va resettato.
 - `reset_db`/`seed_db` agiscono sul `DATABASE_URL` del `.env` (oggi Neon): per il collaudo usare un SQLite usa-e-getta
   (`.agents/workflows/deploy.md`).
 - Il testo di `/privacy` è una bozza da far verificare; DPA con i merchant ancora da scrivere (roadmap).

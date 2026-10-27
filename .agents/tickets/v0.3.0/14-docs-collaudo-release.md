@@ -53,6 +53,8 @@ collaudo, vedi sotto).
    founder (lo prepara a mano da `https://ig.me/m/<username>`).
 
 ## Collaudo end-to-end (a cura del founder, documentato in deploy.md)
+**Privacy** (dal ticket 12): un cliente nuovo di un negozio in attesa non lascia alcun dato (nessuna riga `Card`, nessun indice cieco); la bozza di `/privacy` non cambia, ma il founder lo sappia quando la fa verificare.
+
 I passi 1-8 sono quelli del flusso Instagram; **da dopo il ticket 12** vanno fatti con il merchant approvato (dashboard o
 `POST /api/merchant/{id}/approve`). In più, dopo i ticket 11-13:
 9. **Stato del servizio**: un merchant appena registrato e non approvato, con Instagram collegato: il DM `CARTA` da un follower
