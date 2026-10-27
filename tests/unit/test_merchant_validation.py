@@ -75,3 +75,21 @@ def test_telefono_facoltativo_e_con_prefisso():
         _valid(contact_phone="3331234567")
     with pytest.raises(InvalidInputError, match="telefono"):
         _valid(contact_phone="+39123")
+
+
+def test_password_troppo_lunga():
+    assert len(_valid(password="x" * 128).password) == 128
+    with pytest.raises(InvalidInputError, match="128"):
+        _valid(password="x" * 129)
+
+
+@pytest.mark.parametrize("field", ["business_name", "email", "password"])
+@pytest.mark.parametrize("value", [None, 5, ["x"], {"a": 1}])
+def test_valori_non_testo_valgono_come_vuoti_senza_eccezioni(field, value):
+    """Lo schema HTTP non valida: il core riceve qualunque tipo e risponde sempre con un errore di dominio."""
+    with pytest.raises(InvalidInputError):
+        _valid(**{field: value})
+
+
+def test_telefono_non_testo_vale_come_assente():
+    assert _valid(contact_phone=5).contact_phone is None

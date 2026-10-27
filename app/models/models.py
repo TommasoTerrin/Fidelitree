@@ -1,7 +1,7 @@
 """
 Definizione dei modelli database SQLModel per l'applicazione Fidelitree.
 
-Tabelle: Merchant (esercenti), Card (carta del cliente Instagram presso un negozio),
+Tabelle: AuthCredential (password dei merchant col provider `local`), Merchant (esercenti), Card (carta del cliente Instagram presso un negozio),
 PointTransaction (registro movimenti, fonte di verità),
 MerchantPool (contatore del pool mensile, cache del registro), TreePlanting
 (piantumazioni di fine mese), ProcessedWebhookEvent (dedup dei webhook Zernio) e
@@ -37,10 +37,24 @@ def _normalize_email(v: str) -> str:
     return v.strip().lower()
 
 
+class AuthCredential(SQLModel, table=True):
+    """
+    Credenziale del provider di autenticazione `local`: hash `scrypt` della password, separato dai dati del
+    negozio come farebbe un provider esterno. Nessuna FK verso `merchant`: il legame è
+    `Merchant.auth_user_id == AuthCredential.user_id`. `token_version` entra nel token di sessione: ogni
+    cambio o reset della password lo incrementa e invalida le sessioni aperte. L'hash non compare nel `repr`.
+    """
+    user_id: str = Field(primary_key=True)  # uuid, è anche Merchant.auth_user_id
+    email: str = Field(unique=True, index=True)  # normalizzata in minuscolo
+    password_hash: str = Field(repr=False)  # "scrypt$n$r$p$salt$hash", mai in log né risposte
+    token_version: int = Field(default=1)
+    created_at: datetime = _created_at_field()
+
+
 class Merchant(SQLModel, table=True):
     """
     Esercente registrato. Identificato per email (l'autenticazione è delegata al
-    provider auth: nessuna password nel nostro DB). Contiene l'approvazione
+    provider auth: con `local` l'hash sta in `AuthCredential`, non qui). Contiene l'approvazione
     manuale, la configurazione della conversione tree points → cashback e gli
     eventuali override admin delle soglie dei livelli del pool.
     """

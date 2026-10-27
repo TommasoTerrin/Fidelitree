@@ -14,11 +14,24 @@ NonBlankStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length
 
 
 class RegisterRequest(BaseModel):
-    """Registrazione self-service di un merchant (la validazione di dominio è in `merchant_service`)."""
-    business_name: str
-    email: str
-    password: str
-    contact_phone: Optional[str] = None
+    """
+    Registrazione self-service di un merchant. Nessun vincolo Pydantic e tutti i campi con un default: la
+    validazione sta in `merchant_service.validate_registration` (400), perché un 422 di FastAPI su un campo
+    mancante o del tipo sbagliato rimanderebbe indietro il corpo della richiesta, password compresa.
+    """
+    business_name: Any = ""
+    email: Any = ""
+    password: Any = ""
+    contact_phone: Any = None
+
+
+class ChangePasswordRequest(BaseModel):
+    """
+    Cambio password del merchant autenticato. Come `RegisterRequest`: nessun vincolo né campo obbligatorio,
+    si valida nel service (400/401) e nessuna risposta riporta le password.
+    """
+    current_password: Any = ""
+    new_password: Any = ""
 
 
 class MerchantCreateRequest(BaseModel):

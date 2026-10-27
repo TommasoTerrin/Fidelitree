@@ -151,3 +151,12 @@ def test_lifespan_non_parte_con_chiave_di_cifratura_non_valida(monkeypatch):
     with pytest.raises(RuntimeError):
         with TestClient(app):
             pass
+
+
+@pytest.mark.parametrize("provider", ["dev", "local", "supabase"])
+def test_settings_auth_provider_valori_ammessi(monkeypatch, provider):
+    monkeypatch.setenv("DATABASE_URL", "sqlite://")
+    monkeypatch.setenv("JWT_SECRET_KEY", "x")
+    monkeypatch.setenv("ADMIN_SECRET_KEY", "y")
+    monkeypatch.setenv("AUTH_PROVIDER", provider)
+    assert Settings(_env_file=None).AUTH_PROVIDER == provider

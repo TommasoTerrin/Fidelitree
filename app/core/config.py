@@ -25,7 +25,8 @@ class Settings(BaseSettings):
     # Sicurezza & Auth
     JWT_SECRET_KEY: str      # firma dei token di sessione merchant
     ADMIN_SECRET_KEY: str    # protegge gli endpoint amministrativi /api/merchant
-    AUTH_PROVIDER: Literal["dev", "supabase"] = "dev"  # "dev": solo locale/test
+    # "dev": solo locale/test (rifiutato con ENVIRONMENT=production); "local": password nel nostro DB (ammesso in produzione)
+    AUTH_PROVIDER: Literal["dev", "local", "supabase"] = "dev"
     ENVIRONMENT: str = "development"  # "production" in produzione
     # Solo provider dev: password accettata per ogni email non registrata in memoria (il seed gira
     # in un altro processo del server). Vuota = nessun fallback. Non è un segreto: mai in produzione.

@@ -19,6 +19,7 @@ from fastapi.templating import Jinja2Templates
 from sqlmodel import Session
 import uuid
 
+from app.core.auth import PasswordAdminProvider, get_auth_provider
 from app.core.clock import utc_now
 from app.core.dependencies import get_session, get_optional_merchant
 from app.models.models import Merchant, Card
@@ -62,7 +63,7 @@ async def settings_page(
     """
     Serve la pagina impostazioni: conversione, soglie effettive dei livelli (sola lettura),
     stato di approvazione, sezione Instagram (`instagram` è il pannello: uno stato per volta, mai segreti,
-    nessuna chiamata a Zernio).
+    nessuna chiamata a Zernio) e blocco «Cambia password» (`password_change`, solo se il provider gestisce le password).
     Senza sessione merchant valida → 303 al login.
     """
     if merchant is None:
@@ -74,6 +75,7 @@ async def settings_page(
             "merchant": merchant,
             "thresholds": tree_service.effective_thresholds(merchant),
             "instagram": merchant_service.read_instagram_panel(session, merchant, utc_now()),
+            "password_change": isinstance(get_auth_provider(), PasswordAdminProvider),
         }
     )
 

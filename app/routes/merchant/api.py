@@ -11,9 +11,11 @@ import logging
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from sqlmodel import Session
 
-from app.core.dependencies import get_session, get_current_merchant, require_admin_key
+from app.core.auth import get_auth_provider
+from app.core.dependencies import get_session, get_current_merchant, require_admin_key, set_session_cookie
 from app.core.clock import utc_now
 from app.core.money import cents_to_euro
 from app.models.models import Merchant
@@ -22,6 +24,7 @@ from app.services.db_crud import card_crud, merchant_crud
 from app.services.zernio_service import get_zernio_http
 from app.schemas.card import AddPointsRequest, AddTreePointsRequest, CardResponse, ConvertedInfo, ScanResponse
 from app.schemas.merchant import (
+    ChangePasswordRequest,
     InstagramAccountRequest,
     InstagramAccountResponse,
     InstagramAccountsResponse,
@@ -90,6 +93,25 @@ async def update_own_settings(
         session, merchant, body.model_dump(exclude_unset=True, exclude_none=True),
     )
     return await read_own_profile(merchant)
+
+
+@router.post("/me/password")
+async def change_own_password(
+    body: ChangePasswordRequest,
+    merchant: Merchant = Depends(get_current_merchant),
+):
+    """
+    Cambia la password del merchant autenticato (password attuale + nuova) e riemette il cookie di sessione
+    con il nuovo `ver`: il cookie vecchio e le altre sessioni smettono di valere. Errori: 400 nuova password
+    di lunghezza non valida o cambio non disponibile col provider in uso, 401 password attuale errata.
+    Nessuna risposta riporta le password.
+    """
+    token = merchant_service.change_own_password(
+        get_auth_provider(), merchant, body.current_password, body.new_password,
+    )
+    response = JSONResponse({"status": "success"})
+    set_session_cookie(response, token)
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -206,8 +228,14 @@ async def delete_merchant(
     merchant_id: int,
     session: Session = Depends(get_session)
 ):
-    """Elimina un merchant e, in cascata, carte, movimenti, pool e piantumazioni."""
+    """
+    Elimina un merchant e, in cascata, carte, movimenti, pool e piantumazioni; con il provider `local`
+    elimina anche le sue credenziali (altrimenti l'email non si potrebbe più registrare).
+    """
+    merchant = merchant_crud.get_merchant_by_id(session, merchant_id)
+    auth_user_id = merchant.auth_user_id if merchant else None
     merchant_crud.delete_merchant(session, merchant_id)
+    merchant_service.remove_auth_user(get_auth_provider(), auth_user_id)
     return {"status": "success", "message": f"Merchant {merchant_id} eliminato con successo"}
 
 

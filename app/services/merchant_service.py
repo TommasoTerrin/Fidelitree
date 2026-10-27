@@ -3,8 +3,10 @@ Logica di business degli esercenti: registrazione, login, impostazioni e gestion
 
 Regole di business
 ------------------
-- Il merchant si registra con email + password tramite il provider di autenticazione:
-  nel nostro DB non si salva nessuna password, solo `auth_user_id` ed email.
+- Il merchant si registra con email + password tramite il provider di autenticazione: la tabella `merchant`
+  non ha nessuna password, solo `auth_user_id` ed email (con il provider `local` l'hash sta in `AuthCredential`).
+- Il login ha un freno ai tentativi (5 errori in 15 minuti per email e per IP → 429, vedi `auth.LoginThrottle`);
+  il merchant cambia la password dalle impostazioni, il reset lo fa il founder (ticket 13).
 - Un merchant appena registrato **lavora subito** (scan, tree points) ma è `is_approved=False`:
   il suo pool conta per la piantumazione solo dopo l'approvazione manuale del founder.
 - Il merchant può modificare solo nome, telefono e impostazioni di conversione; approvazione,
@@ -36,13 +38,12 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from app.core.auth import MIN_PASSWORD_LENGTH, validate_password  # noqa: F401  (MIN_PASSWORD_LENGTH: nome storico)
 from app.core.enums import InstagramStatus
 from app.core.errors import InvalidInputError
 from app.services.instagram_service import CARD_POSTBACK_PAYLOAD, QuotaStatus, quota_status
 
 # --- Core puro ---
-
-MIN_PASSWORD_LENGTH = 8
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _PHONE_RE = re.compile(r"^\+39\d{9,10}$")  # stessa regola del modello Merchant
@@ -53,12 +54,13 @@ _PHONE_RE = re.compile(r"^\+39\d{9,10}$")  # stessa regola del modello Merchant
 MAX_BUSINESS_NAME_LENGTH = 80
 
 
-def validate_business_name(business_name: Optional[str]) -> str:
+def validate_business_name(business_name: object) -> str:
     """
     Ripulisce il nome dell'attività dagli spazi e lo valida: obbligatorio e al massimo 80 caratteri,
-    così la card del negozio è sempre costruibile. Solleva `InvalidInputError` in italiano.
+    così la card del negozio è sempre costruibile. Un valore che non sia testo vale come vuoto.
+    Solleva `InvalidInputError` in italiano.
     """
-    name = (business_name or "").strip()
+    name = business_name.strip() if isinstance(business_name, str) else ""
     if not name:
         raise InvalidInputError("Il nome dell'attività è obbligatorio")
     if len(name) > MAX_BUSINESS_NAME_LENGTH:
@@ -78,27 +80,28 @@ class RegistrationData(BaseModel):
 
 
 def validate_registration(
-    business_name: str,
-    email: str,
-    password: str,
-    contact_phone: Optional[str] = None,
+    business_name: object,
+    email: object,
+    password: object,
+    contact_phone: object = None,
 ) -> RegistrationData:
     """
     Valida e normalizza i dati di registrazione di un merchant.
-    Nome e email vengono ripuliti dagli spazi (email anche in minuscolo); il telefono è
-    facoltativo (`None` o stringa vuota = assente) e, se presente, deve essere `+39` + 9-10 cifre.
+    Nome e email vengono ripuliti dagli spazi (email anche in minuscolo); la password deve avere 8-128
+    caratteri (`auth.validate_password`); il telefono è facoltativo (`None` o stringa vuota = assente) e,
+    se presente, deve essere `+39` + 9-10 cifre. Accetta qualunque tipo (un valore che non sia testo vale
+    come vuoto: lo schema HTTP non valida, così nessun 422 rimanda indietro la password).
     Solleva `InvalidInputError` con un messaggio in italiano per il primo campo non valido.
     """
     name = validate_business_name(business_name)
 
-    normalized_email = (email or "").strip().lower()
+    normalized_email = email.strip().lower() if isinstance(email, str) else ""
     if not _EMAIL_RE.match(normalized_email):
         raise InvalidInputError("Email non valida")
 
-    if len(password or "") < MIN_PASSWORD_LENGTH:
-        raise InvalidInputError(f"La password deve avere almeno {MIN_PASSWORD_LENGTH} caratteri")
+    password = validate_password(password)
 
-    phone = (contact_phone or "").strip() or None
+    phone = (contact_phone.strip() if isinstance(contact_phone, str) else "") or None
     if phone is not None and not _PHONE_RE.match(phone):
         raise InvalidInputError("Il telefono deve avere prefisso +39 seguito da 9 o 10 cifre")
 
@@ -287,7 +290,7 @@ from sqlalchemy.exc import IntegrityError  # noqa: E402
 from sqlmodel import Session  # noqa: E402
 
 from app.core import crypto  # noqa: E402
-from app.core.auth import AuthProvider  # noqa: E402
+from app.core.auth import AuthProvider, PasswordAdminProvider, login_throttle, login_throttle_keys  # noqa: E402
 from app.core.config import settings  # noqa: E402
 from app.core.errors import (  # noqa: E402
     AuthError, ConflictError, DomainError, ExternalServiceError, ForbiddenError, NotFoundError,
@@ -322,28 +325,72 @@ def register_merchant(
     except AuthError as e:
         raise ConflictError(_DUPLICATE_EMAIL) from e
 
-    merchant = merchant_crud.create_merchant(session, {
-        "business_name": data.business_name,
-        "email": data.email,
-        "contact_phone": data.contact_phone,
-        "type": "free",
-        "is_approved": False,
-        "auth_user_id": identity.user_id,
-    })
+    try:
+        merchant = merchant_crud.create_merchant(session, {
+            "business_name": data.business_name,
+            "email": data.email,
+            "contact_phone": data.contact_phone,
+            "type": "free",
+            "is_approved": False,
+            "auth_user_id": identity.user_id,
+        })
+    except Exception:
+        # Niente credenziale orfana: senza questa pulizia l'email resterebbe bloccata (409) senza un merchant.
+        session.rollback()
+        remove_auth_user(provider, identity.user_id)
+        raise
     return merchant, provider.sign_in_password(data.email, data.password)
 
 
-def login_merchant(session: Session, provider: AuthProvider, email: str, password: str) -> str:
+def remove_auth_user(provider: AuthProvider, user_id: Optional[str]) -> None:
     """
-    Verifica email+password col provider e ritorna il token di sessione.
-    Solleva `AuthError` se le credenziali sono errate, `ForbiddenError` se l'identità
-    è valida ma non è collegata a un merchant (es. un cliente).
+    Elimina le credenziali di un utente presso il provider, se questo le gestisce (`local`); con `dev` e
+    `supabase`, o senza `user_id` (merchant creato dall'admin), non fa nulla. Idempotente.
     """
-    token = provider.sign_in_password(email, password)
+    if user_id and isinstance(provider, PasswordAdminProvider):
+        provider.delete_user(user_id)
+
+
+def login_merchant(
+    session: Session,
+    provider: AuthProvider,
+    email: str,
+    password: str,
+    *,
+    client_ip: Optional[str],
+    now: datetime,
+    throttle=login_throttle,
+) -> str:
+    """
+    Verifica email+password col provider e ritorna il token di sessione, con il freno ai tentativi:
+    il controllo è PRIMA di ogni verifica (a soglia anche la password giusta riceve 429), ogni errore di
+    credenziali (anche email sconosciuta) conta sull'email e sull'IP, un accesso riuscito azzera solo l'email.
+    Solleva `TooManyAttemptsError` (429), `AuthError` se le credenziali sono errate, `ForbiddenError` se
+    l'identità è valida ma non è collegata a un merchant (es. un account rimasto senza negozio).
+    """
+    keys = login_throttle_keys(email, client_ip)
+    throttle.check(keys, now)
+    try:
+        token = provider.sign_in_password(email, password)
+    except AuthError:
+        throttle.record_failure(keys, now)
+        raise
+    throttle.clear(keys[0])
     identity = provider.verify_token(token)
     if identity is None or merchant_crud.get_merchant_by_auth_user_id(session, identity.user_id) is None:
         raise ForbiddenError("Account non registrato come esercente")
     return token
+
+
+def change_own_password(provider: AuthProvider, merchant: Merchant, current_password: object, new_password: object) -> str:
+    """
+    Cambio password del merchant dalle impostazioni. Ritorna il token riemesso (nuovo `ver`) da rimettere nel
+    cookie. `InvalidInputError` se la nuova password non è di 8-128 caratteri o se il provider non gestisce le
+    password (`dev`, `supabase`), `AuthError` se la password attuale è errata.
+    """
+    if not isinstance(provider, PasswordAdminProvider) or not merchant.auth_user_id:
+        raise InvalidInputError("Il cambio password non è disponibile per questo account")
+    return provider.change_password(merchant.auth_user_id, current_password, new_password)
 
 
 def update_own_settings(session: Session, merchant: Merchant, changes: dict) -> Merchant:

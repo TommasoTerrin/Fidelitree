@@ -146,6 +146,27 @@
             </button>
         </form>
 
+        {% if password_change %}
+        <!-- ===================== CAMBIA PASSWORD (solo provider che gestisce le password) ===================== -->
+
+        <form id="password-form" autocomplete="off"
+            class="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 space-y-4">
+            <div>
+                <p class="text-xs text-slate-400 font-bold uppercase mb-1">Cambia password</p>
+                <p class="text-xs text-slate-400">Se il founder ti ha dato una password temporanea, cambiala qui.</p>
+            </div>
+            <input type="password" id="current-password" required autocomplete="current-password" placeholder="Password attuale"
+                class="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm focus:border-green-500 focus:outline-none">
+            <input type="password" id="new-password" required minlength="8" maxlength="128" autocomplete="new-password"
+                placeholder="Nuova password (8-128 caratteri)"
+                class="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm focus:border-green-500 focus:outline-none">
+            <button type="submit" id="btn-password"
+                class="w-full bg-slate-900 text-white font-bold py-3 rounded-2xl active:scale-95 transition-transform">
+                CAMBIA PASSWORD
+            </button>
+        </form>
+        {% endif %}
+
         <!-- ===================== SOGLIE DEI LIVELLI (sola lettura) ===================== -->
 
         <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
@@ -259,6 +280,34 @@
                 } catch (err) {
                     showToast(err.message, true);
                     disconnectBtn.disabled = false;
+                }
+            });
+        }
+
+        // Cambio password: i campi si svuotano sempre dopo l'invio; il cookie di sessione nuovo arriva con la risposta
+        const passwordForm = document.getElementById('password-form');
+        if (passwordForm) {
+            passwordForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const currentInput = document.getElementById('current-password');
+                const newInput = document.getElementById('new-password');
+                const passwordBtn = document.getElementById('btn-password');
+                passwordBtn.disabled = true;
+                try {
+                    const res = await fetch('/api/merchant/me/password', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ current_password: currentInput.value, new_password: newInput.value })
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Operazione non riuscita');
+                    showToast('Password cambiata ✅');
+                } catch (err) {
+                    showToast(err.message, true);
+                } finally {
+                    currentInput.value = '';
+                    newInput.value = '';
+                    passwordBtn.disabled = false;
                 }
             });
         }

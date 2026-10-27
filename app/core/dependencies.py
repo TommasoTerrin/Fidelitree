@@ -65,8 +65,14 @@ def get_optional_merchant(
     return merchant_crud.get_merchant_by_auth_user_id(session, identity.user_id) if identity else None
 
 def set_session_cookie(response: Response, token: str) -> None:
-    """Imposta il cookie di sessione `access_token` (httponly, 7 giorni) del merchant."""
-    response.set_cookie("access_token", token, httponly=True, max_age=60*24*7*60)
+    """
+    Imposta il cookie di sessione `access_token` (httponly, samesite lax, 7 giorni) del merchant;
+    `secure` (solo https) con `ENVIRONMENT=production`.
+    """
+    response.set_cookie(
+        "access_token", token, httponly=True, max_age=60*24*7*60,
+        samesite="lax", secure=settings.ENVIRONMENT == "production",
+    )
 
 def require_admin_key(x_admin_key: str = Header(default=None)):
     """Protegge gli endpoint amministrativi: richiede l'header X-Admin-Key."""

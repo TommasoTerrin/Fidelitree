@@ -9,10 +9,12 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import SQLModel, create_engine
 
+from app.core.auth import get_auth_provider
 from app.core.config import settings
 from app.core.crypto import validate_keys
 from app.core.errors import (
     AuthError, ConflictError, DomainError, ExternalServiceError, ForbiddenError, NotFoundError,
+    TooManyAttemptsError,
 )
 from app.core.logging_filters import install_access_log_filter
 from app.version import get_version
@@ -29,10 +31,12 @@ from app.routes.webhooks import router as webhooks_router
 async def lifespan(app: FastAPI):
     """
     Gestisce il ciclo di vita dell'applicazione.
-    Verifica le chiavi di cifratura (l'app non parte se non valide), installa il filtro che maschera
-    token del link e `hook_id` nei log di accesso e crea le tabelle del database se non esistono.
+    Verifica le chiavi di cifratura e il provider di autenticazione (l'app non parte con chiavi non valide né con
+    `AUTH_PROVIDER=dev` in produzione), installa il filtro che maschera token del link e `hook_id` nei log di
+    accesso e crea le tabelle del database se non esistono.
     """
     validate_keys()
+    get_auth_provider()
     install_access_log_filter()
     SQLModel.metadata.create_all(engine)
     yield
@@ -47,8 +51,12 @@ async def domain_error_handler(request: Request, exc: DomainError) -> JSONRespon
     """
     Traduce gli errori di dominio del core in risposte HTTP `{"detail": ...}`:
     AuthError → 401, NotFoundError → 404, ForbiddenError → 403, ConflictError → 409,
-    ExternalServiceError → 502, tutti gli altri → 400.
+    TooManyAttemptsError → 429 (con `Retry-After`), ExternalServiceError → 502, tutti gli altri → 400.
     """
+    if isinstance(exc, TooManyAttemptsError):
+        return JSONResponse(
+            status_code=429, content={"detail": str(exc)}, headers={"Retry-After": str(exc.retry_after)},
+        )
     if isinstance(exc, AuthError):
         status = 401
     elif isinstance(exc, NotFoundError):

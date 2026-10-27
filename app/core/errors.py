@@ -31,6 +31,20 @@ class AuthError(DomainError):
     """Credenziali o codice di accesso errati (HTTP 401)."""
 
 
+class TooManyAttemptsError(DomainError):
+    """
+    Troppi tentativi di accesso falliti (HTTP 429). `retry_after` sono i secondi di attesa,
+    arrotondati per eccesso (finiscono nell'header `Retry-After`).
+    """
+
+    def __init__(self, retry_after: int) -> None:
+        self.retry_after = max(1, int(retry_after))
+        minutes = -(-self.retry_after // 60)
+        super().__init__(
+            f"Troppi tentativi di accesso: riprova tra {minutes} minut{'o' if minutes == 1 else 'i'}"
+        )
+
+
 class ExternalServiceError(DomainError):
     """Un servizio esterno (Zernio) non risponde o dà un errore inatteso (HTTP 502). Messaggio senza dettagli né segreti."""
 

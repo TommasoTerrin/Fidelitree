@@ -98,6 +98,32 @@ def auth_provider():
     provider.reset()
 
 
+@pytest.fixture(autouse=True)
+def reset_login_throttle():
+    """Il freno ai tentativi di login è in memoria del processo: lo si azzera prima e dopo ogni test."""
+    from app.core.auth import login_throttle
+    login_throttle.reset()
+    yield
+    login_throttle.reset()
+
+
+@pytest.fixture()
+def local_auth(session, monkeypatch):
+    """
+    Provider `local` su SQLite in-memory, installato al posto del provider scelto da `settings`
+    (`AUTH_PROVIDER=local`). Usa la `session` di test: il provider NON apre mai l'engine dell'app (che punta
+    al `DATABASE_URL` del .env). L'istanza si toglie da `auth._instances` a fine test.
+    """
+    from contextlib import nullcontext
+    from app.core import auth
+    from app.core.config import settings
+
+    provider = auth.LocalAuthProvider(session_factory=lambda: nullcontext(session))
+    monkeypatch.setattr(settings, "AUTH_PROVIDER", "local")
+    monkeypatch.setitem(auth._instances, "local", provider)
+    return provider
+
+
 def login_as(client, identity, provider=None) -> str:
     """Autentica il client come `identity` (cookie `access_token`); ritorna il token."""
     from app.core.auth import get_auth_provider
