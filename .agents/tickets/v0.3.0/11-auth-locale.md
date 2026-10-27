@@ -46,14 +46,14 @@ il merchant per `auth_user_id`; `register_merchant` crea prima l'utente sul prov
 5. **Cambio password del merchant** (scelta mia, serve perché il reset dell'admin dà una password temporanea):
    `POST /api/merchant/me/password` con password attuale e nuova (400 se la nuova è troppo corta, 401 se l'attuale è errata) e
    un blocco «Cambia password» nelle impostazioni; riemette il cookie di sessione.
-6. **Freno ai tentativi** su `POST /merchant/login`: contatore **in memoria** per email e per IP, 5 errori in 15 minuti → 429 con
-   attesa (un solo processo su DO: sufficiente per il pilota). Funzione nel core puro (tempo passato come argomento); lo stesso
+6. **Freno ai tentativi** su `POST /merchant/login`: contatore **in memoria** **per email** (deciso poi: niente freno per IP),
+   5 errori in 15 minuti → 429 con attesa; dal 3° errore un avviso nel messaggio (un solo processo su DO: sufficiente per il pilota). Funzione nel core puro (tempo passato come argomento); lo stesso
    meccanismo serve al login admin (ticket 13).
 7. **Log**: nessuna password, hash o token in log, risposte o errori.
 8. **Docs**: AGENTS.md (voce «Auth merchant nel pilota: provider locale», quella su Supabase ridotta a «più avanti»;
    Stack/Auth), overview.md (Autenticazione, endpoint, modello dati), roadmap, deploy.md (`AUTH_PROVIDER=local` in produzione;
    l'avviso sul primo deploy resta finché non sono chiusi anche i ticket 12 e 13), `.env.example`, planner.
-9. **Scelte dell'implementazione non previste qui** (Dockerfile con `--proxy-headers`, `delete_user`, lifespan, cookie
+9. **Scelte dell'implementazione non previste qui** (`delete_user`, lifespan, cookie
    `Secure`, schemi senza vincoli): elenco nel planner, nota del ticket 11.
 
 ## File coinvolti
