@@ -161,13 +161,13 @@ ruff (lint) + mypy (type check) in pre-commit locale (vedi CI/CD sopra per il li
 
 ## Changelog
 
-- **2026-10-27** — **v0.3.0** completa su `feature/instagram-cards` (ticket 01-13, 1048 test): carta via DM Instagram con
+- **2026-10-27** — **v0.3.0** completa su `feature/instagram-cards` (ticket 01-13, 1049 test): carta via DM Instagram con
   Zernio (webhook, card con link segreto `/c/<token>`, invito a seguire per i non follower), onboarding Instagram del
   merchant dal pannello, pagina carta e PWA solo merchant, vecchio flusso cliente (OTP, wallet, `/join`, `Customer`)
   rimosso, script riallineati (`seed_db --links`, `zernio_check --merchant-id`, `replay_webhook --event-id`,
   `smoke_test_prod`). **v0.2.1 assorbita**, mai rilasciata. In attesa del collaudo end-to-end del founder e dell'ok al
   merge. Il 2026-10-27 aggiunti e completati i ticket 11-13 (auth `local` su Neon, stato del servizio con carta di prova e pausa dello scanner,
-  dashboard admin `/admin` con approva / pausa / riattiva e reset password; 1048 test); il vecchio ticket 11 è il 14.
+  dashboard admin `/admin` con approva / pausa / riattiva e reset password; 1049 test); il vecchio ticket 11 è il 14.
 - **2026-10-22** — Avviata **v0.3.0** (carta via DM Instagram con Zernio): analisi, grilling e 11 ticket; **v0.2.x
   non verrà rilasciata**, assorbita da v0.3.0. Storico di v0.2.0 in `tickets/v0.2.0/STORICO.md`.
 - **2026-10-13** — **v0.2.0** pronta (branch `rinascimento`, 11 ticket): pool mensile per negozio con livelli

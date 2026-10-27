@@ -4,7 +4,7 @@
 > Valida per v0.3.0 (carta via DM Instagram). Le voci spuntate sono quelle verificate; le altre vanno fatte e spuntate.
 
 ## Codice
-- [x] `python -m pytest` → tutti verdi (1048 test al 2026-10-27)
+- [x] `python -m pytest` → tutti verdi (1049 test al 2026-10-27)
 - [x] `python -c "import app.main"` → nessun errore di import (serve il `.env` con le tre chiavi di cifratura)
 - [ ] Nessun segreto hardcoded nel diff (`git diff main..develop`)
 - [x] Nuove env vars aggiunte a `.env.example` e documentate in `.agents/workflows/deploy.md`

@@ -12,7 +12,7 @@
 alberi), mai rilasciata. Dopo v0.3.0 l'app è funzionalmente quella descritta in AGENTS.md; la strada verso la
 versione "a regime" è nella [roadmap](roadmap.md).
 
-**Stato (2026-10-27)**: codice dei ticket 01-13 completo (1048 test verdi). Il 2026-10-27 l'utente ha deciso di aggiungere
+**Stato (2026-10-27)**: codice dei ticket 01-13 completo (1049 test verdi). Il 2026-10-27 l'utente ha deciso di aggiungere
 **tre ticket prima del pilota** (11 auth locale, 12 stato del servizio, 13 dashboard admin): in produzione i merchant non
 potevano accedere e il founder deve poter approvare, mettere in pausa e reimpostare le password. Il vecchio ticket 11 è il
 **14**. **I ticket 11 e 12 sono fatti** (i merchant possono registrarsi, accedere e cambiare la password con `AUTH_PROVIDER=local`;
@@ -40,7 +40,7 @@ Contesto di riferimento: decisioni in [AGENTS.md](../../AGENTS.md), vincoli Zern
 | 10 | Seed, smoke test e script | ✅ 2026-10-26 (766 test) |
 | 11 | Autenticazione dei merchant: provider `local` (registrazione, login, cambio password) | ✅ 2026-10-27 `d3a32d6` + `9ae5b3e` (freno solo per email) (878 test); smoke su SQLite usa-e-getta con `ENVIRONMENT=production` + `AUTH_PROVIDER=local`: registrazione, login, cambio password ok |
 | 12 | Stato del servizio: approvazione, pausa e carta di prova | ✅ 2026-10-27 `f5df96c` + `86f00dd` (936 test); avvio verificato su SQLite usa-e-getta (reset, seed, colonne `is_paused` e `created_at`) |
-| 13 | Dashboard admin | ✅ 2026-10-27 `4081bcd` (1048 test); verificato su SQLite usa-e-getta con `AUTH_PROVIDER=local` e un processo vero: login, lista, approva, reset, `smoke_test_prod` ok |
+| 13 | Dashboard admin | ✅ 2026-10-27 `4081bcd` (+ `897ee7e`, 1049 test); verificato su SQLite usa-e-getta con `AUTH_PROVIDER=local` e un processo vero: login, lista, approva, reset, `smoke_test_prod` ok |
 | 14 | Documentazione, collaudo end-to-end e release (era l'11) | 🔶 2026-10-27: documentazione generale fatta (`65caf34`) e `replay_webhook --event-id` (`b40401a`, 767 test). Restano: collaudo Instagram del founder (si può fare subito), verifiche dei ticket 11-13, esiti in `zernio-notes.md`, ok al merge |
 
 Suite di partenza: 360 test. I ticket 02-08 **aggiungono** il nuovo flusso accanto al vecchio (che continua a
@@ -198,8 +198,8 @@ Note sui ticket fatti:
   (`login_throttle_key`): il 429 del merchant dice «chiedi al founder il reset» e senza questo la password temporanea sarebbe inutilizzabile fino a 15 minuti; (7) **transizioni**:
   `approve` da ogni stato imposta `is_approved` e toglie la pausa; `pause` e `resume` valgono solo per un negozio approvato (409 su uno in attesa, perché la pausa non conta
   lì e l'azione sarebbe ambigua); ripetere un'azione è un no-op con 200; (8) **API admin vecchia**: `POST /api/merchant/{id}/approve` ora passa da `approve_merchant` (toglie la pausa),
-  `is_paused` è in `MerchantUpdateRequest` e in `MerchantResponse` (quindi anche in `GET /api/merchant/me`: il merchant vede il proprio flag); `require_admin_key` non è cambiata
-  (resta `!=` e 403); (9) **reset**: password temporanea di 12 caratteri da un alfabeto di 54 senza `0 O 1 l I` con `secrets.choice` (la `choice` è iniettabile: il core resta
+  `is_paused` è in `MerchantUpdateRequest` e in `MerchantResponse` (quindi anche in `GET /api/merchant/me`: il merchant vede il proprio flag); `require_admin_key` dopo l'approvazione (`897ee7e`) usa `admin_key_matches`
+  (tempo costante, chiave vuota = chiusa; sempre 403); (9) **reset**: password temporanea di 12 caratteri da un alfabeto di 54 senza `0 O 1 l I` con `secrets.choice` (la `choice` è iniettabile: il core resta
   deterministico nei test), `set_password` poi `throttle.clear`; 409 senza `auth_user_id` o con la credenziale mancante (`NotFoundError` del provider tradotto), 400 con un
   provider senza password; la risposta (`AdminResetPasswordResponse`, `temporary_password` con `repr=False`) ha un `response_model` fisso e `no-store`; (10) **la lista** usa due
   query raggruppate (`card_crud.count_cards_by_merchant`, `tree_service.pool_points_by_merchant`) più una per i merchant, non una per riga (un test conta le query); risposta con
