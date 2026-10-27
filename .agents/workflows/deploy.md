@@ -52,7 +52,7 @@ Eliminate da v0.2.0 (cancellabili da DO): `MERCHANT_PASSWORD`. Storiche non più
 
 > ⚠️ **Schema v0.3.0**: `create_all()` non modifica le tabelle esistenti. Il passaggio al nuovo modello (email, pool, carte con indice cieco, webhook...) richiede il reset del DB (`python -m scripts.reset_db`): i dati di v0.1.0 non si migrano. Vedi «Primo deploy di v0.3.0».
 
-> ⚠️ **Accesso dei merchant in produzione (da risolvere prima del pilota)**: con `ENVIRONMENT=production` il provider `dev` non parte e il provider `supabase` è ancora uno stub, quindi oggi su DigitalOcean un merchant **non può registrarsi né accedere** (l'API admin con `X-Admin-Key` e lo smoke test funzionano comunque). Il collegamento di Supabase è il primo passo dopo v0.3.0 nella roadmap; serve una decisione su come fare il pilota nel frattempo.
+> ⚠️ **Accesso dei merchant in produzione**: con `ENVIRONMENT=production` il provider `dev` non parte e il provider `supabase` è uno stub. **Deciso il 2026-10-27**: in produzione si usa `AUTH_PROVIDER=local` (ticket 11 di v0.3.0, password nel nostro DB su Neon), con approvazione/pausa/reset dalla dashboard admin (ticket 12-13). **Finché i ticket 11-13 non sono fatti, su DigitalOcean nessun merchant può registrarsi né accedere**: non fare il primo deploy prima.
 
 ## Primo deploy di v0.3.0 (ordine delle operazioni)
 
@@ -204,7 +204,7 @@ ripetere il collaudo, ricollega (nuovo webhook) o riparti dal passo 1.
 negozio, imposta il negozio come in passo 2 e scrivi `CARTA` da **A**: annota se la card parte, se la riga di log è
 `esito=standby`, e se il pannello mostra l'avviso sull'altra app. Poi scollega ManyChat.
 
-Esiti nel [log del collaudo](../architecture/zernio-notes.md) (tabella «Collaudo finale del ticket 11»). Il tunnel rapido
+Esiti nel [log del collaudo](../architecture/zernio-notes.md) (tabella «Collaudo finale del ticket 14»). Il tunnel rapido
 cambia URL a ogni avvio: dopo un riavvio del tunnel riavvia il server con il nuovo `PUBLIC_BASE_URL` e rifai l'onboarding.
 A fine collaudo: chiudi i terminali (le env var spariscono) ed elimina `collaudo11.db` e `collaudo11.log`.
 

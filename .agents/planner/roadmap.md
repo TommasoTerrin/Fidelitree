@@ -12,10 +12,10 @@ Una micro-SaaS **gratuita per i merchant** e a gestione leggera per il founder, 
   Ecologi di piattaforma; gestisce tutto da un'unica chiave Zernio. I ricavi arrivano da consulenza social e contenuti IA
   venduti ai merchant (modello agenzia), non dall'app.
 - **Pubblico**: un contatore degli alberi piantati, base del build-in-public e della caccia ai primi 3-5 negozi pilota.
-- **Tecnica**: auth reale (Supabase), migrazioni DB, test in CI, staging separato dalla produzione.
+- **Tecnica**: auth dei merchant (provider locale nel pilota, Supabase più avanti), migrazioni DB, test in CI, staging separato dalla produzione.
 
 Percorso: **v0.3.0** (carta via DM, pilota con chiave Zernio del merchant) → **pilota reale con 3-5 negozi** →
-**v0.4.x** (consolidamento: Supabase, contatore pubblico, cron di chiusura, dashboard) → **v0.5+** (chiave Zernio unica
+**v0.4.x** (consolidamento: contatore pubblico, cron di chiusura, dashboard) → **v0.5+** (chiave Zernio unica
 del founder, trigger da commenti e storie, privacy/DPA a regime).
 
 ## Versioni
@@ -35,7 +35,7 @@ alberi, pool, cashback e auth merchant restano. Prima release in produzione dopo
 Decisioni: AGENTS.md; ticket e stato: [`tickets/v0.3.0/`](../tickets/v0.3.0/README.md) e [`current.md`](current.md).
 
 ### Dopo v0.3.0: verso la v0.4 di consolidamento
-Dopo il rilascio e il pilota, in quest'ordine indicativo: Supabase Auth, contatore alberi pubblico, endpoint/cron per
+Dopo il rilascio e il pilota, in quest'ordine indicativo: contatore alberi pubblico, endpoint/cron per
 `close_period`, dashboard merchant, CI. Le voci sono nel backlog sotto; l'ordine definitivo lo decide l'esito del pilota.
 
 ## Estensioni future del flusso Instagram (dopo v0.3.0)
@@ -86,13 +86,12 @@ L'`IGSID_HMAC_KEY` invece non è ruotabile senza scollegare le carte.
 
 ## Backlog (in ordine di priorità indicativa)
 
-### Collegare Supabase (primo passo dopo v0.3.0)
-Progetto Supabase, migrazione del DB da Neon, `SupabaseAuthProvider` reale al posto del provider `dev`
-(email+password per i **merchant**, recupero password; i clienti non hanno auth), env `AUTH_PROVIDER=supabase`.
-Supabase Auth sostituisce anche le voci "Sicurezza password" e "Integrazione Clerk" (superate).
-Prerequisito per un pilota con negozi veri che si registrano da soli: oggi il provider `dev` non parte in produzione.
-Da risolvere in quell'occasione: **collegare un merchant creato dall'admin** (senza `auth_user_id`) al suo
-account al primo accesso, solo con email verificata (oggi la sua email non si può registrare: 409).
+### Collegare Supabase (più avanti, opzionale)
+Deciso il 2026-10-27: nel pilota i merchant accedono con il provider `local` (ticket 11 di v0.3.0, password in una tabella
+del nostro DB su **Neon**, link monouso dalla dashboard admin). Supabase (Auth e/o DB) si valuta quando i merchant
+superano le poche decine (~100): `SupabaseAuthProvider` al posto di `local`, recupero password via email; i merchant
+si reinvitano (gli hash non si migrano) e la tabella `AuthCredential` si elimina. Supabase Auth sostituisce anche le voci
+"Sicurezza password" e "Integrazione Clerk" (superate).
 
 ### Endpoint admin/cron per `close_period`
 Quando i negozi superano i 10-20, riusando lo stesso core di `scripts.close_period` (anteprima, idempotenza, cap).
@@ -148,7 +147,8 @@ ruff (lint) + mypy (type check) in pre-commit locale (vedi CI/CD sopra per il li
   merchant dal pannello, pagina carta e PWA solo merchant, vecchio flusso cliente (OTP, wallet, `/join`, `Customer`)
   rimosso, script riallineati (`seed_db --links`, `zernio_check --merchant-id`, `replay_webhook --event-id`,
   `smoke_test_prod`). **v0.2.1 assorbita**, mai rilasciata. In attesa del collaudo end-to-end del founder e dell'ok al
-  merge; da decidere l'accesso dei merchant in produzione (Supabase).
+  merge. Il 2026-10-27 aggiunti i ticket 11-13 (auth `local` su Neon, stato del servizio con carta di prova e pausa,
+  dashboard admin); il vecchio ticket 11 è il 14.
 - **2026-10-22** — Avviata **v0.3.0** (carta via DM Instagram con Zernio): analisi, grilling e 11 ticket; **v0.2.x
   non verrà rilasciata**, assorbita da v0.3.0. Storico di v0.2.0 in `tickets/v0.2.0/STORICO.md`.
 - **2026-10-13** — **v0.2.0** pronta (branch `rinascimento`, 11 ticket): pool mensile per negozio con livelli

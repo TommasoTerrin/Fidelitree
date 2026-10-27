@@ -46,9 +46,9 @@ Prerequisito: SQLite usa-e-getta (`DATABASE_URL=sqlite:///...` solo nel terminal
 - [ ] `develop` riallineato a `main`
 
 ## Documentazione
-- [x] AGENTS.md / .agents/ allineati al codice di v0.3.0 (ticket 11)
+- [x] AGENTS.md / .agents/ allineati al codice di v0.3.0 (ticket 14)
 - [ ] `.agents/planner/current.md` aggiornato (item completati → changelog roadmap)
 
 ## Esito collaudo
-- v0.3.0: da compilare con gli esiti del collaudo end-to-end (tabella «Collaudo finale del ticket 11» in `.agents/architecture/zernio-notes.md`).
+- v0.3.0: da compilare con gli esiti del collaudo end-to-end (tabella «Collaudo finale del ticket 14» in `.agents/architecture/zernio-notes.md`).
 - Storico, v0.2.0 (2026-10-13, API, SQLite usa-e-getta; il flusso cliente con OTP e wallet non esiste più): pytest 339 verdi, API merchant, pool e conversione, registrazione non approvata e `close_period --cap 2` verificati; restavano `close_period` con Ecologi e PWA da telefono.

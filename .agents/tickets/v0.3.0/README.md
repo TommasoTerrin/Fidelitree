@@ -37,7 +37,14 @@ affinarli, ma non ridurne la copertura), fuori scope, definition of done.
 | 08 | [Pagina carta, QR, scan e PWA merchant](08-pagina-carta-scan-pwa.md) | 03, 06 |
 | 09 | [Rimozione del vecchio flusso cliente](09-rimozione-flusso-cliente.md) | 06, 07, 08 |
 | 10 | [Seed, smoke test e script](10-seed-script.md) | 09 |
-| 11 | [Documentazione, collaudo end-to-end e release](11-docs-collaudo-release.md) | tutti |
+| 11 | [Autenticazione dei merchant: provider locale e link password](11-auth-locale.md) | 01-10 |
+| 12 | [Stato del servizio: approvazione, pausa e carta di prova](12-stato-servizio.md) | 06, 08, 11 |
+| 13 | [Dashboard admin](13-dashboard-admin.md) | 11, 12 |
+| 14 | [Documentazione, collaudo end-to-end e release](14-docs-collaudo-release.md) | tutti |
+
+I ticket 11-13 sono stati aggiunti il 2026-10-27 (decisione «prima del pilota»): in produzione i merchant non potevano accedere
+(`dev` rifiutato, Supabase stub) e il founder deve poter approvare, mettere in pausa e gestire le password. Il vecchio ticket 11
+è diventato il **14**.
 
 Il **ticket 05** ha un collaudo manuale su un account Instagram vero. Va fatto **prima** di scrivere webhook e onboarding,
 perché verifica il rischio più grosso: che Meta rifiuti la card a chi non segue il negozio.
@@ -105,6 +112,10 @@ ProcessedWebhookEvent  event_id str PK (X-Zernio-Event-Id), merchant_id (FK CASC
 ZernioSendCounter  quota_scope str + period 'YYYY-MM' (PK composta), sent int
               # invii riusciti del mese per ambito di quota = team Zernio che invia
               # (oggi "zernio:<zernio_team_id>", fallback "account:<zernio_account_id>"; domani "platform")
+
+AuthCredential  (ticket 11) user_id str PK (= Merchant.auth_user_id), email unique, password_hash opz. (scrypt),
+              token_version int, reset_token_hash opz. unique (SHA-256 del link), reset_expires_at opz. (UTC), created_at
+Merchant      (ticket 12) + created_at (UTC), is_paused bool (default False)
 
 PointTransaction, MerchantPool, TreePlanting   invariati
 Customer      RIMOSSO nel ticket 09 (insieme a Card.customer_id)

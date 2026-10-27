@@ -1,4 +1,6 @@
-# 11 — Documentazione, collaudo end-to-end e release
+# 14 — Documentazione, collaudo end-to-end e release
+
+> Era il ticket 11: rinumerato il 2026-10-27 dopo l'aggiunta dei ticket 11-13 (auth locale, stato del servizio, dashboard admin).
 
 ## Obiettivo
 Documentazione allineata al codice reale di v0.3.0, collaudo completo con un account Instagram Business di test via
@@ -10,7 +12,13 @@ versione **target**, con un banner di transizione. Qui si tolgono i banner e si 
 l'implementazione ha cambiato.
 
 ## Dipendenze
-Tutti.
+Tutti (01-13).
+
+La **parte documentale generale** e i passi 1-9 del collaudo Instagram (checklist in `deploy.md`) sono già stati fatti o preparati
+prima dei ticket 11-13 (commit `65caf34`). Gli esiti del collaudo Instagram (non follower, Requests, `isFollower`, ManyChat,
+menu, Scollega, duplicato, log, latenza) si possono raccogliere **subito**, senza aspettare i ticket 11-13: i passi 1-9 non
+dipendono da auth, approvazione o dashboard, **con un'eccezione**: dopo il ticket 12 il merchant va prima approvato (passo 2 del
+collaudo, vedi sotto).
 
 ## Modifiche
 1. **AGENTS.md**:
@@ -34,10 +42,28 @@ Tutti.
    - in `current.md` v0.3.0 è "pronta al merge", e il punto "merge v0.2.1" diventa "assorbito da v0.3.0";
    - changelog in `roadmap.md`.
 7. **README** del repo, se descrive ancora il wallet o l'OTP.
-8. **QR in negozio**: nelle istruzioni ai merchant una sola riga: per stampare un QR che apre la chat, contattare il
+8. **Nuove voci dei ticket 11-13**: verifica contro il codice (non contro i ticket) di AGENTS.md, overview.md, deploy.md,
+   `.env.example` e pre-release.md per `AUTH_PROVIDER=local`, tabella `AuthCredential`, flag `is_paused`/`created_at`, stati del
+   servizio, `/carta-di-prova`, `/merchant/password/<token>`, `/admin`; mappa del codice e endpoint; nessun avviso residuo sul
+   «merchant non può accedere in produzione» e nessun marcatore di «decisione non ancora implementata».
+9. **Procedure del founder** in `deploy.md`: «nuovo merchant su richiesta» (crea profilo, approva, manda il link), «password
+   dimenticata» (nuovo link), «periodo di prova finito/abbonamento non pagato» (pausa/riattiva), «iscrizione spontanea» (il
+   merchant ti scrive, lo approvi), e quale testo dare ai merchant.
+10. **QR in negozio**: nelle istruzioni ai merchant una sola riga: per stampare un QR che apre la chat, contattare il
    founder (lo prepara a mano da `https://ig.me/m/<username>`).
 
 ## Collaudo end-to-end (a cura del founder, documentato in deploy.md)
+I passi 1-8 sono quelli del flusso Instagram; **da dopo il ticket 12** vanno fatti con il merchant approvato (dashboard o
+`POST /api/merchant/{id}/approve`). In più, dopo i ticket 11-13:
+9. **Stato del servizio**: un merchant appena registrato e non approvato, con Instagram collegato: il DM `CARTA` da un follower
+   porta alla **carta di prova** (nessuna carta vera, nessun dato); dalla dashboard lo approvi, il nuovo `CARTA` dà la carta vera;
+   lo metti in pausa: dalla PWA non puoi aggiungere punti né cashback ma puoi toglierli, la pagina carta mostra l'avviso; lo
+   riattivi.
+10. **Account**: crei un profilo dalla dashboard, il merchant sceglie la password col link (monouso, scade dopo 7 giorni) e accede;
+    reimposti la password dal pannello, il vecchio link e la vecchia sessione non valgono più; login sbagliato ripetuto → 429.
+11. **Log**: nessun token del link password, password o `ADMIN_SECRET_KEY` nel log del server.
+
+Passi 1-8 del flusso Instagram:
 1. SQLite usa-e-getta: `reset_db --force`, server locale, `cloudflared tunnel --url http://127.0.0.1:8001` e
    `PUBLIC_BASE_URL` = URL del tunnel. L'URL cambia a ogni avvio del tunnel rapido: in quel caso l'onboarding va rifatto.
 2. Registrazione del merchant e onboarding con la propria chiave Zernio. Su Zernio compaiono il webhook e la voce di

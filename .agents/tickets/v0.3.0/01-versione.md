@@ -21,7 +21,7 @@ Nessuna.
 - `GET /health` → `version == "0.3.0"`.
 
 ## Fuori scope
-Tag git e merge su `main` (ticket 11, con l'ok dell'utente).
+Tag git e merge su `main` (ticket 14, con l'ok dell'utente).
 
 ## Definition of Done
 Suite verde, `/health` riporta 0.3.0.

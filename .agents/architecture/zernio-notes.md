@@ -47,7 +47,7 @@
 | 409 | `Idempotency-Key` ancora in lavorazione, oppure `not_thread_owner` (subcode Meta `2534037`, conversazione di un'altra app) | https://docs.zernio.com/messages/send-inbox-message | sì |
 | 500 | Zernio **non ritenta** l'invio; ritentare può consegnare due volte | idem | sì |
 | Idempotenza dell'invio | header `Idempotency-Key`, valido 24 h; replay con `Idempotent-Replayed: true`; su 5xx/timeout la chiave viene rilasciata | idem | sì |
-| Card rifiutata ai non follower | Meta `2`/`1545133` rifiuta bottoni e card a chi non segue l'account: documentato **solo per le private reply ai commenti** | https://docs.zernio.com/changelog#1788345066805 | **non verificato per i DM** (il profilo del founder segue il negozio: card consegnata). Da chiudere nel collaudo finale, ticket 11 (vedi sotto). Il codice non dipende dall'esito: chi non segue riceve comunque solo l'invito a seguire, il ripiego «testo con il link» resta come rete di sicurezza |
+| Card rifiutata ai non follower | Meta `2`/`1545133` rifiuta bottoni e card a chi non segue l'account: documentato **solo per le private reply ai commenti** | https://docs.zernio.com/changelog#1788345066805 | **non verificato per i DM** (il profilo del founder segue il negozio: card consegnata). Da chiudere nel collaudo finale, ticket 14 (vedi sotto). Il codice non dipende dall'esito: chi non segue riceve comunque solo l'invito a seguire, il ripiego «testo con il link» resta come rete di sicurezza |
 
 ## Zernio: webhook
 
@@ -80,7 +80,7 @@
 | Pagina Facebook | non serve con `loginMethod=instagram_login` (default) | idem | sì |
 | Connect (futura chiave unica) | `GET /v1/connect/instagram?profileId=...&redirect_url=...` → `{authUrl, state}`; 402 `free_tier_exceeded` oltre gli account gratuiti | https://docs.zernio.com/connect/get-connect-url, https://docs.zernio.com/multi-tenant | sì |
 | Message request | DM di non follower → cartella Requests; "Meta has no accept call: replying moves a thread into the inbox"; esiste comunque `POST /v1/inbox/conversations/{id}/accept` (`accountId`, `message`) | https://docs.zernio.com/platforms/instagram/inbox, https://docs.zernio.com/messages/accept-conversation-request | sì |
-| Il webhook arriva per i DM in Requests? | Meta: notifica per ogni messaggio, senza eccezioni dichiarate; Zernio non ne parla | https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api | **non verificato**: da chiudere nel collaudo finale, ticket 11 (vedi sotto) |
+| Il webhook arriva per i DM in Requests? | Meta: notifica per ogni messaggio, senza eccezioni dichiarate; Zernio non ne parla | https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api | **non verificato**: da chiudere nel collaudo finale, ticket 14 (vedi sotto) |
 | Limiti di DM per account | nessuno documentato | https://docs.zernio.com/guides/rate-limits | non verificato |
 
 ## Zernio: prezzi
@@ -143,9 +143,9 @@
 9. **Desktop**: la card non si vede su Instagram web. Rischio da accettare o mitigare.
 10. **Da chiudere nel collaudo reale**:
     - ~~quale base URL usare?~~ chiuso nel collaudo del 05: `https://zernio.com/api`;
-    - arriva il webhook per i DM in Requests? → collaudo finale (ticket 11);
-    - la card viene accettata da chi non segue l'account? → collaudo finale (ticket 11);
-    - come si comporta con ManyChat come app di default? → collaudo finale (ticket 11).
+    - arriva il webhook per i DM in Requests? → collaudo finale (ticket 14);
+    - la card viene accettata da chi non segue l'account? → collaudo finale (ticket 14);
+    - come si comporta con ManyChat come app di default? → collaudo finale (ticket 14).
 
 ## Verificato nel collaudo del ticket 05 (2026-10-26, `zernio_check` con la chiave del founder)
 
@@ -174,7 +174,7 @@
 | Tocco della voce di menu «🌳 La mia carta» → card | **non verificato** → collaudo finale |
 | «Scollega» da pannello → webhook rimosso da Zernio | **non verificato** (coperto solo dai test automatici) → collaudo finale |
 
-## Collaudo finale del ticket 11 (a cura del founder: esiti da compilare)
+## Collaudo finale del ticket 14 (a cura del founder: esiti da compilare)
 
 Procedura con i comandi: «Collaudo end-to-end» in [deploy.md](../workflows/deploy.md). Per ogni riga si scrive l'esito
 e, dove serve, i numeri misurati; nessun dato personale, token, IGSID o chiave.
