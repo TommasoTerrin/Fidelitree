@@ -12,11 +12,11 @@
 alberi), mai rilasciata. Dopo v0.3.0 l'app è funzionalmente quella descritta in AGENTS.md; la strada verso la
 versione "a regime" è nella [roadmap](roadmap.md).
 
-**Stato (2026-10-27)**: codice dei ticket 01-12 completo (936 test verdi). Il 2026-10-27 l'utente ha deciso di aggiungere
+**Stato (2026-10-27)**: codice dei ticket 01-13 completo (1048 test verdi). Il 2026-10-27 l'utente ha deciso di aggiungere
 **tre ticket prima del pilota** (11 auth locale, 12 stato del servizio, 13 dashboard admin): in produzione i merchant non
 potevano accedere e il founder deve poter approvare, mettere in pausa e reimpostare le password. Il vecchio ticket 11 è il
 **14**. **I ticket 11 e 12 sono fatti** (i merchant possono registrarsi, accedere e cambiare la password con `AUTH_PROVIDER=local`;
-lo stato in attesa / attivo / in pausa governa carta di prova e scanner); resta il 13. **Pronta al merge dopo** il ticket 13, il collaudo end-to-end del founder (procedura in
+lo stato in attesa / attivo / in pausa governa carta di prova e scanner; **il 13** dà al founder la dashboard `/admin`: approva, pausa, riattiva, reset password). **Pronta al merge dopo** il collaudo end-to-end del founder (ticket 14) (procedura in
 [deploy.md](../workflows/deploy.md), esiti in [zernio-notes.md](../architecture/zernio-notes.md)) e l'ok esplicito
 dell'utente: nessun merge su `develop`/`main` e nessun tag prima. **v0.2.1 è assorbito da v0.3.0**: nessun merge
 separato, `develop` oggi è alla v0.2.1 mai rilasciata e verrà superata dal merge di `feature/instagram-cards`.
@@ -40,7 +40,7 @@ Contesto di riferimento: decisioni in [AGENTS.md](../../AGENTS.md), vincoli Zern
 | 10 | Seed, smoke test e script | ✅ 2026-10-26 (766 test) |
 | 11 | Autenticazione dei merchant: provider `local` (registrazione, login, cambio password) | ✅ 2026-10-27 `d3a32d6` + `9ae5b3e` (freno solo per email) (878 test); smoke su SQLite usa-e-getta con `ENVIRONMENT=production` + `AUTH_PROVIDER=local`: registrazione, login, cambio password ok |
 | 12 | Stato del servizio: approvazione, pausa e carta di prova | ✅ 2026-10-27 `f5df96c` + `86f00dd` (936 test); avvio verificato su SQLite usa-e-getta (reset, seed, colonne `is_paused` e `created_at`) |
-| 13 | Dashboard admin | da fare (ticket scritto) |
+| 13 | Dashboard admin | ✅ 2026-10-27 `4081bcd` (1048 test); verificato su SQLite usa-e-getta con `AUTH_PROVIDER=local` e un processo vero: login, lista, approva, reset, `smoke_test_prod` ok |
 | 14 | Documentazione, collaudo end-to-end e release (era l'11) | 🔶 2026-10-27: documentazione generale fatta (`65caf34`) e `replay_webhook --event-id` (`b40401a`, 767 test). Restano: collaudo Instagram del founder (si può fare subito), verifiche dei ticket 11-13, esiti in `zernio-notes.md`, ok al merge |
 
 Suite di partenza: 360 test. I ticket 02-08 **aggiungono** il nuovo flusso accanto al vecchio (che continua a
@@ -178,6 +178,43 @@ Note sui ticket fatti:
   approvato «lavori»; «lavora subito» in `overview.md`, `merchant_service`, `routes/merchant/auth.py`, `settings.html` e pagina di registrazione.
   Limite noto: `ZernioSendCounter` (docstring in `models.py`) cita ancora l'ambito `zernio:<team_id>`, oggi sempre `account:<id>` (non toccato).
   **Il passo 2 del collaudo** (`deploy.md`) ora richiede un passo 2b: approvare il negozio (API admin) prima di aspettarsi `/c/<token>`.
+- **13**: dashboard admin `/admin` (nessuna colonna nuova nel DB). `app/routes/admin.py` (login, logout, pagina, `GET /admin/api/merchants`,
+  `POST .../approve|pause|resume|reset-password`), template `admin/login.html` e `admin/dashboard.html` (Tailwind + JS vanilla), `app/core/security.py`
+  (token `role=admin` di 12 ore, `create_jwt_token(expires_delta=)`, `request_origin_allowed`), `app/core/dependencies.py` (`admin_auth_method`,
+  `require_admin_session`, `require_same_origin`, `require_admin_action`, cookie), `app/core/auth.py` (`admin_key_matches`), `merchant_service`
+  (`login_admin`, `list_admin_merchants`, `set_merchant_state`, `approve_merchant`, `reset_merchant_password`; core: `AdminAction`, `apply_admin_action`,
+  `generate_temporary_password`, `AdminMerchantRow`). **Scelte non previste dal ticket**: (1) **Origin**: confronto il netloc di `Origin` (o `Referer`) con l'header
+  `Host`, senza guardare lo schema (dietro il proxy di DO sarebbe ambiguo); vale per ogni POST con sessione a cookie **e per il POST di login**; mancante,
+  estraneo o `null` → 403, e si controlla prima del freno (un POST cross-site non consuma tentativi); con `X-Admin-Key` **corretto** non serve (un header errato
+  con cookie valido è rifiutato, 401, senza ripiego sul cookie); (2) **`Referrer-Policy: same-origin`** sulle risposte admin, non `no-referrer` come la pagina carta:
+  con `no-referrer` il browser manda `Origin: null` sui POST e ogni azione darebbe 403 mentre i test (che impostano `Origin` a mano) resterebbero verdi;
+  più `Cache-Control: no-store` e `X-Robots-Tag: noindex`; (3) **chiave admin vuota = accesso chiuso**: `.env.example` lascia `ADMIN_SECRET_KEY=` e `Settings` accetta
+  `""`, quindi `compare_digest("", "")` avrebbe fatto entrare una password vuota; `admin_key_matches` fallisce chiuso (anche per l'header); (4) il token admin ha solo
+  `role=admin` (nessun `sub`/`email`/`ver`), quindi i provider dei merchant lo rifiutano e un token merchant (stessa `JWT_SECRET_KEY`) non vale come admin: il claim si
+  controlla con uguaglianza stretta, test nei due versi; cookie `admin_session` con `Path=/admin` e logout con lo stesso `Path` (senza, il browser lo tiene); (5) **freno**:
+  la stessa istanza `login_throttle` con chiave fissa `admin`, messaggi propri (`admin_login_failure_message`) e un `suffix` opzionale in `TooManyAttemptsError` /
+  `LoginThrottle.check` (quello di default invita a chiedere il reset al founder, che per l'admin non ha senso: il 429 admin dice di usare `X-Admin-Key`); il contatore è
+  globale (chiunque può fermare il form per 15 minuti, il ripiego è l'header, senza freno) e il successo lo azzera; (6) **il reset azzera anche il freno del login di quell'email**
+  (`login_throttle_key`): il 429 del merchant dice «chiedi al founder il reset» e senza questo la password temporanea sarebbe inutilizzabile fino a 15 minuti; (7) **transizioni**:
+  `approve` da ogni stato imposta `is_approved` e toglie la pausa; `pause` e `resume` valgono solo per un negozio approvato (409 su uno in attesa, perché la pausa non conta
+  lì e l'azione sarebbe ambigua); ripetere un'azione è un no-op con 200; (8) **API admin vecchia**: `POST /api/merchant/{id}/approve` ora passa da `approve_merchant` (toglie la pausa),
+  `is_paused` è in `MerchantUpdateRequest` e in `MerchantResponse` (quindi anche in `GET /api/merchant/me`: il merchant vede il proprio flag); `require_admin_key` non è cambiata
+  (resta `!=` e 403); (9) **reset**: password temporanea di 12 caratteri da un alfabeto di 54 senza `0 O 1 l I` con `secrets.choice` (la `choice` è iniettabile: il core resta
+  deterministico nei test), `set_password` poi `throttle.clear`; 409 senza `auth_user_id` o con la credenziale mancante (`NotFoundError` del provider tradotto), 400 con un
+  provider senza password; la risposta (`AdminResetPasswordResponse`, `temporary_password` con `repr=False`) ha un `response_model` fisso e `no-store`; (10) **la lista** usa due
+  query raggruppate (`card_crud.count_cards_by_merchant`, `tree_service.pool_points_by_merchant`) più una per i merchant, non una per riga (un test conta le query); risposta con
+  `response_model` (un campo non dichiarato non esce mai) e test sui **valori** dei segreti (chiave cifrata, secret, `hook_id`, hash, id del provider, `ADMIN_SECRET_KEY`,
+  `JWT_SECRET_KEY`), non solo sui nomi dei campi; (11) **XSS**: i nomi li scrivono i merchant, quindi la pagina usa solo `textContent` (un test vieta `innerHTML`, `eval`,
+  `| safe`...) e il server non stampa nessun dato nell'HTML; (12) il form di login usa `fetch` per mostrare 401 e 429 nella pagina (senza JS resta il POST classico) e va su `/admin`
+  solo se il redirect ha portato lì (cookie accettato); (13) **Modifica A**: «Attivo ✅» → «Collegato con Zernio ✅» nelle impostazioni e «la funzione è attiva» → «il collegamento con
+  Zernio è completo» (stesso stato, riga 82); nella dashboard lo stesso stato si chiama «Collegato con Zernio» (il ticket diceva «attivo»: accanto alla colonna dello stato del
+  servizio confonderebbe); `InstagramStatus.ACTIVE` e `data-state="active"` invariati; nessun test dipendeva dai vecchi testi (verificato), ne ho aggiunti due;
+  (14) **Modifica B**: `ZERNIO_CHECK_API_KEY: SecretStr = SecretStr("")` in `Settings` (pydantic-settings la legge dall'ambiente **o dal `.env`**; nessuna dipendenza nuova, il `.env` non
+  si legge a mano, la chiave non si stampa), `scripts/zernio_check._read_key` la legge da `settings` a ogni chiamata; **test riscritti**: quelli che usavano `monkeypatch.setenv/delenv`
+  ora impostano `settings.ZERNIO_CHECK_API_KEY`, e due test nuovi usano un `.env` temporaneo con valori finti; (15) **`tests/conftest.py`**: `ADMIN_SECRET_KEY`, `JWT_SECRET_KEY` e
+  `ZERNIO_CHECK_API_KEY` si impostano nell'ambiente prima di importare l'app (le env var vincono sul `.env`): ora `ZERNIO_CHECK_API_KEY` è un campo di `Settings`, quindi
+  la chiave vera del `.env` entrerebbe nel processo di test e un'asserzione fallita potrebbe stamparla; vale anche per i due segreti dell'admin. Fuori scope rispettato (nessuna creazione /
+  eliminazione / modifica dei dati del merchant, link di invito, più admin, audit log, statistiche).
 - **14** (ex 11, parte già fatta): verifica della documentazione contro il codice. Discrepanze corrette: il flusso del webhook in `overview.md`
   non citava `isFollower` (invito a seguire, `follow_requested`); l'ambito di quota oggi è sempre `account:<id>`
   (`get_team_identity` → `None`), non `zernio:<team>`; ordine del lifespan; `deploy.md` elencava ancora la tabella
@@ -200,7 +237,7 @@ Note sui ticket fatti:
    `isFollower: null`, **ManyChat/standby**, tocco della voce di menu «🌳 La mia carta», «Scollega» da pannello.
 4. ~~Ticket 08~~ fatto, prova manuale del founder riuscita il 2026-10-26.
 5. ~~Ticket 09~~ fatto. ~~Ticket 10~~ fatto.
-6. ~~Ticket 11~~ fatto. ~~Ticket 12~~ fatto. **Ticket 13** (da fare, con approvazione a fine ticket), poi **ticket 14**: documentazione generale fatta. **Collaudo end-to-end a cura del founder** (checklist passo-passo in
+6. ~~Ticket 11~~ fatto. ~~Ticket 12~~ fatto. ~~Ticket 13~~ fatto (attende l'approvazione dell'utente), poi **ticket 14**: documentazione generale fatta. **Collaudo end-to-end a cura del founder** (checklist passo-passo in
    `deploy.md`, «Collaudo end-to-end del flusso Instagram»). Da verificare e riportare in `zernio-notes.md`
    («Collaudo finale del ticket 14»): card a un non follower, DM in Requests via webhook, `isFollower` `null`,
    ManyChat/standby, tocco sulla voce di menu, «Scollega» da pannello, evento duplicato, log senza segreti, latenza
@@ -241,15 +278,17 @@ rivede nel collaudo finale. QR "apri la chat": a mano dal founder (ticket 14).
 
 ## Debito noto
 
-- **Accesso dei merchant in produzione**: con `AUTH_PROVIDER=local` (ticket 11, fatto) i merchant si registrano e accedono
-  anche con `ENVIRONMENT=production`; lo stato del servizio (12, fatto) governa carta di prova e scanner. Manca ancora la dashboard
-  admin con approvazione, pausa e reset password (13): **non fare il primo deploy prima**. Supabase più avanti, DB su Neon.
+- **Accesso dei merchant in produzione**: chiuso. Con `AUTH_PROVIDER=local` (ticket 11) i merchant si registrano e accedono anche con
+  `ENVIRONMENT=production`, lo stato del servizio (12) governa carta di prova e scanner e la dashboard `/admin` (13) permette di avviare,
+  mettere in pausa, riattivare e reimpostare le password. Il primo deploy aspetta solo il collaudo (14) e l'ok al merge. Supabase più avanti, DB su Neon.
 - **Punto aperto: freno ai tentativi in memoria** (solo per email). Giusto con un solo processo (oggi); si azzera al riavvio e
   con più processi/container il limite si moltiplica (5 × N): spostarlo su DB **prima** di scalare (dettagli in `roadmap.md`).
-  Dopo il primo deploy fai la verifica del login in `deploy.md` («Primo deploy», passo 4).
+  Dopo il primo deploy fai la verifica del login in `deploy.md` («Primo deploy», passi 4 e 4b).
+- **Punto aperto: il freno del login admin** è lo stesso contatore in memoria, con una chiave sola (`admin`): chiunque può fermare il form
+  di `/admin` per 15 minuti; ripiego `X-Admin-Key` (nessun freno). Si risolve insieme al freno su DB.
 
 - Merchant creato dall'admin senza `auth_user_id`: la sua email non si può registrare (409) e non può accedere (il reset
-  dalla dashboard riguarda solo i registrati). Si risolve con Supabase.
+  dalla dashboard riguarda solo i registrati: il pulsante è grigio e l'API risponde 409). Si risolve con Supabase.
 - `create_all()` non migra: serve `scripts.reset_db` (nessun dato di produzione da preservare per ora). Con il ticket 12 la tabella `merchant` ha due colonne nuove (`is_paused`, `created_at`): ogni DB già creato (Neon di sviluppo, `collaudo*.db`) va resettato.
 - `reset_db`/`seed_db` agiscono sul `DATABASE_URL` del `.env` (oggi Neon): per il collaudo usare un SQLite usa-e-getta
   (`.agents/workflows/deploy.md`).

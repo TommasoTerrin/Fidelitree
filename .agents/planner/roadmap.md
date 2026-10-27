@@ -103,6 +103,14 @@ e va deciso a chi fidarsi. Altri limiti: chi conosce l'email di un merchant può
 Se i merchant crescono: recupero password via email, parametri di `scrypt`
 più alti (il formato salvato li porta già, la verifica legge quelli dell'hash), login e hash fuori dall'event loop
 (oggi `scrypt` blocca il loop ~60-130 ms a ogni login) e la pagina di login che mostra l'errore invece del JSON.
+Lo stesso freno protegge il **login admin** (ticket 13, chiave unica `admin`): è in memoria come gli altri e il contatore è globale,
+quindi chiunque può fermare il *form* di `/admin` per 15 minuti con 5 tentativi sbagliati; il ripiego è l'header `X-Admin-Key`, che non ha freno.
+Spostarlo su DB sistema entrambi.
+
+### Dashboard admin: estensioni (fuori dal ticket 13)
+Se il pilota lo chiede: audit log delle azioni, più utenti admin, statistiche, creazione/modifica/eliminazione dei merchant dalla dashboard,
+sessione admin revocabile (oggi il JWT scade da solo in 12 ore), soglie dei livelli per negozio, un'opzione per escludere un negozio in pausa
+dalla chiusura mensile (oggi partecipa con i punti raccolti prima) e un filtro «da avviare» per i nuovi iscritti.
 
 ### Endpoint admin/cron per `close_period`
 Quando i negozi superano i 10-20, riusando lo stesso core di `scripts.close_period` (anteprima, idempotenza, cap).
@@ -153,13 +161,13 @@ ruff (lint) + mypy (type check) in pre-commit locale (vedi CI/CD sopra per il li
 
 ## Changelog
 
-- **2026-10-27** — **v0.3.0** completa su `feature/instagram-cards` (11 ticket, 767 test): carta via DM Instagram con
+- **2026-10-27** — **v0.3.0** completa su `feature/instagram-cards` (ticket 01-13, 1048 test): carta via DM Instagram con
   Zernio (webhook, card con link segreto `/c/<token>`, invito a seguire per i non follower), onboarding Instagram del
   merchant dal pannello, pagina carta e PWA solo merchant, vecchio flusso cliente (OTP, wallet, `/join`, `Customer`)
   rimosso, script riallineati (`seed_db --links`, `zernio_check --merchant-id`, `replay_webhook --event-id`,
   `smoke_test_prod`). **v0.2.1 assorbita**, mai rilasciata. In attesa del collaudo end-to-end del founder e dell'ok al
-  merge. Il 2026-10-27 aggiunti i ticket 11-13 (auth `local` su Neon, stato del servizio con carta di prova e pausa dello scanner,
-  dashboard admin); il vecchio ticket 11 è il 14.
+  merge. Il 2026-10-27 aggiunti e completati i ticket 11-13 (auth `local` su Neon, stato del servizio con carta di prova e pausa dello scanner,
+  dashboard admin `/admin` con approva / pausa / riattiva e reset password; 1048 test); il vecchio ticket 11 è il 14.
 - **2026-10-22** — Avviata **v0.3.0** (carta via DM Instagram con Zernio): analisi, grilling e 11 ticket; **v0.2.x
   non verrà rilasciata**, assorbita da v0.3.0. Storico di v0.2.0 in `tickets/v0.2.0/STORICO.md`.
 - **2026-10-13** — **v0.2.0** pronta (branch `rinascimento`, 11 ticket): pool mensile per negozio con livelli

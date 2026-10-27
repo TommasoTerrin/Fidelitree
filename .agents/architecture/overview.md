@@ -14,6 +14,7 @@ Cliente (Instagram) ── DM "CARTA" / menu ──► Instagram ──► Zerni
 Browser cliente: /c/<token> (pagina carta + QR),         FastAPI (app/main.py)
                  /carta-di-prova (negozio in attesa)
 Browser merchant: PWA /merchant/* (scanner, gestione)    routes → services (core puro + shell) → db_crud
+Browser del founder: /admin (dashboard: approva, pausa, reset password)
                                                           ▼
                                        PostgreSQL (Neon oggi, Supabase più avanti)
 
@@ -147,7 +148,25 @@ La pagina carta risponde con `Cache-Control: no-store` e `Referrer-Policy: no-re
 l'URL è il segreto); token sconosciuto o revocato → stessa 404 amichevole. Le pagine HTML merchant senza sessione valida
 rimandano con 303 a `/merchant/login` (le API `/api/merchant/*` restano 401).
 
-### 4. Chiusura mensile
+### 4. Dashboard admin del founder (`/admin`)
+
+```
+GET /admin/login → POST /admin/login (password = ADMIN_SECRET_KEY, confronto in tempo costante, freno 5 errori/15 min → 429)
+   → cookie admin_session (JWT role=admin, httpOnly, SameSite=Strict, Path=/admin, 12 ore) → 303 /admin
+GET /admin → pagina; GET /admin/api/merchants → lista JSON (al massimo 200, dai più recenti, nessun segreto)
+POST /admin/api/merchants/{id}/approve | pause | resume | reset-password
+   ├─ autenticazione: cookie valido oppure header X-Admin-Key corretto (401 altrimenti; pagine HTML: 303 al login)
+   ├─ cookie → Origin (o Referer) deve coincidere con l'header Host, altrimenti 403 (con X-Admin-Key corretto non serve)
+   └─ id sconosciuto 404 · pause/resume su negozio in attesa 409 · reset: 409 senza credenziale, 400 con provider senza password
+```
+
+**Flusso di approvazione**: il founder manda al merchant il link `/merchant/register` → il merchant si iscrive (nasce **in attesa**: Instagram sì, carta vera ai clienti no) → gli scrive (es. su WhatsApp) → il founder lo **avvia** dalla dashboard (`approve`: `is_approved=true`, `is_paused=false`) → il merchant è **attivo**. Periodo di prova finito o abbonamento non pagato → «Metti in pausa» (può solo togliere saldo); pagato → «Riattiva». Nessun pagamento in app, nessuna email, nessun link di invito.
+
+**Reset della password**: «Reimposta password» genera una password temporanea di 12 caratteri (alfabeto senza caratteri ambigui) con `secrets.choice`, la imposta con `PasswordAdminProvider.set_password` (nuovo hash, `token_version + 1`: le sessioni aperte decadono), azzera il freno del login di quell'email (altrimenti il merchant fermato dal 429 non potrebbe usarla) e la mostra **una sola volta** (campo `temporary_password` della risposta, pulsante «Copia»). Non si salva in chiaro, non si logga, il `repr` della risposta non la mostra; la risposta è `no-store`. Il merchant la cambia da `/merchant/settings`.
+
+La pagina costruisce il DOM solo con `textContent` (i nomi delle attività li scrivono i merchant, quindi mai HTML da stringa) e il server non stampa nessun dato dei merchant nell'HTML: la lista arriva dal JSON. Il founder **non** crea profili, non elimina e non modifica i dati del negozio dalla dashboard.
+
+### 5. Chiusura mensile
 
 `python -m scripts.close_period` (vedi `deploy.md`), invariata.
 
@@ -184,7 +203,9 @@ Core puro in `card_service`: `can_add_balance` (solo `active`), `can_remove_bala
 - L'avviso sta solo nelle pagine del merchant (partial `service_banner`: scanner, gestione carta, impostazioni); il cliente non vede
   nessuna differenza. `/carta-di-prova` è una pagina statica (stessi header no-store/no-referrer della pagina carta, `noindex`), senza QR vero.
 - `tree_service.close_period` non cambia: conta solo `is_approved` (un negozio approvato in pausa partecipa con i punti già raccolti).
-- Il cambio di stato è manuale: dashboard admin nel ticket 13; fino ad allora `POST /api/merchant/{id}/approve` o il DB.
+- Il cambio di stato è manuale, dalla **dashboard admin** (flusso 4): «Avvia» (`approve`) imposta `is_approved` **e toglie la pausa**; «Metti in pausa» e
+  «Riattiva» valgono solo per un negozio già approvato (su uno in attesa: 409). Anche `POST /api/merchant/{id}/approve` (X-Admin-Key) passa dallo stesso
+  service, quindi toglie la pausa. Nessuna transizione verso «in attesa» (si rimette `is_approved=false` solo dall'API admin `PUT`).
 
 ## Autenticazione
 
@@ -194,11 +215,11 @@ Tutto passa da `AuthProvider` (`app/core/auth.py`), scelto da `AUTH_PROVIDER`; l
 - **Provider `dev`** (locale/test): utenti in memoria, password `DEV_AUTH_PASSWORD` per i merchant non registrati nel processo (così funzionano gli account del seed), token = JWT firmato con `JWT_SECRET_KEY` (senza `ver`: un token `dev` non vale con `local` e viceversa). Con `ENVIRONMENT=production` l'app **non parte** (`get_auth_provider()` è chiamato dal lifespan).
 - **Provider `supabase`**: stub, si collega in un rilascio successivo.
 - **Merchant**: `POST /merchant/register` (nasce non approvato, quindi **in attesa**: vedi «Stato del servizio») e `POST /merchant/login` (email + password) → cookie `access_token` (httpOnly, samesite lax, **Secure** con `ENVIRONMENT=production`) → `get_current_merchant`. Se la creazione del merchant fallisce dopo quella della credenziale, questa si elimina (altrimenti l'email resterebbe bloccata).
-- **Freno ai tentativi sul login** (`LoginThrottle`, core in `auth.py`): 5 errori in 15 minuti **per email normalizzata** (nessun freno per IP: dietro il proxy di DO sarebbe lo stesso per tutti o falsificabile via `X-Forwarded-For`, quindi il Dockerfile non cambia). Dal 3° errore il 401 aggiunge «Attenzione: dopo 5 errori l'accesso si ferma per 15 minuti», al 5° «Accesso sospeso», poi 429 con `Retry-After` e l'invito a chiedere al founder di reimpostare la password. Il controllo precede ogni verifica (a soglia anche la password giusta riceve 429); l'email sconosciuta conta come errore, con gli stessi messaggi (l'avviso non rivela se l'account esiste); un accesso riuscito azzera il contatore; l'identità senza merchant (403) non conta. Contatore **in memoria**: corretto con un solo processo (oggi su DO), si azzera al riavvio, con più processi/worker ciascuno ha il suo (limite × N). Lo riuserà il login admin (ticket 13).
+- **Freno ai tentativi sul login** (`LoginThrottle`, core in `auth.py`): 5 errori in 15 minuti **per email normalizzata** (nessun freno per IP: dietro il proxy di DO sarebbe lo stesso per tutti o falsificabile via `X-Forwarded-For`, quindi il Dockerfile non cambia). Dal 3° errore il 401 aggiunge «Attenzione: dopo 5 errori l'accesso si ferma per 15 minuti», al 5° «Accesso sospeso», poi 429 con `Retry-After` e l'invito a chiedere al founder di reimpostare la password. Il controllo precede ogni verifica (a soglia anche la password giusta riceve 429); l'email sconosciuta conta come errore, con gli stessi messaggi (l'avviso non rivela se l'account esiste); un accesso riuscito azzera il contatore; l'identità senza merchant (403) non conta. Contatore **in memoria**: corretto con un solo processo (oggi su DO), si azzera al riavvio, con più processi/worker ciascuno ha il suo (limite × N). Lo usa anche il login admin (chiave fissa `admin`, messaggio e invito diversi: vedi «Admin»).
 - **Cambio password del merchant**: `POST /api/merchant/me/password` (password attuale + nuova): 400 se la nuova non è di 8-128 caratteri (o il provider non gestisce le password), 401 se l'attuale è errata; riemette il cookie con il nuovo `ver`. Il blocco «Cambia password» delle impostazioni compare solo se il provider è un `PasswordAdminProvider`.
 - **Cliente**: **nessuna autenticazione**. La carta si vede solo con il link segreto `/c/<token>`.
 - **Zernio → app**: firma HMAC per negozio sul webhook.
-- **Admin**: header `X-Admin-Key` = `ADMIN_SECRET_KEY` → `require_admin_key`.
+- **Admin**: due ingressi con la stessa `ADMIN_SECRET_KEY` (un valore vuoto non fa entrare nessuno). (1) header `X-Admin-Key` → `require_admin_key` per `/api/merchant/*` (CRUD, `approve`; 403 se manca) e `require_admin_session` per `/admin/api/*` (401). (2) **dashboard `/admin`**: `POST /admin/login` confronta la password con `hmac.compare_digest` e imposta il cookie `admin_session` (JWT firmato con `JWT_SECRET_KEY`, claim `role=admin` e **nessun** `sub`/`email`, quindi i provider dei merchant lo rifiutano e viceversa un token merchant non vale come sessione admin; 12 ore; httpOnly, SameSite=Strict, `Path=/admin`, `Secure` in produzione). Freno: 5 errori in 15 minuti → 429 su una chiave unica `admin` (in memoria; contatore globale, quindi il *form* si può fermare per 15 minuti con tentativi sbagliati: l'header `X-Admin-Key` non ha freno ed è la via di ripiego). CSRF: i POST con cookie richiedono `Origin`/`Referer` uguale a `Host` (403), `Origin: null` vale come estraneo; le risposte admin hanno `Cache-Control: no-store`, `noindex` e `Referrer-Policy: same-origin` (con `no-referrer` ogni azione darebbe 403). Il logout cancella solo il cookie: il JWT non è revocabile e scade da solo.
 
 ## Endpoint
 
@@ -212,6 +233,11 @@ Tutto passa da `AuthProvider` (`app/core/auth.py`), scelto da `AUTH_PROVIDER`; l
 | GET /privacy | pubblico | informativa per i clienti |
 | GET /merchant/login, /merchant/register | pubblico | pagine di accesso |
 | POST /merchant/register, POST /merchant/login, GET /merchant/logout | pubblico | auth merchant (login: 401 credenziali, 403 senza negozio, **429** troppi tentativi con `Retry-After`) |
+| GET /admin/login, POST /admin/login, GET /admin/logout | pubblico (login: `Origin` del nostro host, freno **429**) | accesso alla dashboard del founder (cookie `admin_session`) |
+| GET /admin | cookie admin o `X-Admin-Key` (altrimenti 303 al login) | pagina della dashboard (la lista arriva dal JSON) |
+| GET /admin/api/merchants | cookie admin o `X-Admin-Key` (401) | lista dei merchant: stato del servizio, stato Instagram, carte, punti del mese; nessun segreto |
+| POST /admin/api/merchants/{id}/approve, /pause, /resume | cookie admin + `Origin` (403) o `X-Admin-Key` (401) | avvia (approva e toglie la pausa), metti in pausa, riattiva; ritornano la riga aggiornata (404, 409 per pausa/riattiva di un negozio in attesa) |
+| POST /admin/api/merchants/{id}/reset-password | come sopra | password temporanea mostrata solo nella risposta (404, 409 senza credenziale, 400 provider senza password) |
 | GET /merchant/scanner, /merchant/settings, /merchant/card/{id}/manage | cookie merchant | pagine merchant (PWA); banner di stato e pulsanti di aggiunta disattivati se il negozio è in attesa o in pausa |
 | GET /api/merchant/me, PUT /api/merchant/me/settings | cookie merchant | profilo e impostazioni di conversione |
 | POST /api/merchant/me/password | cookie merchant | cambio password (400 nuova non valida, 401 attuale errata); riemette il cookie |
@@ -219,7 +245,7 @@ Tutto passa da `AuthProvider` (`app/core/auth.py`), scelto da `AUTH_PROVIDER`; l
 | POST /api/merchant/add-tree-points/{id} | cookie merchant | scan: tree points (+ conversione automatica); **403** se il negozio non è attivo e il delta è positivo |
 | POST /api/merchant/add-point/{id} | cookie merchant | +/- cashback in euro; **403** se il negozio non è attivo e l'importo è positivo |
 | DELETE /api/merchant/card/{id} | cookie merchant | elimina carta propria (cancellazione su richiesta del cliente) |
-| CRUD /api/merchant/…, POST /api/merchant/{id}/approve | X-Admin-Key | gestione merchant, approvazione, soglie (il DELETE elimina anche la credenziale `local`) |
+| CRUD /api/merchant/…, POST /api/merchant/{id}/approve | X-Admin-Key (403) | gestione merchant, approvazione (toglie anche la pausa), soglie e `is_paused` (il DELETE elimina anche la credenziale `local`) |
 
 Rimossi in v0.3.0: `/customer/login`, `/api/customer/otp/*`, `/customer/logout`, `/join/{id}`, `/wallet`,
 `/api/customer/*`, `/card/{id}`, `/api/card/{id}`.

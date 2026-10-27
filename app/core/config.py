@@ -24,7 +24,7 @@ class Settings(BaseSettings):
 
     # Sicurezza & Auth
     JWT_SECRET_KEY: str      # firma dei token di sessione merchant
-    ADMIN_SECRET_KEY: str    # protegge gli endpoint amministrativi /api/merchant
+    ADMIN_SECRET_KEY: str    # header X-Admin-Key degli endpoint /api/merchant e password della dashboard /admin (vuota = accesso chiuso)
     # "dev": solo locale/test (rifiutato con ENVIRONMENT=production); "local": password nel nostro DB (ammesso in produzione)
     AUTH_PROVIDER: Literal["dev", "local", "supabase"] = "dev"
     ENVIRONMENT: str = "development"  # "production" in produzione

@@ -4,12 +4,12 @@
 > Valida per v0.3.0 (carta via DM Instagram). Le voci spuntate sono quelle verificate; le altre vanno fatte e spuntate.
 
 ## Codice
-- [x] `python -m pytest` → tutti verdi (767 test al 2026-10-27)
+- [x] `python -m pytest` → tutti verdi (1048 test al 2026-10-27)
 - [x] `python -c "import app.main"` → nessun errore di import (serve il `.env` con le tre chiavi di cifratura)
 - [ ] Nessun segreto hardcoded nel diff (`git diff main..develop`)
 - [x] Nuove env vars aggiunte a `.env.example` e documentate in `.agents/workflows/deploy.md`
 - [x] Versione in `pyproject.toml` = `0.3.0`, uguale a `EXPECTED_VERSION` in `scripts/smoke_test_prod.py` (un test le confronta); il tag `vX.Y.Z` sarà identico (vedi `.agents/workflows/development.md`)
-- [ ] In produzione `ENVIRONMENT=production` e `AUTH_PROVIDER` **≠ `dev`** (con `dev` l'app rifiuta di partire; **Supabase è ancora uno stub: vedi l'avviso in `deploy.md`**)
+- [ ] In produzione `ENVIRONMENT=production` e `AUTH_PROVIDER=local` (con `dev` l'app rifiuta di partire, `supabase` è ancora uno stub); `ADMIN_SECRET_KEY` impostata, lunga e casuale (è anche la password di `/admin`)
 - [ ] In produzione `DEV_AUTH_PASSWORD` non impostata (serve solo al provider `dev`)
 - [ ] `ENCRYPTION_KEY`, `IGSID_HMAC_KEY` e `CARD_LINK_KEY` **generate da zero** (tre valori diversi, salvate nel password manager); la vecchia `ENCRYPTION_KEY` Fernet di v0.1.0 non va riusata
 - [ ] `PUBLIC_BASE_URL` = dominio https di produzione
@@ -32,11 +32,14 @@ Prerequisito: SQLite usa-e-getta (`DATABASE_URL=sqlite:///...` solo nel terminal
 - [ ] `python -m scripts.close_period --month AAAA-MM` (mese del seed, `ECOLOGI_TEST_MODE=true`): anteprima corretta, conferma, **seconda esecuzione senza effetti**; con `--cap` basso vedi il blocco
 - [ ] `python -m scripts.ecologi_check` lanciato con la chiave di test (`ECOLOGI_TEST_MODE=true`) e con quella reale (`ECOLOGI_TEST_MODE=false`): entrambe OK, nulla sul profilo Ecologi
 - [ ] Logout del merchant
+- [ ] **Dashboard admin** (`/admin`): login con `ADMIN_SECRET_KEY`; il merchant appena registrato compare «In attesa»; «Avvia» → «Attivo» (lo scanner aggiunge, un cliente nuovo riceve `/c/<token>`); «Metti in pausa» → lo scanner solo toglie e la pagina carta del cliente resta identica; «Riattiva»; sesto tentativo di password sbagliata → 429; «Esci» chiude la sessione
+- [ ] **Reset password dalla dashboard**: la password temporanea compare una volta sola con «Copia»; il merchant accede con quella e non con la vecchia, la sua sessione aperta decade, la cambia da Impostazioni; un merchant fermato dal 429 rientra subito dopo il reset; nessuna password né `ADMIN_SECRET_KEY` nel log del server
 
 ## Produzione
 - [ ] Env vars su DigitalOcean allineate (vedi `deploy.md`), **prima** del merge
 - [ ] DB di produzione resettato (i dati di v0.1.0 non si migrano: «Primo deploy di v0.3.0» in `deploy.md`)
-- [ ] Dopo il deploy: smoke test (`scripts/smoke_test_prod.py`) passato
+- [ ] Dopo il deploy: smoke test (`scripts/smoke_test_prod.py`) passato (include `/admin/login` e l'API admin)
+- [ ] Dashboard in produzione verificata con un negozio di prova (passo 4b di «Primo deploy di v0.3.0»), poi negozio di prova eliminato
 - [ ] Verifica dati su console Neon/Supabase (tabelle `merchant`, `card`, `pointtransaction`, `merchantpool`, `treeplanting`, `processedwebhookevent`, `zerniosendcounter`)
 - [ ] Onboarding di un merchant pilota in produzione con la sua chiave Zernio e DM di prova riuscito
 - [ ] **`/privacy` verificata dal founder** (il testo è una bozza) prima di dare il link ai clienti

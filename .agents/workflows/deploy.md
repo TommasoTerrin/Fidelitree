@@ -15,7 +15,7 @@ Se ne manca una l'app **crasha all'avvio** (Settings pydantic con campi obbligat
 |---|---|
 | `DATABASE_URL` | URL Postgres completo (`postgresql://...?sslmode=require`) |
 | `JWT_SECRET_KEY` | firma dei token di sessione |
-| `ADMIN_SECRET_KEY` | chiave per gli endpoint admin (`X-Admin-Key`) |
+| `ADMIN_SECRET_KEY` | chiave per gli endpoint admin (`X-Admin-Key`) e **password della dashboard `/admin`**. Non lasciarla vuota: con un valore vuoto l'accesso admin resta chiuso |
 | `ENCRYPTION_KEY` | (v0.3.0) chiave AES-256-GCM, 32 byte in base64 urlsafe: cifra chiave Zernio e secret del webhook dei merchant |
 | `IGSID_HMAC_KEY` | (v0.3.0) indice cieco dell'IGSID dei clienti. **Non ruotabile**: cambiarla scollega tutte le carte |
 | `CARD_LINK_KEY` | (v0.3.0) deriva il token dei link delle carte; cambiarla invalida tutti i link già inviati |
@@ -42,7 +42,7 @@ Variabili **opzionali** (hanno un default), introdotte con v0.2.0:
 | `INSTAGRAM_CARD_KEYWORD` | `CARTA` | (v0.3.0) parola chiave che il cliente scrive in DM al negozio |
 | `ZERNIO_MONTHLY_SEND_LIMIT` | `10000` | (v0.3.0) invii gratuiti al mese per team Zernio (solo per l'avviso: è Zernio a fermare gli invii) |
 | `ZERNIO_SEND_WARN_PERCENT` | `75` | (v0.3.0) soglia di avviso nel pannello del merchant |
-| `ZERNIO_CHECK_API_KEY` | vuota | (v0.3.0) **solo locale**, per `scripts.zernio_check` senza `--merchant-id`: chiave Zernio di prova. Non serve in produzione |
+| `ZERNIO_CHECK_API_KEY` | vuota | (v0.3.0) **solo locale**, per `scripts.zernio_check` senza `--merchant-id`: chiave Zernio di prova, letta dal `.env` o dall'ambiente (campo opzionale di `Settings`, mai stampato). Vuota = lo script la chiede a video. Non serve in produzione |
 
 Eliminate da v0.2.0 (cancellabili da DO): `MERCHANT_PASSWORD`. Storiche non più usate: `HUMANI_*`, `TELEGRAM_BOT_TOKEN`, `BASE_URL`, `DATABASE_PASSWORD`.
 
@@ -52,7 +52,7 @@ Eliminate da v0.2.0 (cancellabili da DO): `MERCHANT_PASSWORD`. Storiche non più
 
 > ⚠️ **Schema v0.3.0**: `create_all()` non modifica le tabelle esistenti. Il passaggio al nuovo modello (email, pool, carte con indice cieco, webhook, `AuthCredential`, `Merchant.is_paused` e `Merchant.created_at`...) richiede il reset del DB (`python -m scripts.reset_db`): i dati di v0.1.0 non si migrano. **Anche un DB di sviluppo o di collaudo creato prima del ticket 12** (Neon di sviluppo, `collaudo*.db`) va resettato: senza le colonne nuove l'app dà errore alla prima lettura dei merchant. Vedi «Primo deploy di v0.3.0».
 
-> ⚠️ **Accesso dei merchant in produzione**: con `ENVIRONMENT=production` il provider `dev` non parte e il provider `supabase` è uno stub; in produzione si usa **`AUTH_PROVIDER=local`** (ticket 11 di v0.3.0, **fatto**: i merchant si registrano da `/merchant/register`, accedono e cambiano la password dalle impostazioni). **Non fare comunque il primo deploy prima del ticket 13**: senza la dashboard admin il founder non può mettere in pausa né riattivare un merchant né reimpostargli la password (l'approvazione si può fare con `POST /api/merchant/{id}/approve` e `X-Admin-Key`). Lo stato del servizio (ticket 12, **fatto**) c'è già: un negozio in attesa mostra la carta di prova ai clienti nuovi e il suo scanner può solo togliere saldo. Questo avviso si toglie quando il 13 è chiuso.
+> **Accesso in produzione**: con `ENVIRONMENT=production` il provider `dev` non parte e `supabase` è uno stub, quindi si usa **`AUTH_PROVIDER=local`** (i merchant si registrano da `/merchant/register`, accedono e cambiano la password dalle impostazioni). Il founder li gestisce dalla dashboard **`/admin`** (password = `ADMIN_SECRET_KEY`): avvia (approva), mette in pausa, riattiva e reimposta le password (vedi «Procedure del founder»). Auth locale (ticket 11), stato del servizio (12) e dashboard (13) sono fatti: il primo deploy aspetta solo il collaudo end-to-end (ticket 14) e l'ok esplicito al merge.
 
 ## Primo deploy di v0.3.0 (ordine delle operazioni)
 
@@ -68,16 +68,52 @@ v0.3.0 è la prima release dopo v0.1.0: schema e variabili cambiano insieme. Ord
    Il seed non è per la produzione (richiede `AUTH_PROVIDER=dev`). Eventuali tabelle di versioni precedenti non più nel modello (per esempio `customer`) restano nel DB come orfane, innocue: si possono eliminare a mano dalla console. Il reset lascia l'app vecchia senza schema valido fino al deploy: fallo subito prima del merge.
 3. Procedura di release (sotto): merge su `main`, deploy, smoke test.
 4. **Verifica del login (dopo il deploy)**: registra un negozio di prova e sbaglia la password: dal 3° errore la risposta avvisa del blocco, al 6° tentativo (anche con la password giusta) arriva 429 con l'invito a chiedere il reset al founder; dopo 15 minuti si rientra. Il freno è **per email** e il contatore sta in **memoria** (un solo processo: non impostare `--workers` né più istanze su DO finché non è spostato su DB; vedi roadmap).
-5. **Onboarding dei merchant pilota**: ogni merchant, dalle impostazioni, incolla la **propria** chiave Zernio e sceglie il suo account Instagram; il DM di prova lo rende attivo. Zernio deve poter raggiungere `PUBLIC_BASE_URL`. Se `PUBLIC_BASE_URL` cambia, ogni merchant deve rifare l'onboarding (scollega/ricollega): il webhook su Zernio punta al vecchio URL.
+4b. **Verifica della dashboard (dopo il deploy)**: apri `https://<app>/admin`, accedi con `ADMIN_SECRET_KEY` (in produzione il cookie è `Secure`: serve https), controlla che il negozio di prova del passo 4 compaia «In attesa» con nome ed email, «Avvia» lo rende «Attivo», «Metti in pausa» e «Riattiva» funzionano, «Reimposta password» mostra una password di 12 caratteri una sola volta; poi elimina il negozio di prova (API admin: `DELETE /api/merchant/{id}` con `X-Admin-Key`, che toglie anche la sua credenziale). Lo smoke test controlla già `/admin/login` e l'API admin.
+5. **Onboarding dei merchant pilota**: ogni merchant, dalle impostazioni, incolla la **propria** chiave Zernio e sceglie il suo account Instagram; il DM di prova collega Instagram, e il founder lo **avvia** dalla dashboard (finché non è avviato i clienti nuovi vedono la carta di prova). Zernio deve poter raggiungere `PUBLIC_BASE_URL`. Se `PUBLIC_BASE_URL` cambia, ogni merchant deve rifare l'onboarding (scollega/ricollega): il webhook su Zernio punta al vecchio URL.
 6. **`/privacy`**: il testo è una bozza; il founder la fa verificare (e prepara il DPA, fuori scope) prima di dare il link ai primi clienti.
 7. **Istruzioni ai merchant, una riga sul QR in negozio**: per stampare un QR che apre la chat, contattare il founder, che lo prepara a mano da `https://ig.me/m/<username>`.
+
+## Procedure del founder (dashboard `/admin`)
+
+**Accesso**: apri `https://<app>/admin` (in locale `http://127.0.0.1:8001/admin`) e inserisci `ADMIN_SECRET_KEY`. La sessione dura 12 ore; «Esci» è in alto a destra.
+Dopo 5 password sbagliate in 15 minuti il form si ferma per 15 minuti (il contatore è uno solo e in memoria: lo stesso limite vale per chiunque provi, quindi
+può scattare anche senza colpa tua; si azzera da solo, o al riavvio dell'app). In quel caso, o per uno script, usa l'API con l'header:
+`curl -H "X-Admin-Key: <chiave>" https://<app>/admin/api/merchants` (la chiave non va incollata in chat, in un ticket o in un log). Per non esporre la chiave nella
+history della shell, mettila in una variabile d'ambiente del terminale.
+
+**Iscrizione di un nuovo merchant**
+1. Mandagli il link `https://<app>/merchant/register` (nome attività al massimo 80 caratteri, perché è il titolo della card; telefono facoltativo con `+39`).
+2. Il merchant si iscrive, accede e collega il suo Instagram dalle impostazioni con la propria chiave Zernio. Finché non lo avvii è **«In attesa»**: può fare la prova,
+   ma i suoi clienti nuovi vedono la carta di prova (`/carta-di-prova`) e lo scanner può solo togliere saldo.
+3. Ti scrive (per esempio su WhatsApp). In `/admin` lo trovi in cima alla lista (dai più recenti), con nome attività, email e telefono; controlla che l'Instagram sia
+   «Collegato con Zernio» (o «in attesa del DM di prova») e premi **«Avvia»**: da quel momento è **«Attivo»**.
+4. Dagli le istruzioni (testo sotto).
+
+**Password dimenticata** (anche dopo un «Accesso sospeso»)
+1. Il merchant ti scrive. In `/admin` cercalo per nome o email e premi **«Reimposta password»**, poi conferma.
+2. Appare la **password temporanea** (12 caratteri, senza caratteri ambigui): copiala con «Copia» e comunicala a mano, su un canale privato. **Si vede una sola volta**:
+   se chiudi il riquadro senza averla copiata, rifai il reset (quella vecchia non vale comunque più).
+3. Il reset annulla la vecchia password e le sessioni aperte del merchant e sblocca il suo accesso. Il merchant entra con la temporanea e la cambia da
+   Impostazioni → «Cambia password».
+4. Il pulsante è grigio per i merchant creati dall'API admin: non hanno una password (si risolve con Supabase).
+
+**Prova finita / abbonamento non pagato**
+- **«Metti in pausa»**: il merchant vede il banner «Servizio in pausa» e non può aggiungere punti né cashback, ma può toglierli; il **cliente non vede nessuna differenza**
+  (la pagina carta resta com'è). La chiusura mensile conta ancora i punti raccolti prima (conta `is_approved`).
+- **«Riattiva»**: quando il merchant ha pagato; torna «Attivo». «Metti in pausa» e «Riattiva» valgono solo per un negozio già avviato: su uno «In attesa» danno un errore (usa «Avvia»).
+
+**Testo da dare ai merchant** (bozza, da adattare)
+- *Dopo l'avvio*: «Il tuo Fidelitree è attivo. I tuoi clienti ricevono la carta scrivendo CARTA in DM al tuo Instagram (anche dal menu «🌳 La mia carta»). Per aggiungere punti
+  apri `https://<app>/merchant/scanner` dal telefono, installa l'app («Aggiungi a schermata Home») e inquadra il QR che il cliente ha sulla carta. Se dimentichi la password
+  scrivimi: te la reimposto io. Per stampare un QR che apre la chat, contattami: lo preparo io.»
+- *In pausa*: «Il servizio è in pausa: puoi ancora togliere punti e cashback già presenti, ma non aggiungerne. Scrivimi per riattivarlo.»
 
 ## Procedura di release
 
 1. Completa la checklist `.agents/checklists/pre-release.md` e i passi 1-2 di «Primo deploy di v0.3.0» (solo la prima volta).
 2. `git checkout main && git merge develop && git push` → parte il deploy automatico.
 3. Attendi il deploy dalla console DO (build + health check su `/health`).
-4. Smoke test: `python scripts/smoke_test_prod.py https://<app>.ondigitalocean.app <ADMIN_SECRET_KEY>` (controlla versione `0.3.0`, `/privacy`, `/carta-di-prova`, `/c/<inesistente>` 404, webhook con hook sconosciuto 404, manifest e service worker, pagine del vecchio flusso 404, API admin).
+4. Smoke test: `python scripts/smoke_test_prod.py https://<app>.ondigitalocean.app <ADMIN_SECRET_KEY>` (controlla versione `0.3.0`, `/privacy`, `/carta-di-prova`, `/admin/login`, `/c/<inesistente>` 404, webhook con hook sconosciuto 404, manifest e service worker, pagine del vecchio flusso 404, API admin senza chiave 403, `/admin/api/merchants` 401 senza credenziali e 200 con `X-Admin-Key`).
 5. Verifica il DB (console Neon/Supabase → tabelle `merchant`, `authcredential`, `card`, `pointtransaction`, `merchantpool`, `treeplanting`, `processedwebhookevent`, `zerniosendcounter` presenti).
 6. Tag: `git tag vX.Y.Z && git push --tags`.
 7. Riallinea develop: `git checkout develop && git merge main && git push`.
@@ -155,7 +191,7 @@ chiave Zernio, «COLLEGA ZERNIO», scegli l'account, «COLLEGA ACCOUNT». Contro
 compare il menu «🌳 La mia carta». Poi, nel terminale 3: `python -m scripts.zernio_check conversations --merchant-id 1`
 (stampa lo stato del negozio con la chiave mascherata e le conversazioni: `id  data`).
 
-**Passo 2b — approva il negozio** (dal ticket 12): un negozio appena registrato è «in attesa», quindi il DM `CARTA` di un cliente nuovo porta alla **carta di prova** (`/carta-di-prova`), non a `/c/<token>`, e lo scanner non aggiunge nulla. Per provare la carta vera approva il negozio con l'API admin (finché non c'è la dashboard del ticket 13): `POST http://127.0.0.1:8001/api/merchant/1/approve` con l'header `X-Admin-Key` = `ADMIN_SECRET_KEY` del tuo `.env` (non incollarla in chat né nei log). Se vuoi provare anche la carta di prova, fai prima il passo 3 **senza** approvare: deve aprirsi `/carta-di-prova` con l'etichetta «CARTA DI PROVA», senza QR e senza dati; poi approva e riscrivi `CARTA`.
+**Passo 2b — approva il negozio** (dal ticket 12): un negozio appena registrato è «in attesa», quindi il DM `CARTA` di un cliente nuovo porta alla **carta di prova** (`/carta-di-prova`), non a `/c/<token>`, e lo scanner non aggiunge nulla. Per provare la carta vera avvia il negozio dalla dashboard: apri `http://127.0.0.1:8001/admin`, accedi con `ADMIN_SECRET_KEY` del tuo `.env` (non incollarla in chat né nei log) e premi «Avvia» (in alternativa `POST http://127.0.0.1:8001/api/merchant/1/approve` con l'header `X-Admin-Key`). Se vuoi provare anche la carta di prova, fai prima il passo 3 **senza** approvare: deve aprirsi `/carta-di-prova` con l'etichetta «CARTA DI PROVA», senza QR e senza dati; poi approva e riscrivi `CARTA`.
 
 **Passo 3 — DM da un follower**: da **A** scrivi `CARTA` al negozio. Annota l'ora sul telefono in cui invii, l'ora
 della riga `Webhook: negozio=1 evento=… esito=sent` nel terminale 2 e l'ora in cui la card compare sul telefono (per
