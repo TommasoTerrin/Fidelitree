@@ -28,7 +28,7 @@ Pool mensile per negozio pagato dal founder (chiave Ecologi unica), auth merchan
 pronta per Supabase, cashback e conversione tree points, logo e icone PWA. Il flusso cliente con OTP e wallet è sostituito
 da v0.3.0. Storico: [`tickets/v0.2.0/STORICO.md`](../tickets/v0.2.0/STORICO.md).
 
-### v0.3.0 — Carta fedeltà via DM Instagram (in sviluppo, `feature/instagram-cards`)
+### v0.3.0 — Carta fedeltà via DM Instagram (codice e documentazione completi su `feature/instagram-cards`, in attesa di collaudo e merge)
 La carta nasce da un DM Instagram al negozio (parola chiave o voce di menu), ricevuto via **Zernio** e risposto con una
 card che apre la pagina carta con un link segreto. Sostituisce OTP cliente, wallet, QR `/join` e la PWA cliente;
 alberi, pool, cashback e auth merchant restano. Prima release in produzione dopo v0.1.0.
@@ -143,6 +143,12 @@ ruff (lint) + mypy (type check) in pre-commit locale (vedi CI/CD sopra per il li
 
 ## Changelog
 
+- **2026-10-27** — **v0.3.0** completa su `feature/instagram-cards` (11 ticket, 767 test): carta via DM Instagram con
+  Zernio (webhook, card con link segreto `/c/<token>`, invito a seguire per i non follower), onboarding Instagram del
+  merchant dal pannello, pagina carta e PWA solo merchant, vecchio flusso cliente (OTP, wallet, `/join`, `Customer`)
+  rimosso, script riallineati (`seed_db --links`, `zernio_check --merchant-id`, `replay_webhook --event-id`,
+  `smoke_test_prod`). **v0.2.1 assorbita**, mai rilasciata. In attesa del collaudo end-to-end del founder e dell'ok al
+  merge; da decidere l'accesso dei merchant in produzione (Supabase).
 - **2026-10-22** — Avviata **v0.3.0** (carta via DM Instagram con Zernio): analisi, grilling e 11 ticket; **v0.2.x
   non verrà rilasciata**, assorbita da v0.3.0. Storico di v0.2.0 in `tickets/v0.2.0/STORICO.md`.
 - **2026-10-13** — **v0.2.0** pronta (branch `rinascimento`, 11 ticket): pool mensile per negozio con livelli

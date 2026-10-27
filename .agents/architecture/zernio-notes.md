@@ -11,7 +11,7 @@
 | Vincolo | Valore | Fonte | Verificato |
 |---|---|---|---|
 | Base URL | `https://zernio.com/api` (chiamate su `/v1/...`) | https://zernio.com/openapi.yaml (`servers`), https://docs.zernio.com/quickstart | sì |
-| Base URL alternativo | `https://api.zernio.com/v1/...` compare **solo** in una voce del changelog (2026-10-22), non nella spec | https://docs.zernio.com/changelog#1792665421464 | sì (incoerenza: usiamo quello della spec, configurabile in env) |
+| Base URL alternativo | `https://api.zernio.com/v1/...` compare **solo** in una voce del changelog (2026-10-22), non nella spec | https://docs.zernio.com/changelog#1792665421464 | sì (incoerenza: usiamo quello della spec, configurabile in env). **Confermato nel collaudo del 05 (2026-10-26)**: le chiamate su `https://zernio.com/api` funzionano |
 | Autenticazione | `Authorization: Bearer <key>` | https://docs.zernio.com/quickstart | sì |
 | Formato chiave | `sk_` + 64 caratteri esadecimali (67 in tutto); chiavi con gruppi disattivati: prefisso `zrk_` (lunghezza non documentata) | https://docs.zernio.com/quickstart, https://docs.zernio.com/multi-tenant | sì |
 | Chiave `zrk_` con gruppi disattivati | 403 `insufficient_permissions` + `required_group`; gruppi rilevanti per noi: `messages`, `webhooks`, `accounts` | https://docs.zernio.com/multi-tenant | sì |
@@ -47,7 +47,7 @@
 | 409 | `Idempotency-Key` ancora in lavorazione, oppure `not_thread_owner` (subcode Meta `2534037`, conversazione di un'altra app) | https://docs.zernio.com/messages/send-inbox-message | sì |
 | 500 | Zernio **non ritenta** l'invio; ritentare può consegnare due volte | idem | sì |
 | Idempotenza dell'invio | header `Idempotency-Key`, valido 24 h; replay con `Idempotent-Replayed: true`; su 5xx/timeout la chiave viene rilasciata | idem | sì |
-| Card rifiutata ai non follower | Meta `2`/`1545133` rifiuta bottoni e card a chi non segue l'account: documentato **solo per le private reply ai commenti** | https://docs.zernio.com/changelog#1788345066805 | non verificato per i DM (rischio: collaudo) |
+| Card rifiutata ai non follower | Meta `2`/`1545133` rifiuta bottoni e card a chi non segue l'account: documentato **solo per le private reply ai commenti** | https://docs.zernio.com/changelog#1788345066805 | **non verificato per i DM** (il profilo del founder segue il negozio: card consegnata). Da chiudere nel collaudo finale, ticket 11 (vedi sotto). Il codice non dipende dall'esito: chi non segue riceve comunque solo l'invito a seguire, il ripiego «testo con il link» resta come rete di sicurezza |
 
 ## Zernio: webhook
 
@@ -80,7 +80,7 @@
 | Pagina Facebook | non serve con `loginMethod=instagram_login` (default) | idem | sì |
 | Connect (futura chiave unica) | `GET /v1/connect/instagram?profileId=...&redirect_url=...` → `{authUrl, state}`; 402 `free_tier_exceeded` oltre gli account gratuiti | https://docs.zernio.com/connect/get-connect-url, https://docs.zernio.com/multi-tenant | sì |
 | Message request | DM di non follower → cartella Requests; "Meta has no accept call: replying moves a thread into the inbox"; esiste comunque `POST /v1/inbox/conversations/{id}/accept` (`accountId`, `message`) | https://docs.zernio.com/platforms/instagram/inbox, https://docs.zernio.com/messages/accept-conversation-request | sì |
-| Il webhook arriva per i DM in Requests? | Meta: notifica per ogni messaggio, senza eccezioni dichiarate; Zernio non ne parla | https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api | **non verificato** (collaudo) |
+| Il webhook arriva per i DM in Requests? | Meta: notifica per ogni messaggio, senza eccezioni dichiarate; Zernio non ne parla | https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api | **non verificato**: da chiudere nel collaudo finale, ticket 11 (vedi sotto) |
 | Limiti di DM per account | nessuno documentato | https://docs.zernio.com/guides/rate-limits | non verificato |
 
 ## Zernio: prezzi
@@ -124,10 +124,10 @@
 | **`folder=requests` con Instagram Login** | **non supportato**: "Instagram accounts connected with Instagram Login answer PLATFORM_LIMITATION (Meta does not expose the folder on that login)" → 400. Serve Facebook Login. Lo script (`conversations --folder requests`) lo mostra come errore `bad_request` | idem | sì (da spec; da riconfermare nel collaudo) |
 | Identità del team | **nessun campo**: `GET /v1/users` → `{currentUserId, users[{_id, name, email, role, isRoot, profileAccess}]}` identifica l'utente, non il team (`teamId` esiste solo nelle impostazioni Slack). `isRoot`/`role: owner` indicherebbe il titolare, ma la semantica non è documentata. `get_team_identity` restituisce quindi `None` e la quota ripiega su `account:<id>` | idem (`listUsers`) | sì (assenza); `isRoot` come team: non verificato |
 
-## Cosa ne segue per il progetto (proposte da confermare nel grilling, non decisioni)
+## Cosa ne segue per il progetto (proposte del 2026-10-22: le decisioni prese sono in AGENTS.md)
 
 1. **Secret del webhook**: lo scegliamo noi alla registrazione. Senza secret non c'è firma, quindi va sempre impostato. Resta da decidere se è per merchant o globale.
-2. **Tempi**: Zernio vuole risposta entro 5 s, Meta entro 30 s (policy). Proposta: risposta sincrona nel webhook, timeout verso Zernio di circa 3 s. **Misurato il 2026-10-26: l`invio della card dura 1,2-3,1 s (il 3,1 s a connessione nuova, come fa il webhook); con 3 s scadeva, quindi il timeout è 4 s.**
+2. **Tempi**: Zernio vuole risposta entro 5 s, Meta entro 30 s (policy). Proposta: risposta sincrona nel webhook, timeout verso Zernio di circa 3 s. **Misurato il 2026-10-26: l'invio della card dura 1,2-3,1 s (il 3,1 s a connessione nuova, come fa il webhook); con 3 s scadeva, quindi il timeout è 4 s.**
 3. **Dedup e retry**:
    - dedup su `X-Zernio-Event-Id`;
    - la finestra dei retry Zernio dura circa 51 h, quindi gli id degli eventi vanno conservati almeno 3 giorni;
@@ -142,10 +142,20 @@
 8. **Standby**: con `metadata.standby = true` un invio riceve 409 `not_thread_owner`.
 9. **Desktop**: la card non si vede su Instagram web. Rischio da accettare o mitigare.
 10. **Da chiudere nel collaudo reale**:
-    - arriva il webhook per i DM in Requests?
-    - la card viene accettata da chi non segue l'account?
-    - come si comporta con ManyChat come app di default?
-    - quale base URL usare?
+    - ~~quale base URL usare?~~ chiuso nel collaudo del 05: `https://zernio.com/api`;
+    - arriva il webhook per i DM in Requests? → collaudo finale (ticket 11);
+    - la card viene accettata da chi non segue l'account? → collaudo finale (ticket 11);
+    - come si comporta con ManyChat come app di default? → collaudo finale (ticket 11).
+
+## Verificato nel collaudo del ticket 05 (2026-10-26, `zernio_check` con la chiave del founder)
+
+| Cosa | Esito |
+|---|---|
+| Base URL `https://zernio.com/api` | funziona (`accounts` e `conversations` rispondono) |
+| `send-card` verso la conversazione del founder (profilo che **segue** il negozio) | card consegnata e corretta su mobile (titolo, sottotitolo, bottone «Apri la carta») |
+| `conversations`: ordine e date | in ritardo (la conversazione del founder risultava del giorno prima): per trovare la conversazione si legge il mittente dei messaggi, non ci si fida dell'ordine |
+| `conversations --folder requests` | 400 `PLATFORM_LIMITATION` con Instagram Login, come dichiarato dalla spec (riga «`folder=requests`» sopra: ora verificato) |
+| Card a un **non follower** (passo 3 del collaudo) | rimandato: nessun profilo non follower disponibile → collaudo finale |
 
 ## Verificato nel collaudo del ticket 07 (2026-10-26, webhook reale via ngrok, account `@oroscopo.kittysincula`)
 
@@ -157,9 +167,29 @@
 | Durata della sola chiamata di invio card (10 prove) | 1,2-3,1 s; il massimo a connessione nuova (il webhook crea un client per richiesta). Con timeout 3 s scadeva pur consegnando la card → `SEND_TIMEOUT` portato a **4 s** |
 | Ritardo percepito di ~30 s | non è l'invio: webhook ~11,5 s + consegna Instagram/telefono (il resto non è stato scomposto) |
 | `/c/<token>` | 404 fino al ticket 08 (atteso) |
-| Card a un **non follower** (rifiuto Meta 2/1545133 o consegna) | **non verificato**: manca un profilo non follower (collaudo finale, ticket 11) |
-| Webhook per DM in **Requests** | **non verificato** (stesso motivo) |
-| `isFollower: null` nel payload reale | **non verificato** |
-| ManyChat come app predefinita / standby | **non verificato** |
-| Tocco della voce di menu «🌳 La mia carta» → card | **non verificato** |
-| «Scollega» da pannello → webhook rimosso da Zernio | **non verificato** (coperto solo dai test automatici) |
+| Card a un **non follower** (rifiuto Meta 2/1545133 o consegna) | **non verificato**: manca un profilo non follower → collaudo finale |
+| Webhook per DM in **Requests** | **non verificato** (stesso motivo) → collaudo finale |
+| `isFollower: null` nel payload reale | **non verificato** → collaudo finale |
+| ManyChat come app predefinita / standby | **non verificato** → collaudo finale |
+| Tocco della voce di menu «🌳 La mia carta» → card | **non verificato** → collaudo finale |
+| «Scollega» da pannello → webhook rimosso da Zernio | **non verificato** (coperto solo dai test automatici) → collaudo finale |
+
+## Collaudo finale del ticket 11 (a cura del founder: esiti da compilare)
+
+Procedura con i comandi: «Collaudo end-to-end» in [deploy.md](../workflows/deploy.md). Per ogni riga si scrive l'esito
+e, dove serve, i numeri misurati; nessun dato personale, token, IGSID o chiave.
+
+| Cosa | Esito |
+|---|---|
+| Onboarding da zero con tunnel cloudflared (webhook e voce di menu su Zernio) | _da compilare_ |
+| DM «CARTA» da un profilo che segue → card → `/c/<token>` → scan dalla PWA → punti nuovi in pagina | _da compilare_ |
+| Tocco della voce di menu «🌳 La mia carta» → stessa card, stesso link | _da compilare_ |
+| Card/risposta a un **non follower**: invito a seguire consegnato? la card verrebbe rifiutata da Meta (2/1545133)? | _da compilare_ |
+| Dopo che il non follower segue e riscrive «CARTA»: arriva la card? | _da compilare_ |
+| Webhook per un DM in **Requests** (profilo che non segue il negozio) | _da compilare_ |
+| `isFollower`: valore reale nei payload (`true`/`false`/`null`/assente), anche subito dopo aver iniziato a seguire | _da compilare_ |
+| ManyChat (o altra app) come app predefinita: arriva `metadata.standby`? l'avviso compare nel pannello? | _da compilare_ |
+| Evento duplicato (`replay_webhook --event-id`): un solo invio | _da compilare_ |
+| Latenza: `sentAt` → arrivo del webhook → card sul telefono (osservati ~30 s; webhook ~11,5 s dopo `sentAt`) | _da compilare_ |
+| Log del server: nessun token, IGSID, chiave o secret | _da compilare_ |
+| «Scollega» da pannello → webhook sparito da Zernio | _da compilare_ |

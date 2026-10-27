@@ -12,6 +12,12 @@
 alberi), mai rilasciata. Dopo v0.3.0 l'app è funzionalmente quella descritta in AGENTS.md; la strada verso la
 versione "a regime" è nella [roadmap](roadmap.md).
 
+**Stato (2026-10-27)**: codice dei ticket 01-10 e documentazione del 11 completi (767 test verdi). **Pronta al merge
+dopo** gli esiti del collaudo end-to-end del founder (procedura in
+[deploy.md](../workflows/deploy.md), esiti da riportare in [zernio-notes.md](../architecture/zernio-notes.md)) e l'ok
+esplicito dell'utente: nessun merge su `develop`/`main` e nessun tag prima. **v0.2.1 è assorbito da v0.3.0**: nessun merge
+separato, `develop` oggi è alla v0.2.1 mai rilasciata e verrà superata dal merge di `feature/instagram-cards`.
+
 Contesto di riferimento: decisioni in [AGENTS.md](../../AGENTS.md), vincoli Zernio/Meta con le fonti in
 [zernio-notes.md](../architecture/zernio-notes.md), ticket in [tickets/v0.3.0](../tickets/v0.3.0/README.md).
 
@@ -29,7 +35,7 @@ Contesto di riferimento: decisioni in [AGENTS.md](../../AGENTS.md), vincoli Zern
 | 08 | Pagina carta, QR, scan e PWA merchant | ✅ 2026-10-26 (793 test); prova manuale del founder riuscita (link `/c/<token>`, scan dalla PWA con aggiunta di punti, PWA installata, redirect al login) |
 | 09 | Rimozione del vecchio flusso cliente (OTP, wallet, `/join`, `Customer`) | ✅ 2026-10-26 (744 test) |
 | 10 | Seed, smoke test e script | ✅ 2026-10-26 (766 test) |
-| 11 | Documentazione, collaudo end-to-end e release | |
+| 11 | Documentazione, collaudo end-to-end e release | 🔶 2026-10-27: documentazione fatta (banner tolti, AGENTS/overview/zernio-notes/deploy/pre-release/README/roadmap allineati al codice); `replay_webhook --event-id` (`b40401a`, 767 test). **Resta il collaudo end-to-end del founder**, poi gli esiti in `zernio-notes.md` e l'ok al merge |
 
 Suite di partenza: 360 test. I ticket 02-08 **aggiungono** il nuovo flusso accanto al vecchio (che continua a
 funzionare); il vecchio si toglie tutto insieme nel 09.
@@ -135,9 +141,18 @@ Note sui ticket fatti:
   usa-e-getta (porta 8011): `reset_db --force`, seed (idempotente), 4 link `/c/<token>` → 200, login del merchant del seed,
   scan +5 (10→15, pool 105→110), carta di un altro negozio 404, smoke test contro il server locale tutto OK.
 
+- **11**: verifica della documentazione contro il codice. Discrepanze corrette: il flusso del webhook in `overview.md`
+  non citava `isFollower` (invito a seguire, `follow_requested`); l'ambito di quota oggi è sempre `account:<id>`
+  (`get_team_identity` → `None`), non `zernio:<team>`; ordine del lifespan; `deploy.md` elencava ancora la tabella
+  `customer` e la voce `seed_db` senza `--links`; `pre-release.md` testava ancora OTP, wallet e `/join`; il README
+  descriveva il wallet. **Il passo 6 del collaudo (evento duplicato) non era fattibile**: `replay_webhook`
+  generava un `event_id` nuovo a ogni esecuzione → aggiunto `--event-id` (con test). Segnalato a parte: in
+  produzione i merchant non possono accedere (provider `dev` rifiutato con `ENVIRONMENT=production`, Supabase stub:
+  avviso in `deploy.md`), e il commento del `Dockerfile` cita ancora Railway (non toccato).
+
 ### Prossimo passo
 
-1. ~~Ticket 05~~ codice fatto; **chiuderlo** dopo il collaudo.
+1. ~~Ticket 05~~ fatto (passi 1-2 del collaudo; il passo 3, non follower, è nel collaudo del 11).
 2. ~~Ticket 06~~ fatto. ~~Collaudo anticipato del 05~~ passi 1-2 fatti il 2026-10-26 (esiti sotto). Restano da verificare,
    nel collaudo del 07: card a un non follower, DM in Requests via webhook, ManyChat/standby. Se ManyChat risulta ancora
    collegato all'account, scollegarlo. Se l'esito contraddice le ipotesi di `zernio-notes.md`: **fermarsi e chiedere**.
@@ -147,7 +162,13 @@ Note sui ticket fatti:
    card/risposta a un **non follower** e DM in **Requests** via webhook (serve un profilo che non segue il negozio),
    `isFollower: null`, **ManyChat/standby**, tocco della voce di menu «🌳 La mia carta», «Scollega» da pannello.
 4. ~~Ticket 08~~ fatto, prova manuale del founder riuscita il 2026-10-26.
-5. ~~Ticket 09~~ fatto. ~~Ticket 10~~ fatto. Poi 11, dopo l'approvazione.
+5. ~~Ticket 09~~ fatto. ~~Ticket 10~~ fatto.
+6. **Ticket 11**: documentazione fatta. **Collaudo end-to-end a cura del founder** (checklist passo-passo in
+   `deploy.md`, «Collaudo end-to-end del flusso Instagram»). Da verificare e riportare in `zernio-notes.md`
+   («Collaudo finale del ticket 11»): card a un non follower, DM in Requests via webhook, `isFollower` `null`,
+   ManyChat/standby, tocco sulla voce di menu, «Scollega» da pannello, evento duplicato, log senza segreti, latenza
+   (~30 s osservati; webhook ~11,5 s dopo `sentAt`). Poi: aggiornare gli esiti, rimuovere o riformulare le righe
+   «non verificato» che il collaudo ha chiuso, marcare il 11 come ✅ e attendere l'ok al merge.
 
 Esiti del collaudo del 05 (2026-10-26): `conversations` ha date in ritardo (la conversazione del founder risultava del
 giorno prima: per trovarla si legge il mittente dei messaggi, non si fida dell'ordine); `--folder requests` dà 400
@@ -171,17 +192,21 @@ rivede nel collaudo finale. QR "apri la chat": a mano dal founder (ticket 11).
 
 - Aggiungere al `.env` locale `ENCRYPTION_KEY`, `IGSID_HMAC_KEY`, `CARD_LINK_KEY` (l'app non parte senza; i test le
   impostano da soli). Non committare mai i valori.
-- Collaudo manuale 1-3 del ticket 07 (sopra; il passo 5 «Scollega» verifica solo il webhook: la voce di menu
-  «🌳 La mia carta» resta su Instagram e, dopo lo scollegamento, toccarla non fa nulla: non è un bug, vedi nota 07).
-  Servono un account Zernio gratuito e un account Instagram Business/Creator di prova. Per i tempi: il log `info` del
-  webhook (`esito=...`) **non si vede** in locale, perché `local_main.py` configura solo `uvicorn` e i logger dell'app
-  restano a WARNING; serve una configurazione di log con timestamp (solo locale), da decidere a parte.
+- **Collaudo end-to-end del ticket 11** (passi 1-9 in `deploy.md`). Servono un account Zernio gratuito, un account
+  Instagram Business/Creator di prova e due profili personali (uno che segue il negozio, uno no). «Scollega» verifica
+  solo il webhook: la voce di menu «🌳 La mia carta» resta su Instagram e, dopo lo scollegamento, toccarla non fa
+  nulla (non è un bug, vedi nota 07). Il log `info` del webhook (`esito=...`) non si vede con `local_main.py` (solo i
+  logger di uvicorn): la checklist usa un comando `python -c` con i log dell'app e l'ora, senza toccare il codice.
 - Rimasti da v0.2.x e ancora validi per il rilascio di v0.3.0: collaudo di `ecologi_check` (chiave di test e reale) e
   di `close_period` in test mode; checklist `pre-release.md`, PWA merchant su telefono (HTTPS o tunnel).
-- Lavoro di documentazione della fase 4 (AGENTS.md, overview, deploy, `.env.example`, ticket v0.3.0, planner) ancora
-  **non committato**: va committato a parte rispetto ai ticket di codice.
+- Dopo il collaudo: far verificare il testo di `/privacy` e decidere come far accedere i merchant pilota in produzione
+  (vedi «Debito noto»).
 
 ## Debito noto
+
+- **Accesso dei merchant in produzione**: con `ENVIRONMENT=production` il provider `dev` non parte e il provider
+  Supabase è uno stub, quindi su DigitalOcean nessun merchant può registrarsi o accedere. Va deciso prima del pilota
+  (Supabase Auth è il primo passo dopo v0.3.0 in roadmap).
 
 - Merchant creato dall'admin senza `auth_user_id`: la sua email non si può registrare (409). Si risolve con Supabase.
 - `create_all()` non migra: serve `scripts.reset_db` (nessun dato di produzione da preservare per ora).

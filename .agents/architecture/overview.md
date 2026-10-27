@@ -1,9 +1,5 @@
 # Architettura Fidelitree (v0.3.0)
 
-> ⚠️ **Transizione (dal 2026-10-22)**: questo documento descrive l'architettura **target** di v0.3.0, in sviluppo su
-> `feature/instagram-cards` ([ticket](../tickets/v0.3.0/README.md)). Finché il ticket 09 non è chiuso, nel codice
-> convivono il vecchio flusso cliente (OTP, wallet, `/join`) e il nuovo. Il banner si toglie nel ticket 11.
-
 ## Vista d'insieme
 
 Monolite FastAPI con rendering server-side (Jinja2) e API JSON. Un solo processo, un solo database.
@@ -50,7 +46,7 @@ ZernioSendCounter (quota_scope, period) → invii riusciti del mese per team Zer
 | **MerchantPool** | PK `(merchant_id, period)`, `points` | contatore del pool, aggiornato nella **stessa transazione** dello scan |
 | **TreePlanting** | `merchant_id`, `period`, `level`, `tree_count`, `pool_points`, `ecologi_ref`, `test` | `UNIQUE(merchant_id, period, test)`: idempotenza della chiusura |
 | **ProcessedWebhookEvent** | PK `event_id` (`X-Zernio-Event-Id`), `merchant_id`, `received_at`, `outcome` (`received` → esito) | inserito **per primo**: i retry Zernio diventano no-op; conservato 7 giorni |
-| **ZernioSendCounter** | PK `(quota_scope, period)`, `sent` | quota Zernio di 10.000 invii al mese **per team**; solo avviso, non blocca |
+| **ZernioSendCounter** | PK `(quota_scope, period)`, `sent` | quota Zernio di 10.000 invii al mese **per team** (oggi l'ambito è `account:<id>`); solo avviso, non blocca |
 
 ⚠️ Nota SQLModel: con `table=True` i validatori pydantic **non girano sul costruttore**: per validare usa `Model.model_validate(...)` (come fanno i `db_crud`).
 
@@ -99,18 +95,24 @@ un errore su un negozio non blocca gli altri (resta non chiuso e si ritenta).
 4. parse message.received → account.accountId del negozio? direction incoming?      no → 200 (ignorato)
 5. metadata.standby? → standby_detected_at = ora (avviso nel pannello), nessuna carta → 200
 6. trigger: testo normalizzato == INSTAGRAM_CARD_KEYWORD  oppure  postback FIDELITREE_CARD   no → 200 (ignorato)
-7. carta = get_or_create(merchant, HMAC(IGSID)); salva conversation.id e last_inbound_at = message.sentAt
-8. can_reply(sentAt, ora) (< 24 h)?                                                  no → 200 (fuori finestra)
-9. card generic template: titolo = nome negozio, sottotitolo fisso, bottone "Apri la carta" → <PUBLIC_BASE_URL>/c/<token>
-   POST /v1/inbox/conversations/{conversation.id}/messages (Idempotency-Key = event id, timeout 4 s, nessun nuovo tentativo)
-   └─ errore Meta 2/1545133 (non follower) → testo fisso con il link
-   └─ 401/403 chiave → instagram_status = key_invalid · 409 not_thread_owner → come standby · altri → log
-10. invio riuscito: ZernioSendCounter(quota_scope, mese) += 1 (avviso al 75%); awaiting_test_dm → active
-11. risposta 200 entro 5 s (sempre, dopo una firma valida)
+7. isFollower == false? → NESSUNA carta: testo fisso "segui @negozio, poi riscrivi CARTA" (outcome follow_requested,
+   stessa finestra di 24 h, stessa quota). true o null (dato non disponibile) → si prosegue con la carta
+8. carta = get_or_create(merchant, HMAC(IGSID)); salva conversation.id e last_inbound_at = message.sentAt
+9. can_reply(sentAt, ora) (< 24 h)?                                                  no → 200 (fuori finestra)
+10. card generic template: titolo = nome negozio, sottotitolo fisso, bottone "Apri la carta" → <PUBLIC_BASE_URL>/c/<token>
+    POST /v1/inbox/conversations/{conversation.id}/messages (Idempotency-Key = event id, timeout 4 s, nessun nuovo tentativo)
+    └─ errore Meta 2/1545133 (Meta rifiuta la card) → testo fisso con il link (rete di sicurezza)
+    └─ 401/403 chiave → instagram_status = key_invalid · 409 not_thread_owner → come standby · altri → send_failed, log
+11. invio riuscito (card, ripiego o invito): ZernioSendCounter(quota_scope, mese) += 1 (avviso al 75%); awaiting_test_dm → active
+12. risposta 200 entro 5 s (sempre, dopo una firma valida)
 ```
 
+`hook_id` sconosciuto, o negozio senza chiave/account → 404; firma assente o errata → 401. Un corpo non valido, un
+evento senza id o un `X-Zernio-Event-Id` già visto → 200 senza elaborare. Una riga evento rimasta `received` indica
+un'elaborazione interrotta: il retry di Zernio non la ripete, per non rischiare un doppio invio.
+
 Il riconoscitore di trigger lavora su `InboundMessage` con un campo `source` (`dm_text`, `dm_postback`): commenti e
-risposte alle storie si aggiungeranno come nuove sorgenti, senza toccare i passi 7-11.
+risposte alle storie si aggiungeranno come nuove sorgenti, senza toccare i passi 8-12.
 
 ### 2. Onboarding Instagram del merchant (`/merchant/settings`)
 
@@ -153,7 +155,7 @@ quota_scope)` è l'**unico** codice che sa da dove arriva la chiave.
 | `api_key` | chiave del merchant, decifrata | chiave di piattaforma (env) |
 | `account_id` / `profile_id` | scelti all'onboarding | `profileId` per negozio, account collegato con il connect OAuth di Zernio (`GET /v1/connect/instagram?profileId=...`) |
 | `webhook_secret` | secret per negozio | invariato (un webhook per negozio, oppure uno unico con instradamento per `accountId`) |
-| `quota_scope` | `"zernio:<zernio_team_id>"` (team Zernio della chiave del merchant; fallback `"account:<zernio_account_id>"`) | `"platform"` (un solo team: 10.000 invii al mese condivisi, rate limit per team) |
+| `quota_scope` | `"account:<zernio_account_id>"`: Zernio non espone un id del team (`get_team_identity` ritorna sempre `None`), quindi il ramo `"zernio:<zernio_team_id>"` oggi non scatta | `"platform"` (un solo team: 10.000 invii al mese condivisi, rate limit per team) |
 
 Service, modelli, webhook e contatore non cambiano: cambiano solo questa funzione e l'onboarding (connect al posto
 della chiave incollata).
@@ -199,5 +201,5 @@ Rimossi in v0.3.0: `/customer/login`, `/api/customer/otp/*`, `/customer/logout`,
 - **Engine DB** in `app/main.py` con `pool_pre_ping=True` e `pool_recycle=300` (timeout SSL di Neon).
 - **`get_session`** importa l'engine lazy da `app.main` (evita import circolari); nei test viene sostituita da SQLite in-memory (`tests/conftest.py`).
 - **QR code** generato client-side (niente dipendenze server).
-- **Lifespan**: `create_all`, validazione delle chiavi di cifratura, filtro dei log di accesso (niente Alembic: il DB si resetta con `scripts.reset_db`).
+- **Lifespan**: validazione delle chiavi di cifratura, filtro dei log di accesso, `create_all` (niente Alembic: il DB si resetta con `scripts.reset_db`).
 - **Ecologi**: un solo URL (`ECOLOGI_BASE_URL`), due chiavi scelte da `ECOLOGI_TEST_MODE` (`ECOLOGI_TEST_API_KEY` / `ECOLOGI_API_KEY`, nessun fallback). Con `true` la richiesta porta `"test": true` (nessun addebito). Il `name` inviato è `<negozio> · <mese> <anno>` (`tree_service.planting_name`) e compare nella foresta pubblica; `TreePlanting.ecologi_ref` = `treeUrl` della risposta (non c'è un `id`).

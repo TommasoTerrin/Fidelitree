@@ -3,13 +3,11 @@
 > **Punto di ingresso unico** per qualsiasi coding agent (Claude Code, Codex, Gemini CLI, OpenCode, ...).
 > Leggi questo file prima di toccare il codice. Approfondimenti in [`.agents/`](.agents/).
 
-> **Versione su `develop`: v0.2.1** (pool del negozio, auth, wallet cliente + logo e icone PWA), mai andata in produzione
-> e **non** verrà rilasciata: è assorbita da v0.3.0.
-> ⚠️ **In sviluppo: v0.3.0 — carta fedeltà via DM Instagram (Zernio)** su `feature/instagram-cards`, ticket in
-> [`.agents/tickets/v0.3.0/`](.agents/tickets/v0.3.0/README.md). Da qui in giù questo file descrive **v0.3.0 (target)**:
-> finché il ticket 09 non è chiuso, il vecchio flusso cliente (OTP, wallet, `/join`) esiste ancora nel codice.
-> Il banner si toglie nel ticket 11. Storia di v0.2.0: [`.agents/tickets/v0.2.0/`](.agents/tickets/v0.2.0/README.md).
-> Lo stato del lavoro è in [`.agents/planner/current.md`](.agents/planner/current.md).
+> **Versione corrente: v0.3.0 — carta fedeltà via DM Instagram (Zernio)**, sviluppata su `feature/instagram-cards`
+> (ticket in [`.agents/tickets/v0.3.0/`](.agents/tickets/v0.3.0/README.md)). È la prima release in produzione dopo
+> v0.1.0: assorbe v0.2.x (pool del negozio, auth merchant), mai rilasciata. Storia di v0.2.0:
+> [`.agents/tickets/v0.2.0/`](.agents/tickets/v0.2.0/README.md). Lo stato del lavoro è in
+> [`.agents/planner/current.md`](.agents/planner/current.md).
 
 ## Contesto di business
 
@@ -21,8 +19,8 @@
 
 ### Come funziona (v0.3.0)
 
-1. **Il merchant collega il suo Instagram** dalle impostazioni: incolla la sua chiave **Zernio** (account gratuito suo), sceglie l'account Instagram Business/Creator; l'app configura da sola il webhook e la voce di menu "🌳 La mia carta". Diventa attivo dopo un DM di prova.
-2. **Il cliente scrive "CARTA" in DM al negozio** (o tocca la voce di menu). Zernio chiama il nostro webhook: l'app crea (o ritrova) la sua carta e risponde con **una card** (titolo = nome del negozio, testo fisso, bottone "Apri la carta"). Nessun dato dinamico nel messaggio; a ogni nuova parola chiave arriva di nuovo la stessa card con lo stesso link.
+1. **Il merchant collega il suo Instagram** dalle impostazioni: incolla la sua chiave **Zernio** (account gratuito suo), sceglie l'account Instagram Business/Creator; l'app configura da sola il webhook e la voce di menu "🌳 La mia carta" (solo se il menu del negozio è vuoto). Diventa attivo dopo un DM di prova.
+2. **Il cliente scrive "CARTA" in DM al negozio** (o tocca la voce di menu). Zernio chiama il nostro webhook: se il cliente segue il negozio l'app crea (o ritrova) la sua carta e risponde con **una card** (titolo = nome del negozio, testo fisso, bottone "Apri la carta"); se non lo segue riceve solo l'invito a seguire e a riscrivere. Nessun dato dinamico nel messaggio; a ogni nuova parola chiave arriva di nuovo la stessa card con lo stesso link.
 3. Il link apre la **pagina carta** (`/c/<token segreto>`, nessun login): punti, cashback, livello del pool e un QR. Il merchant scansiona il QR dalla sua **PWA** e aggiunge **tree points** (e, a sua discrezione, **cashback** in €).
 4. **Tree points del cliente → cashback**: raggiunta una soglia scelta dal merchant, i tree points della carta si convertono automaticamente in cashback (es. 50 punti → 2,00 €). Il merchant può disattivare la conversione ("solo alberi") e può sempre aggiungere/togliere cashback a mano.
 5. **Pool del negozio (gamification collettiva)**: tutti i tree points raccolti dai clienti di un negozio nel **mese solare** formano il pool. Il pool raggiunge dei livelli:
@@ -60,7 +58,7 @@
 
 - **Fonte unica della versione**: `[project] version` in `pyproject.toml` (SemVer 0.x).
 - A ogni rilascio: bump in `pyproject.toml` → merge su `main` → tag git `vX.Y.Z` con lo stesso valore.
-- `v0.1.0` = MVP cashback. `v0.2.0`/`v0.2.1` = pool del negozio + auth + wallet (assorbe la vecchia "Release 2"; mai andata in produzione). `v0.3.0` = carta via DM Instagram (assorbe v0.2.x: prima release in produzione dopo v0.1.0).
+- `v0.1.0` = MVP cashback. `v0.2.0`/`v0.2.1` = pool del negozio + auth + wallet cliente (assorbe la vecchia "Release 2"; mai andata in produzione, non verrà rilasciata). `v0.3.0` = carta via DM Instagram (assorbe v0.2.x: prima release in produzione dopo v0.1.0). `pyproject.toml` è già a `0.3.0`; `scripts/smoke_test_prod.py` ha la costante `EXPECTED_VERSION` da tenere uguale (un test le confronta: al prossimo bump fallisce finché non la si aggiorna).
 
 ## Comandi essenziali
 
@@ -78,7 +76,7 @@ python -m pytest tests/unit      # solo core puro, velocissimi
 
 # Utilità DB (ATTENZIONE: agiscono sul DATABASE_URL in .env, che può essere il DB vero:
 # per il collaudo locale usa un SQLite usa-e-getta, vedi .agents/workflows/deploy.md)
-python -m scripts.reset_db      # drop + ricrea schema (chiede conferma)
+python -m scripts.reset_db [--force]  # drop + ricrea schema (chiede conferma, --force la salta)
 python -m scripts.seed_db [--links]  # 2 merchant, carte "Instagram" finte e scan di prova; --links stampa anche i link /c/<token> (segreti) (solo AUTH_PROVIDER=dev)
 
 # Chiusura mensile: pianta gli alberi del pool (anteprima, conferma, idempotente)
@@ -91,7 +89,7 @@ python -m scripts.ecologi_check [--trees N] [--merchant-name NOME] [--month AAAA
 python -m scripts.zernio_check accounts | conversations | send-card | send-text [--merchant-id N]
 
 # Collaudo locale del webhook: evento message.received firmato verso il server (che invia DAVVERO a Zernio)
-python -m scripts.replay_webhook --merchant-id N --conversation-id ID [--text CARTA | --postback] [--standby] [--follower si|no]
+python -m scripts.replay_webhook --merchant-id N --conversation-id ID [--text CARTA | --postback] [--standby] [--follower si|no] [--event-id ID]
 
 # Tunnel https per ricevere i webhook in locale (PUBLIC_BASE_URL = URL stampato)
 cloudflared tunnel --url http://127.0.0.1:8001
@@ -104,7 +102,7 @@ python scripts/smoke_test_prod.py https://<app>.ondigitalocean.app <ADMIN_SECRET
 
 ```
 app/
-  main.py               # FastAPI app, engine DB, lifespan (create_all), router
+  main.py               # FastAPI app, engine DB, lifespan (chiavi di cifratura, filtro dei log, create_all), router, /sw.js, /health
   core/
     config.py           # Settings da .env — variabili obbligatorie: vedi .env.example
     auth.py             # interfaccia AuthProvider + provider dev (Supabase: stub) — solo merchant
@@ -164,14 +162,14 @@ tests/                  # pytest + conftest (SQLite in-memory); tests/unit/ = co
 - **Carta via DM Instagram con Zernio** (2026-10-22): trigger = DM con la parola chiave **unica di piattaforma** (`INSTAGRAM_CARD_KEYWORD`, default `CARTA`; maiuscole, accenti, punteggiatura ed emoji ignorati, corrispondenza esatta) oppure voce del menu persistente "🌳 La mia carta" (impostata all'onboarding solo se il menu del negozio è vuoto). Gli altri messaggi sono ignorati in silenzio. Commenti e storie → DM sono **fuori scope** (roadmap) ma il riconoscitore di trigger è separato per aggiungerli.
 - **Risposta = una sola card** (2026-10-22): un invio per azione, generic template con titolo = nome del negozio (≤ 80 caratteri, validato anche in registrazione), sottotitolo fisso, un bottone "Apri la carta". **Nessun dato dinamico** nel messaggio: punti, livello e cashback solo nella pagina carta. Limiti di caratteri verificati nel core. Unico ripiego: testo fisso con il link se Meta rifiuta la card a un non follower (errore 2/1545133). La card **non si vede su Instagram desktop** (limite Meta): accettato, l'uso è in negozio da telefono.
 - **Carta solo a chi segue il negozio** (2026-10-23, modifica la regola "card a tutti"): `message.sender.instagramProfile.isFollower` del webhook decide. `true` → card; `false` → **nessuna carta**, solo un testo fisso "per avere la carta segui @negozio, poi riscrivi CARTA" (`outcome` `follow_requested`, nessuna riga `Card`); `null` (dato non disponibile) → card, da rivedere nel collaudo finale con un profilo che segue e uno che non segue. Chi non segue non ha i vantaggi (cashback, punti, alberi). Il ripiego "testo con il link" resta solo come rete di sicurezza se Meta rifiuta comunque la card (2/1545133). Il blocco vale per tutti i negozi; opzione per singolo negozio e testo scelto dal merchant sono in roadmap.
-- **QR "apri la chat" in negozio** (2026-10-23): link `https://ig.me/m/<username>` stampato come QR, fatto **a mano dal founder** su richiesta del merchant. Fuori dall'app.
+- **QR "apri la chat" in negozio** (2026-10-23): link `https://ig.me/m/<username>` stampato come QR, fatto **a mano dal founder** su richiesta del merchant. Fuori dall'app. Nelle istruzioni ai merchant basta una riga: *per stampare un QR che apre la chat, contatta il founder* (lo prepara a mano da `https://ig.me/m/<username>`).
 - **Identità del cliente** (2026-10-22): una carta per coppia (negozio, IGSID). Dell'IGSID si salva solo l'**indice cieco** HMAC-SHA256 (`IGSID_HMAC_KEY`, chiave **non ruotabile** senza scollegare le carte); per rispondere si usa il `conversation.id` di Zernio. Nessuno username, nome, foto o testo dei messaggi salvato. Niente tabella `Customer`: l'IGSID è diverso per ogni account Instagram, un cliente "trasversale" tra negozi non esiste (si potrà aggiungere quando ci sarà un dato che vale tra negozi).
 - **Link della carta** (2026-10-22): `/c/<token>` con token = HMAC(`CARD_LINK_KEY`, id carta + versione), mai salvato (nel DB solo l'hash); stesso link a ogni messaggio, revoca = versione +1. Mai l'IGSID nell'URL. Il token nel percorso è mascherato nei nostri log; i log di DigitalOcean sono accettati (il "segreto dopo #" è in roadmap per quando l'app cresce).
 - **QR della pagina carta = id della carta** (2026-10-22), distinto dal token: lo legge solo lo scanner del merchant del negozio, una foto del QR non apre la carta. In chat non si manda nessun QR.
 - **Zernio: chiave del merchant nel pilota** (2026-10-22): ogni merchant ha il suo account Zernio gratuito, incolla la sua chiave (validata con una chiamata reale, salvata cifrata AES-GCM con `ENCRYPTION_KEY`, mai restituita né loggata, cancellata allo scollegamento). Webhook configurato in automatico, **uno per negozio** con id opaco nel path e secret per negozio. `zernio_service.zernio_credentials_for(merchant)` è l'**unico** punto che sa da dove arriva la chiave: la migrazione alla chiave unica del founder (un `profileId` per negozio) cambierà solo quella funzione e l'onboarding.
 - **Webhook sincrono e idempotente** (2026-10-22): dedup su `X-Zernio-Event-Id` (riga inserita per prima, conservata 7 giorni), risposta entro 5 s, timeout 4 s verso Zernio (misurato 2026-10-26: 1,2-3,1 s per invio; con 3 s scadeva a freddo), **nessun nuovo tentativo** sugli invii (un 5xx può aver già consegnato: il cliente riscrive la parola chiave). Si risponde solo entro **24 h** dal `sentAt` del messaggio del cliente; nessun invio proattivo.
 - **Standby (ManyChat o altra app proprietaria della conversazione)** (2026-10-22): nessuna carta né invio, solo rilevamento e avviso nel pannello del merchant perché scolleghi l'altra app.
-- **Quota Zernio: contatore e avviso, nessun blocco nostro** (2026-10-22): `ZernioSendCounter` per ambito di quota (= team Zernio, oggi del merchant) e mese UTC, avviso al `ZERNIO_SEND_WARN_PERCENT` (75%) di `ZERNIO_MONTHLY_SEND_LIMIT` (10.000); oltre, è Zernio a fermare gli invii (403 gestito).
+- **Quota Zernio: contatore e avviso, nessun blocco nostro** (2026-10-22): `ZernioSendCounter` per ambito di quota (= team Zernio; oggi Zernio non espone l'id del team, quindi l'ambito è `account:<id>` dell'account Instagram del negozio) e mese UTC, avviso al `ZERNIO_SEND_WARN_PERCENT` (75%) di `ZERNIO_MONTHLY_SEND_LIMIT` (10.000); oltre, è Zernio a fermare gli invii (403 gestito).
 - **Errori Zernio** (2026-10-22): 401/403 chiave → stato "chiave non valida" nel pannello; 429/5xx → solo log.
 - **Privacy** (2026-10-22): informativa in `/privacy` (bozza da far verificare al founder), linkata in fondo alla pagina carta. Conservazione: finché il cliente non chiede la cancellazione al negozio (che elimina la carta) o il negozio esce. DPA con i merchant, comando di cancellazione via DM e pulizia automatica in roadmap.
 - **PWA solo merchant** (2026-10-22): manifest con `start_url` `/merchant/scanner` e scope `/merchant/`; la pagina carta del cliente non ha manifest né service worker.
@@ -187,7 +185,7 @@ tests/                  # pytest + conftest (SQLite in-memory); tests/unit/ = co
 
 | Documento | Contenuto |
 |---|---|
-| [.agents/tickets/v0.3.0/README.md](.agents/tickets/v0.3.0/README.md) | Ticket di v0.3.0 (carta via DM Instagram), lavoro aperto |
+| [.agents/tickets/v0.3.0/README.md](.agents/tickets/v0.3.0/README.md) | Ticket con cui è stata costruita v0.3.0 (carta via DM Instagram) |
 | [.agents/tickets/v0.2.0/README.md](.agents/tickets/v0.2.0/README.md) | Ticket con cui è stata costruita v0.2.0 (storia e decisioni) |
 | [.agents/architecture/overview.md](.agents/architecture/overview.md) | Architettura, modello dati, segreti, flussi (webhook, onboarding, scan), punto di aggancio Zernio, endpoint |
 | [.agents/architecture/zernio-notes.md](.agents/architecture/zernio-notes.md) | Vincoli Zernio e Meta con le fonti (limiti, firma, retry, quota, standby) |
