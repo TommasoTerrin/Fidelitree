@@ -34,6 +34,13 @@ class WebhookOutcome(str, Enum):
     FOLLOW_REQUESTED = "follow_requested"  # il cliente non segue il negozio: solo l'invito a seguire, nessuna carta
 
 
+class ServiceState(str, Enum):
+    """Stato del servizio di un negozio, derivato da `is_approved` e `is_paused` (nessuna colonna propria)."""
+    PENDING = "pending"  # iscritto, non ancora approvato dal founder: carta di prova ai clienti nuovi
+    ACTIVE = "active"    # approvato e non in pausa: tutto come da regole
+    PAUSED = "paused"    # approvato ma in pausa (prova finita, abbonamento non pagato)
+
+
 class Level(str, Enum):
     """Livello raggiunto dal pool mensile di un negozio."""
     NONE = "none"

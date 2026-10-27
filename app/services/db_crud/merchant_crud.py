@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 # Campi impostabili alla creazione (il chiamante decide cosa passare: l'API admin non espone auth_user_id)
 _CREATE_FIELDS = (
-    "business_name", "email", "auth_user_id", "contact_phone", "type", "is_approved",
+    "business_name", "email", "auth_user_id", "contact_phone", "type", "is_approved", "is_paused",
     "conversion_enabled", "conversion_threshold", "conversion_value_cents",
     "bronze_threshold", "silver_threshold", "gold_threshold",
 )

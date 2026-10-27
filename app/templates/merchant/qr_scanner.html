@@ -10,6 +10,7 @@
     <script src="https://unpkg.com/html5-qrcode"></script>
 </head>
 
+{% from 'partials/service_banner.html' import service_banner %}
 <body class="bg-black min-h-screen flex flex-col font-sans">
 
     <div class="p-6 bg-slate-900 flex justify-between items-center text-white">
@@ -19,6 +20,10 @@
             <a href="/merchant/logout" class="text-xs bg-slate-800 px-3 py-2 rounded-lg">Esci</a>
         </div>
     </div>
+
+    {% if service_state.value != 'active' %}
+    <div class="px-6 pt-6">{{ service_banner(service_state.value, dark=true) }}</div>
+    {% endif %}
 
     <div class="flex-1 flex flex-col items-center justify-center p-6">
         <div id="reader-container" class="relative w-full max-w-sm">

@@ -2,8 +2,9 @@
 Gestione dell'autenticazione per gli esercenti: registrazione, login, logout e cookie di sessione.
 
 L'identità è verificata dal provider di autenticazione (`app/core/auth.py`); la logica di
-registrazione e login vive in `merchant_service`. Un merchant appena registrato può lavorare
-subito ma resta non approvato finché il founder non lo approva. Il login ha un freno ai tentativi
+registrazione e login vive in `merchant_service`. Un merchant appena registrato è in attesa di approvazione:
+può collegare Instagram, ma i clienti nuovi vedono una carta di prova e lo scanner può solo togliere saldo,
+finché il founder non lo approva. Il login ha un freno ai tentativi
 (avviso dal 3° errore, 429 al 6° tentativo dopo 5 errori in 15 minuti, per email).
 """
 from fastapi import APIRouter, Form, Depends

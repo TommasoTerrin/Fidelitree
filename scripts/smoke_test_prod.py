@@ -57,8 +57,8 @@ def run_smoke_test(base_url: str, admin_key: str, http=requests) -> bool:
         print(f"[ERROR] Health check fallito: {e}")
         return False
 
-    # 2. Pagine pubbliche (informativa del cliente, accesso merchant)
-    for page in ["/privacy", "/merchant/login", "/merchant/register"]:
+    # 2. Pagine pubbliche (informativa e carta di prova del cliente, accesso merchant)
+    for page in ["/privacy", "/carta-di-prova", "/merchant/login", "/merchant/register"]:
         try:
             resp = http.get(f"{base_url}{page}", timeout=10)
             check(f"Pagina {page} raggiungibile", _is_html(resp), f"status {resp.status_code}")

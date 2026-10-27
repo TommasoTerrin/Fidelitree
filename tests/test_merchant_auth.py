@@ -102,15 +102,15 @@ def test_login_richiede_la_password(client, auth_provider):
     assert client.post("/merchant/login", data={"email": "bar@sole.it"}).status_code == 422
 
 
-def test_merchant_non_approvato_puo_lavorare(client, session, auth_provider):
-    """Registrazione → scanner e add-tree-points funzionano anche senza approvazione."""
+def test_merchant_non_approvato_vede_lo_scanner_ma_puo_solo_togliere(client, session, auth_provider):
+    """Registrazione → lo scanner si apre, ma senza approvazione non si aggiunge nulla (ticket 12)."""
     merchant_id = _register(client).json()["merchant_id"]
     assert client.get("/merchant/scanner").status_code == 200
 
     card = make_card(session, session.get(Merchant, merchant_id))
 
     resp = client.post(f"/api/merchant/add-tree-points/{card.id}", json={"tree_points": 10})
-    assert resp.status_code == 200
+    assert resp.status_code == 403
     assert session.get(Merchant, merchant_id).is_approved is False
 
 

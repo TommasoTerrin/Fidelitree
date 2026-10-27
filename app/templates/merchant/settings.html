@@ -1,3 +1,4 @@
+{% from 'partials/service_banner.html' import service_banner %}
 <!DOCTYPE html>
 <html lang="it">
 
@@ -21,13 +22,12 @@
             <p class="text-xs text-slate-400 font-bold uppercase mb-1">Attività</p>
             <h2 class="font-black text-lg text-slate-800">{{ merchant.business_name }}</h2>
             <p class="text-sm text-slate-500">{{ merchant.email }}</p>
-            {% if merchant.is_approved %}
+            {% if service_state.value == 'active' %}
             <span class="inline-block mt-3 text-xs font-bold px-3 py-1 rounded-full bg-green-100 text-green-700">Approvato ✅</span>
-            {% else %}
-            <span class="inline-block mt-3 text-xs font-bold px-3 py-1 rounded-full bg-yellow-100 text-yellow-800">In attesa di approvazione</span>
-            <p class="text-xs text-slate-400 mt-2">Puoi usare le carte fin da subito: i tuoi punti contano per la piantumazione dopo l'approvazione.</p>
             {% endif %}
         </div>
+
+        {{ service_banner(service_state.value) }}
 
         <!-- ===================== INSTAGRAM (Zernio): uno stato per volta ===================== -->
 

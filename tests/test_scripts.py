@@ -44,7 +44,7 @@ def test_seed_crea_merchant_carte_e_movimenti(session):
     assert len(entries) == 2
     merchants = session.exec(select(Merchant)).all()
     assert len(merchants) == 2
-    assert all(m.is_approved and m.auth_user_id for m in merchants)
+    assert all(m.is_approved and not m.is_paused and m.auth_user_id for m in merchants)
     assert _count(session, Card) == 4  # ogni cliente finto ha una carta presso ciascun negozio
     assert all(c.igsid_hash and c.link_token_hash for c in session.exec(select(Card)).all())
     assert _count(session, PointTransaction) > 0
@@ -756,3 +756,8 @@ def test_replay_webhook_contro_l_app_vera_crea_la_carta(client, session, instagr
     assert code == 0
     assert _count(session, Card) == 1
     assert len(zernio_mock.requests) == 1
+
+
+def test_smoke_test_controlla_la_carta_di_prova(client, mock_ecologi, capsys):
+    assert run_smoke_test("", settings.ADMIN_SECRET_KEY, http=client) is True
+    assert "[OK] Pagina /carta-di-prova raggiungibile" in capsys.readouterr().out

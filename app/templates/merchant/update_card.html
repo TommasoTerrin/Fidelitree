@@ -1,3 +1,4 @@
+{% from 'partials/service_banner.html' import service_banner %}
 <!DOCTYPE html>
 <html lang="it">
 
@@ -17,6 +18,8 @@
             Ambiente di Test
         </div>
         {% endif %}
+
+        {{ service_banner(service_state.value) }}
 
         <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
             <p class="text-xs text-slate-400 font-bold uppercase mb-2">Stato Carta</p>
@@ -74,8 +77,8 @@
                     oninput="this.value = this.value.replace(/[^0-9]/g, '')">
             </div>
 
-            <button onclick="prepareTreeOperation(1)"
-                class="w-full bg-green-600 text-white font-black py-4 rounded-2xl text-lg shadow-lg active:scale-95 transition-all">
+            <button id="btn-add-tree" onclick="prepareTreeOperation(1)" {% if not can_add %}disabled{% endif %}
+                class="w-full bg-green-600 text-white font-black py-4 rounded-2xl text-lg shadow-lg active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100">
                 AGGIUNGI TREE POINTS
             </button>
 
@@ -102,8 +105,8 @@
                     oninput="sanitizeCashbackInput(this)">
             </div>
 
-            <button id="btn-cashback" onclick="prepareCashbackOperation(1)"
-                class="w-full bg-blue-600 text-white font-black py-4 rounded-2xl text-lg shadow-lg active:scale-95 transition-all">
+            <button id="btn-cashback" onclick="prepareCashbackOperation(1)" {% if not can_add %}disabled{% endif %}
+                class="w-full bg-blue-600 text-white font-black py-4 rounded-2xl text-lg shadow-lg active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100">
                 AGGIUNGI CASHBACK
             </button>
 

@@ -7,8 +7,10 @@ Regole di business
   non ha nessuna password, solo `auth_user_id` ed email (con il provider `local` l'hash sta in `AuthCredential`).
 - Il login ha un freno ai tentativi (5 errori in 15 minuti per email → 429, avviso dal 3° errore, vedi `auth.LoginThrottle`);
   il merchant cambia la password dalle impostazioni, il reset lo fa il founder (ticket 13).
-- Un merchant appena registrato **lavora subito** (scan, tree points) ma è `is_approved=False`:
-  il suo pool conta per la piantumazione solo dopo l'approvazione manuale del founder.
+- Un merchant appena registrato è `is_approved=False` (**in attesa**): può collegare Instagram e fare il DM di
+  prova, ma i clienti nuovi vedono la carta di prova e lo scanner può solo togliere saldo. Dopo l'approvazione
+  manuale del founder è **attivo**; può essere messo **in pausa** (`is_paused`). Stato e permessi:
+  `card_service.service_state` e `check_balance_change`.
 - Il merchant può modificare solo nome, telefono e impostazioni di conversione; approvazione,
   tipo e soglie dei livelli le decide l'admin (con soglie sempre coerenti: bronzo < argento < oro).
 

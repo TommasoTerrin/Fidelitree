@@ -1,0 +1,17 @@
+{# Banner di stato del servizio, solo per le pagine del merchant (mai per il cliente).
+   Uso: {% from 'partials/service_banner.html' import service_banner %}{{ service_banner(service_state.value) }}
+   `dark=true` per lo sfondo scuro dello scanner. Per un negozio attivo non scrive nulla. #}
+{% macro service_banner(state, dark=false) -%}
+{% if state == 'pending' or state == 'paused' %}
+<div id="service-banner" data-state="{{ state }}"
+    class="rounded-2xl p-4 border text-left {% if dark %}bg-yellow-500/10 border-yellow-500 text-yellow-400{% else %}bg-yellow-50 border-yellow-200 text-yellow-800{% endif %}">
+    {% if state == 'pending' %}
+    <p class="text-sm font-black">In attesa di approvazione</p>
+    <p class="text-xs mt-1">Il tuo negozio non è ancora attivo: puoi collegare Instagram e fare la prova, ma i nuovi clienti vedono una carta di prova e puoi solo togliere punti e cashback già presenti. Contatta il founder per l'attivazione.</p>
+    {% else %}
+    <p class="text-sm font-black">Servizio in pausa</p>
+    <p class="text-xs mt-1">Puoi solo togliere punti e cashback già presenti: non puoi aggiungerne. Contatta il founder per riattivare il servizio.</p>
+    {% endif %}
+</div>
+{% endif %}
+{%- endmacro %}

@@ -11,13 +11,16 @@ Regole di business
   bottone "Apri la carta". Nessun dato dinamico nel messaggio. Unico ripiego: un testo fisso con il link.
 - **Carta solo a chi segue** (2026-10-23): `isFollower` falso → nessuna carta, solo un testo fisso di invito a
   seguire il profilo; `null`/assente → card (da rivedere nel collaudo finale).
+- **Negozio in attesa di approvazione** (2026-10-27): a un cliente **nuovo** la card porta a `/carta-di-prova`
+  (carta fittizia): nessuna riga `Card`, nessun indice cieco salvato. Un cliente che ha già una carta riceve
+  il suo link vero. Finestra, quota ed esiti non cambiano; in pausa non cambia nulla.
 - **Finestra**: si risponde solo entro 24 ore dal messaggio del cliente (`sentAt`, non l'ora di consegna
   del webhook). Nessun invio proattivo.
 - **Quota**: Zernio regala 10.000 invii al mese per team; noi li contiamo e avvisiamo, non blocchiamo.
 - **Testo dei clienti**: mai salvato; qui lo si legge solo per riconoscere il trigger.
 
 Il core usa solo Pydantic e stdlib: il tempo si passa come argomento, niente DB né rete. La shell
-(`get_or_create_card`, `card_link_url`, `get_card_by_link_token`, `handle_webhook`) legge il webhook,
+(`get_or_create_card`, `card_link_url`, `demo_card_url`, `get_card_by_link_token`, `handle_webhook`) legge il webhook,
 salva la carta, risolve il token della pagina carta e invia tramite `zernio_service`. Fonti dei limiti e del formato dei payload: `.agents/architecture/zernio-notes.md`.
 """
 
@@ -289,7 +292,8 @@ from app.core.config import settings  # noqa: E402
 from app.core.enums import InstagramStatus, WebhookOutcome  # noqa: E402
 from app.core.errors import InvalidSignatureError, NotFoundError  # noqa: E402
 from app.models.models import Card, Merchant, ProcessedWebhookEvent, ZernioSendCounter  # noqa: E402
-from app.services import zernio_service  # noqa: E402
+from app.core.enums import ServiceState  # noqa: E402
+from app.services import card_service, zernio_service  # noqa: E402
 from app.services.db_crud import card_crud, merchant_crud  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -326,6 +330,11 @@ def card_link_url(card: Card) -> str:
     """Link segreto della carta: `<PUBLIC_BASE_URL>/c/<token>`, con il token ricalcolato da id e versione."""
     token = crypto.card_link_token(card.id, card.link_version)
     return f"{settings.PUBLIC_BASE_URL.rstrip('/')}/c/{token}"
+
+
+def demo_card_url() -> str:
+    """Link della carta di prova: `<PUBLIC_BASE_URL>/carta-di-prova`. Pubblico, senza token né dati."""
+    return f"{settings.PUBLIC_BASE_URL.rstrip('/')}/carta-di-prova"
 
 
 def get_card_by_link_token(session: Session, token: str) -> Card:
@@ -465,16 +474,22 @@ async def _reply_with_card(
     Crea o ritrova la carta, aggiorna conversazione e `last_inbound_at` e risponde con la card; se Meta la
     rifiuta a un non follower (2/1545133) ripiega sul testo con il link. Fuori dalle 24 ore la carta si
     aggiorna ma non si invia nulla.
+    Negozio in attesa di approvazione: la carta si cerca **senza crearla**; se il cliente ce l'ha si procede
+    come sempre, altrimenti la card (e l'eventuale ripiego) porta a `/carta-di-prova` e non si salva nulla.
     """
-    card, _ = get_or_create_card(session, merchant, msg.sender_id)
-    card.zernio_conversation_id = msg.conversation_id
-    card.last_inbound_at = msg.sent_at
-    session.add(card)
-    session.commit()
+    if card_service.merchant_state(merchant) is ServiceState.PENDING:
+        card = card_crud.get_card_by_igsid_hash(session, merchant.id, crypto.igsid_blind_index(msg.sender_id))
+    else:
+        card, _ = get_or_create_card(session, merchant, msg.sender_id)
+    if card is not None:
+        card.zernio_conversation_id = msg.conversation_id
+        card.last_inbound_at = msg.sent_at
+        session.add(card)
+        session.commit()
     if not can_reply(msg.sent_at, now):
         return WebhookOutcome.OUT_OF_WINDOW
 
-    card_url = card_link_url(card)
+    card_url = card_link_url(card) if card is not None else demo_card_url()
     try:
         card_message = build_card_message(merchant.business_name, card_url)
     except InvalidInputError:

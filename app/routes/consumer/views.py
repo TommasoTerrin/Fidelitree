@@ -1,6 +1,7 @@
 """
 Route per il frontend lato cliente.
-Pagina carta `/c/<token>` (link segreto, nessun login) e informativa `/privacy`. Il cliente non ha
+Pagina carta `/c/<token>` (link segreto, nessun login), carta di prova `/carta-di-prova` (per i clienti nuovi
+dei negozi non ancora approvati) e informativa `/privacy`. Il cliente non ha
 account né sessione: la carta nasce da un DM Instagram e si apre solo con il link della card.
 """
 
@@ -64,6 +65,18 @@ async def card_page(request: Request, token: str, session: Session = Depends(get
         name="consumer/card.html",
         context=_card_page_context(session, card),
         headers=CARD_PAGE_HEADERS,
+    )
+
+
+# 1b. CARTA DI PROVA (pubblica): la riceve il cliente nuovo di un negozio non ancora approvato
+@router.get("/carta-di-prova", response_class=HTMLResponse)
+async def demo_card_page(request: Request):
+    """
+    Carta fittizia con valori di esempio: nessuna sessione, nessun dato letto o salvato, nessun QR vero.
+    Stessi header della pagina carta (no-store, no-referrer) e `noindex`. Non dipende dallo stato di nessun negozio.
+    """
+    return templates.TemplateResponse(
+        request=request, name="consumer/test_card.html", headers=CARD_PAGE_HEADERS,
     )
 
 

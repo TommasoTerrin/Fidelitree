@@ -55,8 +55,10 @@ class Merchant(SQLModel, table=True):
     """
     Esercente registrato. Identificato per email (l'autenticazione è delegata al
     provider auth: con `local` l'hash sta in `AuthCredential`, non qui). Contiene l'approvazione
-    manuale, la configurazione della conversione tree points → cashback e gli
-    eventuali override admin delle soglie dei livelli del pool.
+    manuale, la pausa, la configurazione della conversione tree points → cashback e gli
+    eventuali override admin delle soglie dei livelli del pool. Lo stato del servizio
+    (in attesa / attivo / in pausa) si deriva da `is_approved` e `is_paused`
+    (`card_service.service_state`).
     """
     id: Optional[int] = Field(default=None, primary_key=True)
     business_name: str
@@ -64,7 +66,9 @@ class Merchant(SQLModel, table=True):
     auth_user_id: Optional[str] = Field(default=None, unique=True, index=True)
     contact_phone: Optional[str] = Field(default=None)  # facoltativo, formato +39
     type: str = Field(default="test")  # 'test', 'free', 'pro'
-    is_approved: bool = Field(default=False)  # solo i negozi approvati contano per gli alberi
+    is_approved: bool = Field(default=False)  # approvato dal founder: conta per gli alberi e per lo stato del servizio
+    is_paused: bool = Field(default=False)  # in pausa (prova finita, abbonamento non pagato); conta solo se approvato
+    created_at: datetime = _created_at_field()  # iscrizione (UTC), per la lista admin
 
     # --- Conversione tree points → cashback (a carico del merchant) ---
     conversion_enabled: bool = Field(default=True)
