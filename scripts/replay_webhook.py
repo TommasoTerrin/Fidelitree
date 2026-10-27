@@ -8,10 +8,12 @@ Lo script non parla mai con Zernio: manda solo il webhook al nostro server.
 Utilizzo (dalla root del progetto, con il server avviato):
     python -m scripts.replay_webhook --merchant-id N --conversation-id ID
         [--text CARTA | --postback] [--sender-id finto-igsid] [--standby] [--follower si|no]
-        [--hours-ago H] [--url http://127.0.0.1:8001]
+        [--hours-ago H] [--event-id ID] [--url http://127.0.0.1:8001]
 
 `--follower` imposta `instagramProfile.isFollower` (se omesso il campo manca: il server lo tratta come
-"dato non disponibile"). Stampa status HTTP ed esito letto dalla riga dell'evento nel DB; non stampa mai
+"dato non disponibile"). `--event-id` fissa l'id dell'evento (`X-Zernio-Event-Id`): lanciato due volte con lo
+stesso valore simula un retry di Zernio e il server deve fare un solo invio (default: un UUID nuovo a ogni
+esecuzione). Stampa status HTTP ed esito letto dalla riga dell'evento nel DB; non stampa mai
 secret, id della conversazione né id del webhook. Codici di uscita: 0 ok, 1 errore.
 """
 
@@ -55,6 +57,9 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--standby", action="store_true", help="metadata.standby = true (un'altra app possiede la chat)")
     parser.add_argument("--follower", choices=["si", "no"], help="instagramProfile.isFollower (default: assente)")
     parser.add_argument("--hours-ago", type=float, default=0.0, help="sentAt = adesso meno H ore (default: 0)")
+    parser.add_argument(
+        "--event-id", help="id dell'evento: riusarlo simula un retry di Zernio (default: un UUID nuovo a ogni esecuzione)",
+    )
     parser.add_argument(
         "--url", default=f"http://{settings.APP_HOST}:{settings.APP_PORT}",
         help="base URL del server (default: da APP_HOST e APP_PORT)",
@@ -105,7 +110,7 @@ def _run(args: argparse.Namespace, session: Session, http: httpx.Client) -> int:
     if creds.webhook_secret is None or not creds.account_id:
         raise DomainError("Il negozio non ha il secret del webhook o l'account Zernio")
 
-    event_id = str(uuid.uuid4())
+    event_id = args.event_id or str(uuid.uuid4())
     raw = json.dumps(build_payload(args, creds.account_id, event_id)).encode("utf-8")
     signature = hmac.new(creds.webhook_secret.get_secret_value().encode("utf-8"), raw, hashlib.sha256).hexdigest()
     url = f"{args.url.rstrip('/')}/webhooks/zernio/{merchant.webhook_hook_id}"

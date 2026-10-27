@@ -623,6 +623,15 @@ def test_replay_webhook_ogni_esecuzione_ha_un_event_id_nuovo(session, instagram_
     assert first.requests[0].headers["X-Zernio-Event-Id"] != second.requests[0].headers["X-Zernio-Event-Id"]
 
 
+def test_replay_webhook_event_id_fisso_simula_un_retry(session, instagram_merchant):
+    first, second = _FakeServer(), _FakeServer()
+    _replay(session, instagram_merchant, first, "--event-id", "evento-fisso")
+    _replay(session, instagram_merchant, second, "--event-id", "evento-fisso")
+    assert first.requests[0].headers["X-Zernio-Event-Id"] == "evento-fisso"
+    assert second.requests[0].headers["X-Zernio-Event-Id"] == "evento-fisso"
+    assert first.event_message().event_id == "evento-fisso"
+
+
 def test_replay_webhook_testo_di_default_e_la_parola_chiave(session, instagram_merchant):
     server = _FakeServer()
     _replay(session, instagram_merchant, server)
