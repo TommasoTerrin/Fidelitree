@@ -57,7 +57,7 @@ I passi 1-8 sono quelli del flusso Instagram; **da dopo il ticket 12** vanno fat
 `POST /api/merchant/{id}/approve`). In più, dopo i ticket 11-13:
 9. **Stato del servizio**: un merchant appena registrato e non approvato, con Instagram collegato: il DM `CARTA` da un follower
    porta alla **carta di prova** (nessuna carta vera, nessun dato); dalla dashboard lo approvi, il nuovo `CARTA` dà la carta vera;
-   lo metti in pausa: dalla PWA non puoi aggiungere punti né cashback ma puoi toglierli, la pagina carta mostra l'avviso; lo
+   lo metti in pausa: dalla PWA non puoi aggiungere punti né cashback ma puoi toglierli (avviso solo nello scanner), la pagina carta del cliente resta identica; lo
    riattivi.
 10. **Account**: il merchant si registra da `/merchant/register` e accede; reimposti la sua password dalla dashboard (password
     temporanea): la vecchia e le sessioni aperte non valgono più, lui la cambia dalle impostazioni; login sbagliato ripetuto → 429.
