@@ -164,12 +164,12 @@ def test_429_rate_limited():
     _error_case(429, {"error": "slow down"}, ZernioErrorKind.RATE_LIMITED)
 
 
-@pytest.mark.parametrize("exc", [
-    httpx.ReadTimeout("timeout"),
-    httpx.ConnectTimeout("timeout"),
-    httpx.ConnectError("rete assente"),
+@pytest.mark.parametrize("exc, kind", [
+    (httpx.ReadTimeout("timeout"), ZernioErrorKind.TIMEOUT),       # richiesta partita, nessuna risposta: esito incerto
+    (httpx.ConnectTimeout("timeout"), ZernioErrorKind.SERVER),     # mai partita: il messaggio non c'è
+    (httpx.ConnectError("rete assente"), ZernioErrorKind.SERVER),
 ])
-def test_eccezione_di_rete_o_timeout_e_server_senza_nuovo_tentativo(exc):
+def test_eccezione_di_rete_o_timeout_senza_nuovo_tentativo(exc, kind):
     seen = []
 
     def handler(request):
@@ -180,7 +180,7 @@ def test_eccezione_di_rete_o_timeout_e_server_senza_nuovo_tentativo(exc):
     card = build_card_message("Bar Demo", CARD_URL)
     with pytest.raises(ZernioError) as e:
         _call(client, lambda http: zs.send_card(http, _creds(), "c", card, "i"))
-    assert e.value.kind == ZernioErrorKind.SERVER
+    assert e.value.kind == kind
     assert e.value.status is None
     assert KEY not in str(e.value)
     assert len(seen) == 1

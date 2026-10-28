@@ -109,7 +109,7 @@ un errore su un negozio non blocca gli altri (resta non chiuso e si ritenta).
     (cliente nuovo di un negozio in attesa: → <PUBLIC_BASE_URL>/carta-di-prova, anche nel testo di ripiego)
     POST /v1/inbox/conversations/{conversation.id}/messages (Idempotency-Key = event id, timeout 4 s, nessun nuovo tentativo)
     └─ errore Meta 2/1545133 (Meta rifiuta la card) → testo fisso con il link (rete di sicurezza)
-    └─ 401/403 chiave → instagram_status = key_invalid · 409 not_thread_owner → come standby · altri → send_failed, log
+    └─ 401/403 chiave → instagram_status = key_invalid · 409 not_thread_owner → come standby · timeout di lettura → send_uncertain (contato, negozio non attivato) · altri → send_failed, log
 11. invio riuscito (card, ripiego o invito): ZernioSendCounter(quota_scope, mese) += 1 (avviso al 75%); awaiting_test_dm → active
 12. risposta 200 entro 5 s (sempre, dopo una firma valida)
 ```

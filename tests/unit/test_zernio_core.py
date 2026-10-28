@@ -80,7 +80,7 @@ def test_corpo_non_dizionario_non_manda_in_errore():
 def test_not_configured_esiste_ma_non_e_prodotto_da_classify():
     assert K.NOT_CONFIGURED.value == "not_configured"
     assert {c.value for c in K} == {
-        "auth", "quota", "not_thread_owner", "not_follower", "rate_limited", "server", "bad_request",
+        "auth", "quota", "not_thread_owner", "not_follower", "rate_limited", "server", "timeout", "bad_request",
         "not_configured",
     }
 

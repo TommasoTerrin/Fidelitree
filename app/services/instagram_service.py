@@ -385,11 +385,13 @@ def _increment_send_counter(session: Session, quota_scope: str, period: str) -> 
 
 def _record_send(
     session: Session, merchant: Merchant, creds: "zernio_service.ZernioCredentials", now: datetime,
+    *, activate: bool = True,
 ) -> None:
     """
     Bookkeeping di un invio riuscito (card, ripiego o invito a seguire): contatore del mese per l'ambito di
     quota, avviso nel log al superamento della soglia (nessun blocco nostro: oltre il limite è Zernio a
-    fermare gli invii) e `AWAITING_TEST_DM` → `ACTIVE`.
+    fermare gli invii) e `AWAITING_TEST_DM` → `ACTIVE`. Con `activate=False` (esito incerto per timeout)
+    si conta soltanto: l'arrivo del messaggio non è confermato, quindi il negozio non si attiva.
     """
     period = now.astimezone(timezone.utc).strftime("%Y-%m")
     sent = _increment_send_counter(session, creds.quota_scope, period)
@@ -397,21 +399,26 @@ def _record_send(
     status = quota_status(sent, limit, warn)
     if status.warning and not quota_status(sent - 1, limit, warn).warning:
         logger.warning("Quota Zernio: il negozio %s ha raggiunto il %s%% degli invii mensili", merchant.id, status.percent)
-    if merchant.instagram_status == InstagramStatus.AWAITING_TEST_DM:
+    if activate and merchant.instagram_status == InstagramStatus.AWAITING_TEST_DM:
         merchant.instagram_status = InstagramStatus.ACTIVE
         session.add(merchant)
         session.commit()
 
 
 def _handle_send_error(
-    session: Session, merchant: Merchant, error: "zernio_service.ZernioError", event_id: str, now: datetime,
+    session: Session, merchant: Merchant, creds: "zernio_service.ZernioCredentials",
+    error: "zernio_service.ZernioError", event_id: str, now: datetime,
 ) -> WebhookOutcome:
     """
     Esito di un invio fallito, uguale per card, ripiego e invito: chiave rifiutata → `KEY_INVALID`
-    (pannello del merchant) e `SEND_FAILED`; conversazione di un'altra app → come lo standby; ogni altro
-    errore → `SEND_FAILED`. Nessun nuovo tentativo. Si logga solo tipo dell'errore, negozio ed evento.
+    (pannello del merchant) e `SEND_FAILED`; conversazione di un'altra app → come lo standby; timeout di
+    lettura → `SEND_UNCERTAIN` (il messaggio può essere arrivato: l'invio si conta, il negozio non si attiva);
+    ogni altro errore → `SEND_FAILED`. Nessun nuovo tentativo. Si logga solo tipo dell'errore, negozio ed evento.
     """
     logger.warning("Webhook: invio non riuscito (%s) negozio=%s evento=%s", error.kind.value, merchant.id, event_id)
+    if error.kind == zernio_service.ZernioErrorKind.TIMEOUT:
+        _record_send(session, merchant, creds, now, activate=False)
+        return WebhookOutcome.SEND_UNCERTAIN
     if error.kind == zernio_service.ZernioErrorKind.AUTH:
         merchant.instagram_status = InstagramStatus.KEY_INVALID
         session.add(merchant)
@@ -436,7 +443,7 @@ async def _send_fallback_text(
     try:
         await zernio_service.send_text(http, creds, msg.conversation_id, text, f"{msg.event_id}:text")
     except zernio_service.ZernioError as error:
-        return _handle_send_error(session, merchant, error, msg.event_id, now)
+        return _handle_send_error(session, merchant, creds, error, msg.event_id, now)
     _record_send(session, merchant, creds, now)
     return WebhookOutcome.FALLBACK_SENT
 
@@ -461,7 +468,7 @@ async def _invite_to_follow(
     try:
         await zernio_service.send_text(http, creds, msg.conversation_id, text, f"{msg.event_id}:follow")
     except zernio_service.ZernioError as error:
-        return _handle_send_error(session, merchant, error, msg.event_id, now)
+        return _handle_send_error(session, merchant, creds, error, msg.event_id, now)
     _record_send(session, merchant, creds, now)
     return WebhookOutcome.FOLLOW_REQUESTED
 
@@ -501,7 +508,7 @@ async def _reply_with_card(
     except zernio_service.ZernioError as error:
         if error.kind == zernio_service.ZernioErrorKind.NOT_FOLLOWER:
             return await _send_fallback_text(session, http, merchant, creds, msg, card_url, now)
-        return _handle_send_error(session, merchant, error, msg.event_id, now)
+        return _handle_send_error(session, merchant, creds, error, msg.event_id, now)
     _record_send(session, merchant, creds, now)
     return WebhookOutcome.SENT
 

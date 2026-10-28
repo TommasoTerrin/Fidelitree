@@ -16,7 +16,7 @@ versione "a regime" è nella [roadmap](roadmap.md).
 **tre ticket prima del pilota** (11 auth locale, 12 stato del servizio, 13 dashboard admin): in produzione i merchant non
 potevano accedere e il founder deve poter approvare, mettere in pausa e reimpostare le password. Il vecchio ticket 11 è il
 **14**. **I ticket 11 e 12 sono fatti** (i merchant possono registrarsi, accedere e cambiare la password con `AUTH_PROVIDER=local`;
-lo stato in attesa / attivo / in pausa governa carta di prova e scanner; **il 13** dà al founder la dashboard `/admin`: approva, pausa, riattiva, reset password). **Pronta al merge dopo** il collaudo end-to-end del founder (ticket 14) (procedura in
+lo stato in attesa / attivo / in pausa governa carta di prova e scanner; **il 13** dà al founder la dashboard `/admin`: approva, pausa, riattiva, reset password). **Collaudo end-to-end del founder fatto il 2026-10-28 (ticket 14 chiuso con riserve): pronta al merge solo con l'ok esplicito dell'utente** (procedura in
 [deploy.md](../workflows/deploy.md), esiti in [zernio-notes.md](../architecture/zernio-notes.md)) e l'ok esplicito
 dell'utente: nessun merge su `develop`/`main` e nessun tag prima. **v0.2.1 è assorbito da v0.3.0**: nessun merge
 separato, `develop` oggi è alla v0.2.1 mai rilasciata e verrà superata dal merge di `feature/instagram-cards`.
@@ -32,16 +32,16 @@ Contesto di riferimento: decisioni in [AGENTS.md](../../AGENTS.md), vincoli Zern
 | 02 | Modelli, config ed errori | ✅ `865797d` |
 | 03 | Cifratura AES-GCM, indice cieco IGSID, token del link | ✅ `161850d` (414 test) |
 | 04 | Core dei messaggi: trigger, card, finestra 24 h, quota | ✅ 2026-10-23 `f4bb1b3` (459 test) |
-| 05 | Client Zernio, `zernio_check`, **collaudo anticipato** | ✅ 2026-10-26: passi 1-2 del collaudo fatti (base URL `https://zernio.com/api` ok, `send-card` consegnata e corretta su mobile al profilo del founder); passo 3 (non follower) rimandato al collaudo del 07/11 |
+| 05 | Client Zernio, `zernio_check`, **collaudo anticipato** | ✅ (voci rimandate chiuse nel collaudo finale del 2026-10-28, ticket 14) 2026-10-26: passi 1-2 del collaudo fatti (base URL `https://zernio.com/api` ok, `send-card` consegnata e corretta su mobile al profilo del founder); passo 3 (non follower) rimandato al collaudo del 07/11 |
 | 06 | Webhook: dalla parola chiave alla card | ✅ 2026-10-23 (644 test) |
-| 07 | Onboarding Instagram del merchant | ✅ codice 2026-10-26 (739 test); collaudo 2026-10-26 fatto per onboarding e DM da follower (timeout invio 4 s); non follower/Requests, ManyChat, menu e «Scollega» rimandati al ticket 14 |
+| 07 | Onboarding Instagram del merchant | ✅ (voci rimandate chiuse nel collaudo finale del 2026-10-28, ticket 14: esito per voce in `zernio-notes.md`) codice 2026-10-26 (739 test); collaudo 2026-10-26 fatto per onboarding e DM da follower (timeout invio 4 s); non follower/Requests, ManyChat, menu e «Scollega» rimandati al ticket 14 |
 | 08 | Pagina carta, QR, scan e PWA merchant | ✅ 2026-10-26 (793 test); prova manuale del founder riuscita (link `/c/<token>`, scan dalla PWA con aggiunta di punti, PWA installata, redirect al login) |
 | 09 | Rimozione del vecchio flusso cliente (OTP, wallet, `/join`, `Customer`) | ✅ 2026-10-26 (744 test) |
 | 10 | Seed, smoke test e script | ✅ 2026-10-26 (766 test) |
 | 11 | Autenticazione dei merchant: provider `local` (registrazione, login, cambio password) | ✅ 2026-10-27 `d3a32d6` + `9ae5b3e` (freno solo per email) (878 test); smoke su SQLite usa-e-getta con `ENVIRONMENT=production` + `AUTH_PROVIDER=local`: registrazione, login, cambio password ok |
 | 12 | Stato del servizio: approvazione, pausa e carta di prova | ✅ 2026-10-27 `f5df96c` + `86f00dd` (936 test); avvio verificato su SQLite usa-e-getta (reset, seed, colonne `is_paused` e `created_at`) |
 | 13 | Dashboard admin | ✅ 2026-10-27 `4081bcd` (+ `897ee7e`, 1049 test); verificato su SQLite usa-e-getta con `AUTH_PROVIDER=local` e un processo vero: login, lista, approva, reset, `smoke_test_prod` ok |
-| 14 | Documentazione, collaudo end-to-end e release (era l'11) | 🔶 2026-10-27: documentazione generale fatta (`65caf34`) e `replay_webhook --event-id` (`b40401a`, 767 test). 2026-10-27 seconda sessione: documentazione dei ticket 11-13 riverificata contro il codice (commit `f52379f`, solo commenti) e passi 9-11 del collaudo verificati via HTTP su un processo vero (nota sotto). Restano **a cura del founder**: collaudo Instagram (passi 1-8), prova nel browser, esiti in `zernio-notes.md`, ok al merge |
+| 14 | Documentazione, collaudo end-to-end e release (era l'11) | ✅ **chiuso con riserve il 2026-10-28**: collaudo del founder fatto, esiti nella tabella di `zernio-notes.md` e riepilogo «Non confermato o non riuscito» (bug aperti: voce di menu non cliccabile; timeout di invio a 4 s (corretto: esito `send_uncertain`, 1052 test); non follower lenti). In attesa solo dell'ok al merge. Storico: 🔶 2026-10-27: documentazione generale fatta (`65caf34`) e `replay_webhook --event-id` (`b40401a`, 767 test). 2026-10-27 seconda sessione: documentazione dei ticket 11-13 riverificata contro il codice (commit `f52379f`, solo commenti) e passi 9-11 del collaudo verificati via HTTP su un processo vero (nota sotto). Restano **a cura del founder**: collaudo Instagram (passi 1-8), prova nel browser, esiti in `zernio-notes.md`, ok al merge |
 
 Suite di partenza: 360 test. I ticket 02-08 **aggiungono** il nuovo flusso accanto al vecchio (che continua a
 funzionare); il vecchio si toglie tutto insieme nel 09.

@@ -53,7 +53,8 @@ class ZernioErrorKind(str, Enum):
     NOT_THREAD_OWNER = "not_thread_owner"  # la conversazione è di un'altra app (standby)
     NOT_FOLLOWER = "not_follower"          # Meta rifiuta la card a chi non segue l'account
     RATE_LIMITED = "rate_limited"
-    SERVER = "server"                      # 5xx, timeout o rete
+    SERVER = "server"                      # 5xx, connessione mancata o timeout di connessione
+    TIMEOUT = "timeout"                    # richiesta partita, nessuna risposta entro il tempo: il messaggio può essere arrivato
     BAD_REQUEST = "bad_request"            # ogni altro 4xx, compreso ogni altro 403
     NOT_CONFIGURED = "not_configured"      # mancano chiave o account (nessuna chiamata fatta)
 
@@ -65,6 +66,7 @@ _ERROR_MESSAGES = {
     ZernioErrorKind.NOT_FOLLOWER: "Instagram non consente la card a chi non segue l'account",
     ZernioErrorKind.RATE_LIMITED: "Troppe richieste a Zernio: riprova tra poco",
     ZernioErrorKind.SERVER: "Zernio non ha risposto correttamente (errore del servizio, rete o timeout)",
+    ZernioErrorKind.TIMEOUT: "Zernio non ha risposto in tempo: il messaggio potrebbe essere arrivato lo stesso",
     ZernioErrorKind.BAD_REQUEST: "Zernio ha rifiutato la richiesta",
     ZernioErrorKind.NOT_CONFIGURED: "Instagram non è collegato: mancano la chiave o l'account Zernio",
 }
@@ -301,7 +303,7 @@ async def _request(
 ) -> dict:
     """
     Una sola richiesta (mai ritentata) con `Authorization: Bearer`. Ritorna il corpo JSON (vuoto se assente);
-    solleva `ZernioError` su rete/timeout (`SERVER`) o status ≥ 400 (`classify_error`). Si logga solo
+    solleva `ZernioError` su timeout di lettura (`TIMEOUT`), rete o connessione (`SERVER`) o status ≥ 400 (`classify_error`). Si logga solo
     metodo, path (senza query), status e tipo: mai corpi né chiave.
     """
     url = f"{settings.ZERNIO_BASE_URL.rstrip('/')}{path}"
@@ -310,6 +312,9 @@ async def _request(
         response = await http.request(
             method, url, headers=request_headers, json=json, params=params, timeout=timeout,
         )
+    except httpx.ReadTimeout:
+        logger.warning("Zernio %s %s: nessuna risposta entro il tempo", method, path)
+        raise ZernioError(ZernioErrorKind.TIMEOUT) from None
     except httpx.HTTPError:
         logger.warning("Zernio %s %s: errore di rete o timeout", method, path)
         raise ZernioError(ZernioErrorKind.SERVER) from None

@@ -55,5 +55,5 @@ Prerequisito: SQLite usa-e-getta (`DATABASE_URL=sqlite:///...` solo nel terminal
 - [ ] `.agents/planner/current.md` aggiornato (item completati → changelog roadmap)
 
 ## Esito collaudo
-- v0.3.0: da compilare con gli esiti del collaudo end-to-end (tabella «Collaudo finale del ticket 14» in `.agents/architecture/zernio-notes.md`).
+- v0.3.0 (2026-10-28): collaudo end-to-end del founder fatto in locale (SQLite usa-e-getta, tunnel cloudflared, `AUTH_PROVIDER=local`). Esiti nella tabella «Collaudo finale del ticket 14» di `.agents/architecture/zernio-notes.md`, con il riepilogo «Non confermato o non riuscito». Parte locale chiusa con riserve; **restano fuori**: Neon/DigitalOcean, un merchant Instagram vero, evento duplicato, ManyChat, prove da browser di reset password/429.
 - Storico, v0.2.0 (2026-10-13, API, SQLite usa-e-getta; il flusso cliente con OTP e wallet non esiste più): pytest 339 verdi, API merchant, pool e conversione, registrazione non approvata e `close_period --cap 2` verificati; restavano `close_period` con Ecologi e PWA da telefono.

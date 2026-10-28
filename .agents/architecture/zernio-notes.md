@@ -174,26 +174,43 @@
 | Tocco della voce di menu «🌳 La mia carta» → card | **non verificato** → collaudo finale |
 | «Scollega» da pannello → webhook rimosso da Zernio | **non verificato** (coperto solo dai test automatici) → collaudo finale |
 
-## Collaudo finale del ticket 14 (a cura del founder: esiti da compilare)
+## Collaudo finale del ticket 14 (esiti del founder, 2026-10-28)
 
 Procedura con i comandi: «Collaudo end-to-end» in [deploy.md](../workflows/deploy.md). Per ogni riga si scrive l'esito
 e, dove serve, i numeri misurati; nessun dato personale, token, IGSID o chiave.
 
+### Non confermato o non riuscito (riepilogo, 2026-10-28)
+
+**Non riuscito o limite noto**
+1. **Voce di menu «🌳 La mia carta»**: il tocco non fa nulla e non arriva nessun evento al webhook. Bug aperto, causa non capita (Instagram o Zernio?), da segnalare a Zernio se persiste. Aggirabile: scrivere `CARTA`.
+2. **Timeout di invio a 4 s**: 2 invii su ~7 scaduti; nel caso verificabile la card è arrivata lo stesso (falso `send_failed`). Vedi riga «Timeout di invio».
+3. **Non follower lenti**: il primo DM (cartella Requests, non leggibile dall'API) arriva al webhook dopo minuti; non so se serva accettare la richiesta.
+
+**Non verificato**
+4. Evento duplicato (`replay_webhook`): test futuro.
+5. ManyChat/standby: non provato per scelta (pilota senza strumenti simili; se c'è, lo scollega il founder).
+6. Latenza `sentAt` → card sul telefono: non misurata.
+7. Nel browser: reset password, 429, «Esci», banner e pulsanti grigi in pausa, carta di prova a occhio (verificati solo via HTTP il 2026-10-27).
+8. `isFollower` `null`/assente nei payload del webhook: mai osservato.
+9. Fuori da questo collaudo locale: Neon e DigitalOcean, un account Instagram di un merchant vero.
+
 | Cosa | Esito |
 |---|---|
-| Onboarding da zero con tunnel cloudflared (webhook e voce di menu su Zernio) | _da compilare_ |
-| DM «CARTA» da un profilo che segue → card → `/c/<token>` → scan dalla PWA → punti nuovi in pagina | _da compilare_ |
-| Tocco della voce di menu «🌳 La mia carta» → stessa card, stesso link | _da compilare_ |
-| Card/risposta a un **non follower**: invito a seguire consegnato? la card verrebbe rifiutata da Meta (2/1545133)? | _da compilare_ |
-| Dopo che il non follower segue e riscrive «CARTA»: arriva la card? | _da compilare_ |
-| Webhook per un DM in **Requests** (profilo che non segue il negozio) | _da compilare_ |
-| `isFollower`: valore reale nei payload (`true`/`false`/`null`/assente), anche subito dopo aver iniziato a seguire | _da compilare_ |
-| ManyChat (o altra app) come app predefinita: arriva `metadata.standby`? l'avviso compare nel pannello? | _da compilare_ |
-| Evento duplicato (`replay_webhook --event-id`): un solo invio | _da compilare_ |
-| Latenza: `sentAt` → arrivo del webhook → card sul telefono (osservati ~30 s; webhook ~11,5 s dopo `sentAt`) | _da compilare_ |
-| Log del server: nessun token, IGSID, chiave o secret | _da compilare_ |
-| «Scollega» da pannello → webhook sparito da Zernio | _da compilare_ |
-| Negozio in attesa: `CARTA` di un cliente nuovo → `/carta-di-prova` (senza QR né dati); dopo «Avvia» → carta vera | _da compilare_ |
-| Dashboard `/admin` nel browser: lista, filtro, ricerca, «Avvia», «Metti in pausa» (banner e pulsanti grigi nello scanner, pagina carta invariata), «Riattiva», «Esci» | _da compilare_ |
-| Reset password (Copia, vecchia password e sessione aperta invalide, cambio dalle impostazioni) e 429 dopo 6 errori | _da compilare_ |
-| Log del server: nessuna password, temporanea o `ADMIN_SECRET_KEY` | _da compilare_ |
+| Onboarding da zero con tunnel cloudflared (webhook e voce di menu su Zernio) | **ok (2026-10-28)**, dal log: registrazione, chiave e account Zernio collegati (200), webhook registrato e raggiunto via tunnel (consegne 200), stato `ACTIVE`, voce di menu impostata (`persistent_menu_set` vero) |
+| DM «CARTA» da un profilo che segue → card → `/c/<token>` → scan dalla PWA → punti nuovi in pagina | **ok lato server (2026-10-28)**: card consegnata, `/c/***` aperto (200), scan dalla PWA con +60 tree points e 1 conversione, cashback −200 centesimi. Il founder riferisce che il flusso funziona; la pagina sul telefono non è tracciata nel log |
+| Tocco della voce di menu «🌳 La mia carta» → stessa card, stesso link | **non ok (2026-10-28)**: il menu è nostro (`persistent_menu_set` = vero, voce visibile in chat dal menu ≡), ma il tocco non fa nulla e **nessun evento arriva al webhook** (nessuna riga nel log). Il codice non è coinvolto; causa non capita (lato Instagram/Zernio?). **Bug aperto**, non blocca il rilascio: la carta si ottiene scrivendo `CARTA`. Da riprovare con altro profilo/app aggiornata e da segnalare a Zernio se persiste |
+| DM «CARTA» (profilo che segue), 2026-10-28 | ok: card consegnata. Contatore invii del mese = **2** (`account:<id>`, 2026-10). Eventi registrati: 2 `sent`, 1 `ignored`, 1 `send_failed` (timeout di rete verso Zernio sull'invio; il retry di Zernio è scartato come «già visto» per scelta di progetto: nessun nuovo tentativo) |
+| Timeout di invio (4 s) | **da tenere d'occhio (2026-10-28)**: 2 invii su ~7 sono scaduti a 4,1 s, il tetto, mentre quelli riusciti durano 1,5-1,9 s (12:47 con card appena creata per un follower, 13:20 durante la prova del non follower; anche un `GET` di elenco è scaduto). **Non dipende dal follow.** Nel caso verificabile (12:47) la conversazione su Zernio risulta aggiornata 1,2 s dopo il nostro timeout: la card è arrivata comunque, quindi `send_failed` può essere un falso negativo e il contatore invii può essere sottostimato. **Corretto dopo il collaudo (2026-10-28)**: il timeout di lettura dà ora `ZernioErrorKind.TIMEOUT` ed esito `send_uncertain` (invio contato nella quota, negozio in attesa non attivato); connessione mancata o `ConnectTimeout` restano `send_failed` e non contano. Nessun nuovo tentativo, per scelta di progetto (con timeout Zernio rilascia l'`Idempotency-Key`: un retry può duplicare la card) |
+| Card/risposta a un **non follower**: invito a seguire consegnato? la card verrebbe rifiutata da Meta (2/1545133)? | **ok (2026-10-28)**: invito a seguire consegnato (`esito=follow_requested`), nessuna card, come da progetto. Il rifiuto Meta 2/1545133 **non è stato osservato**: ai non follower la card non viene nemmeno tentata |
+| Dopo che il non follower segue e riscrive «CARTA»: arriva la card? | **ok, ma lento (2026-10-28)**: dopo il follow e un nuovo `CARTA` la card è partita (`esito=sent`, nuova card creata). Contatore invii del mese a fine prova: **5** (4 card + 1 invito). Il founder riferisce che «ci mette tanto ma funziona» |
+| Webhook per un DM in **Requests** (profilo che non segue il negozio) | **arriva, con grande ritardo (2026-10-28)**: B (non follower) scrive `CARTA`; per diversi minuti nessun evento e nessuna conversazione su `GET /v1/inbox/conversations` (la cartella Requests non è leggibile con Instagram Login: 400 `PLATFORM_LIMITATION`). Dopo l'accettazione della richiesta dall'app e un nuovo `CARTA` il webhook è arrivato (`follow_requested`). **Non so se a sbloccare sia stata l'accettazione, il nuovo messaggio o solo il tempo**: ritardo non misurato con precisione. Per i merchant: il primo DM di un non follower può impiegare minuti |
+| `isFollower`: valore reale nei payload (`true`/`false`/`null`/assente), anche subito dopo aver iniziato a seguire | **parziale (2026-10-28)**: `true` per i profili che seguono (letto dall'API conversazioni); per B il server ha registrato `follow_requested`, quindi falso al momento del DM. `null`/assente **non osservato** nei payload del webhook (compare solo in conversazioni vecchie di febbraio); il ritardo dell'aggiornamento dopo il follow non è misurato. Il codice tratta `null` come follower (deploy.md, passo 5) |
+| ManyChat (o altra app) come app predefinita: arriva `metadata.standby`? l'avviso compare nel pannello? | **non provato, per scelta (2026-10-28)**: troppo presto per i pilota; strumenti simili sono quasi assenti tra le attività italiane. Se un merchant pilota lo avesse, lo scollega il founder. Il codice gestisce `standby` (nessuna risposta + avviso nel pannello) ma resta non verificato dal vivo |
+| Evento duplicato (`replay_webhook --event-id`): un solo invio | **non eseguito (2026-10-28)**, per scelta: test futuro (il rischio è una card mandata due volte). La dedup su `X-Zernio-Event-Id` è coperta dai test automatici e in questa sessione ha scartato due retry di Zernio come «già visto» |
+| Latenza: `sentAt` → arrivo del webhook → card sul telefono (osservati ~30 s; webhook ~11,5 s dopo `sentAt`) | **non misurata (2026-10-28)**. Osservato: l'invio della card dura 1,5-1,9 s quando riesce (prove precedenti 1,2-3,1 s); il primo DM di un non follower può arrivare dopo minuti (riga sulle Requests) |
+| Log del server: nessun token, IGSID, chiave o secret | **ok (2026-10-28)**, 155 righe lette: 0 occorrenze di chiave `sk_`, hash `scrypt$`, `bearer`, password, secret, token nei percorsi (`/c/***`, `/webhooks/zernio/***` mascherati), numeri lunghi tipo IGSID. Nei log compaiono: id Zernio della conversazione (solo nei timeout d'invio), UUID della card (che è anche il contenuto del QR; non il token del link, di cui il DB tiene solo l'hash) e `fbclid` nelle richieste dei crawler Meta a `/` (404). **Osservazione**: 2 invii su ~7 sono falliti per timeout verso Zernio (12:47 e 13:20 locali; anche un `GET` elenco è scaduto), senza nuovo tentativo per scelta di progetto: il cliente non riceve nulla finché non riscrive `CARTA` |
+| «Scollega» da pannello → webhook sparito da Zernio | **ok (2026-10-28)**, riferito dal founder |
+| Negozio in attesa: `CARTA` di un cliente nuovo → `/carta-di-prova` (senza QR né dati); dopo «Avvia» → carta vera | **parziale (2026-10-28)**, dal log: `/carta-di-prova` servita (200) e «Avvia» dalla dashboard (200), poi carte vere consegnate. L'assenza di QR e dati è coperta dal test del ticket 12; **non ricontrollata a occhio** in questa sessione |
+| Dashboard `/admin` nel browser: lista, filtro, ricerca, «Avvia», «Metti in pausa» (banner e pulsanti grigi nello scanner, pagina carta invariata), «Riattiva», «Esci» | **parziale (2026-10-28)**, dal log: login admin, lista, «Avvia», pausa e «Riattiva» eseguiti (200). **Non confermati**: banner e pulsanti grigi nello scanner in pausa, «Esci», filtro e ricerca (girano nel browser, senza traccia nel log) |
+| Reset password (Copia, vecchia password e sessione aperta invalide, cambio dalle impostazioni) e 429 dopo 6 errori | **non eseguito dal founder (2026-10-28)**: nessuna chiamata di reset nel log. Verificato solo via HTTP il 2026-10-27 (script usa-e-getta: password temporanea, sessioni decadute, 429 al 6° errore), **non da browser** |
+| Log del server: nessuna password, temporanea o `ADMIN_SECRET_KEY` | **ok per il log del 2026-10-28** (0 occorrenze di password, secret, hash). Nessuna password temporanea è stata generata in questa sessione: quel caso resta provato solo dallo script del 2026-10-27 |

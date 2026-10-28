@@ -590,14 +590,48 @@ def test_errore_500_un_solo_tentativo(client, session, instagram_merchant, zerni
     assert _counters(session) == []
 
 
-def test_timeout_un_solo_tentativo(client, session, instagram_merchant, zernio_mock):
+def test_timeout_un_solo_tentativo_esito_incerto_e_contato(client, session, instagram_merchant, zernio_mock):
+    """Nessuna risposta entro il tempo: il messaggio può essere partito (collaudo 2026-10-28), quindi non è `send_failed`."""
     zernio_mock.queue(httpx.ReadTimeout("lento"))
 
     response = signed_webhook(client, instagram_merchant, _payload())
 
     assert response.status_code == 200
     assert len(zernio_mock.requests) == 1
+    assert _event(session).outcome == WebhookOutcome.SEND_UNCERTAIN
+    assert [c.sent for c in _counters(session)] == [1]
+
+
+def test_timeout_non_attiva_il_negozio(client, session, instagram_merchant, zernio_mock):
+    instagram_merchant.instagram_status = InstagramStatus.AWAITING_TEST_DM
+    session.add(instagram_merchant)
+    session.commit()
+    zernio_mock.queue(httpx.ReadTimeout("lento"))
+
+    signed_webhook(client, instagram_merchant, _payload())
+
+    session.refresh(instagram_merchant)
+    assert instagram_merchant.instagram_status == InstagramStatus.AWAITING_TEST_DM
+
+
+def test_timeout_dell_invito_a_seguire_esito_incerto_e_contato(client, session, instagram_merchant, zernio_mock):
+    zernio_mock.queue(httpx.ReadTimeout("lento"))
+
+    signed_webhook(client, instagram_merchant, _payload(is_follower=False))
+
+    assert len(zernio_mock.requests) == 1
+    assert _event(session).outcome == WebhookOutcome.SEND_UNCERTAIN
+    assert [c.sent for c in _counters(session)] == [1]
+
+
+def test_connessione_mancata_resta_send_failed_e_non_conta(client, session, instagram_merchant, zernio_mock):
+    """La richiesta non è mai partita: il messaggio non c'è, quindi nessun invio da contare."""
+    zernio_mock.queue(httpx.ConnectError("rete assente"))
+
+    signed_webhook(client, instagram_merchant, _payload())
+
     assert _event(session).outcome == WebhookOutcome.SEND_FAILED
+    assert _counters(session) == []
 
 
 def test_conversazione_di_un_altra_app_vale_come_standby(client, session, instagram_merchant, zernio_mock):

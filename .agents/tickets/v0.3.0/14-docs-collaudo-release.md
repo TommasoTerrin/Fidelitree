@@ -1,6 +1,8 @@
 # 14 — Documentazione, collaudo end-to-end e release
 
 > Era il ticket 11: rinumerato il 2026-10-27 dopo l'aggiunta dei ticket 11-13 (auth locale, stato del servizio, dashboard admin).
+>
+> **Stato: chiuso con riserve il 2026-10-28.** Collaudo del founder eseguito; esiti e punti non confermati in `.agents/architecture/zernio-notes.md` («Collaudo finale del ticket 14»). Nessun merge fatto: serve l'ok esplicito dell'utente.
 
 ## Obiettivo
 Documentazione allineata al codice reale di v0.3.0, collaudo completo con un account Instagram Business di test via
