@@ -21,7 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      DATABASE_URL: "sqlite://"
+      # file e non in-memory: main.py configura un pool (pool_size) che SingletonThreadPool non accetta
+      DATABASE_URL: "sqlite:///ci.db"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -58,4 +59,8 @@ jobs:
           cache: pip
           cache-dependency-path: requirements.txt
       - run: pip install pip-audit
-      - run: pip-audit -r requirements.txt
+      # Ignorate (decisione 2026-10-28): python-jose/ecdsa riguardano gli algoritmi a chiave pubblica
+      # (confusione di algoritmo con chiavi DER, timing ECDSA P-256), nessun fix disponibile.
+      # L'app usa solo HS256 con algorithms=[HS256] fissato (app/core/security.py). Da rivalutare
+      # con la migrazione a PyJWT: poi togliere gli --ignore-vuln.
+      - run: pip-audit -r requirements.txt --ignore-vuln PYSEC-2026-4298 --ignore-vuln PYSEC-2026-1325
