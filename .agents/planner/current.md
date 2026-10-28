@@ -308,3 +308,8 @@ rivede nel collaudo finale. QR "apri la chat": a mano dal founder (ticket 14).
 - Si lavora un ticket alla volta; a fine ticket: test verdi, commit in italiano "... (ticket NN)", riepilogo di 3 righe
   e attesa dell'approvazione.
 - La vecchia logica alberi/Telegram è in `feature/trees` (branch di archivio, non mergiare).
+
+
+## Sessione 2026-10-28 — CI e staging (non rilascia in produzione)
+
+In corso: (1) CI minima GitHub Actions (`.github/workflows/ci.yml`: pytest, build Docker, pip-audit; nessun segreto); (2) valutazione sottoagente devops (raccomandazione: no, in attesa di ok); (3) staging = app DO collegata a `develop` + branch Neon `develop`, dominio proprio. Nessun merge su develop/main e nessun tag senza ok esplicito. Decisione durevole: niente Alembic finche' non ci sono dati di produzione da preservare (i branch Neon servono a provare le modifiche allo schema).
