@@ -238,6 +238,11 @@ Note sui ticket fatti:
    `isFollower: null`, **ManyChat/standby**, tocco della voce di menu «🌳 La mia carta», «Scollega» da pannello.
 4. ~~Ticket 08~~ fatto, prova manuale del founder riuscita il 2026-10-26.
 5. ~~Ticket 09~~ fatto. ~~Ticket 10~~ fatto.
+**Piano unificato (deciso il 2026-10-28)**: documentazione e codice dei ticket 01-14 completi. Un solo **collaudo finale** a cura del founder (passi 1-11
+di `deploy.md`, esiti nella tabella di `zernio-notes.md`). Se va tutto bene: si compila la tabella, si chiudono **insieme** i ticket aperti (05 e 07 con le
+voci rimandate, 14), si spunta `pre-release.md` (parte locale), poi ok esplicito dell'utente → merge su `develop`. Se un esito contraddice AGENTS.md: fermarsi
+e chiedere. Dopo il merge: `main` e produzione secondo «Primo deploy di v0.3.0».
+
 6. ~~Ticket 11~~ fatto. ~~Ticket 12~~ fatto. ~~Ticket 13~~ fatto (attende l'approvazione dell'utente), poi **ticket 14**: documentazione generale fatta. **Collaudo end-to-end a cura del founder** (checklist passo-passo in
    `deploy.md`, «Collaudo end-to-end del flusso Instagram»). Da verificare e riportare in `zernio-notes.md`
    («Collaudo finale del ticket 14»): card a un non follower, DM in Requests via webhook, `isFollower` `null`,

@@ -193,3 +193,7 @@ e, dove serve, i numeri misurati; nessun dato personale, token, IGSID o chiave.
 | Latenza: `sentAt` → arrivo del webhook → card sul telefono (osservati ~30 s; webhook ~11,5 s dopo `sentAt`) | _da compilare_ |
 | Log del server: nessun token, IGSID, chiave o secret | _da compilare_ |
 | «Scollega» da pannello → webhook sparito da Zernio | _da compilare_ |
+| Negozio in attesa: `CARTA` di un cliente nuovo → `/carta-di-prova` (senza QR né dati); dopo «Avvia» → carta vera | _da compilare_ |
+| Dashboard `/admin` nel browser: lista, filtro, ricerca, «Avvia», «Metti in pausa» (banner e pulsanti grigi nello scanner, pagina carta invariata), «Riattiva», «Esci» | _da compilare_ |
+| Reset password (Copia, vecchia password e sessione aperta invalide, cambio dalle impostazioni) e 429 dopo 6 errori | _da compilare_ |
+| Log del server: nessuna password, temporanea o `ADMIN_SECRET_KEY` | _da compilare_ |

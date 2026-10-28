@@ -174,6 +174,7 @@ cloudflared tunnel --url http://127.0.0.1:8001
 ```powershell
 # Terminale 2: server. Le env var del terminale vincono sul .env: il DB vero NON viene toccato
 $env:DATABASE_URL = "sqlite:///collaudo11.db"
+$env:AUTH_PROVIDER = "local"      # serve ai passi 10-11: con `dev` il reset password dalla dashboard risponde 400
 $env:PUBLIC_BASE_URL = "https://<nome>.trycloudflare.com"
 python -m scripts.reset_db --force
 python -c "import logging,sys; h=logging.StreamHandler(sys.stdout); h.setFormatter(logging.Formatter('%(asctime)s.%(msecs)03d %(name)s %(message)s')); a=logging.getLogger('app'); a.setLevel(logging.INFO); a.addHandler(h); import uvicorn; uvicorn.run('app.main:app', host='127.0.0.1', port=8001)" | Tee-Object -FilePath collaudo11.log
@@ -242,6 +243,21 @@ ripetere il collaudo, ricollega (nuovo webhook) o riparti dal passo 1.
 **Passo 9 — ManyChat/standby (facoltativo)**: collega ManyChat (o un'altra app di messaggistica) all'account del
 negozio, imposta il negozio come in passo 2 e scrivi `CARTA` da **A**: annota se la card parte, se la riga di log è
 `esito=standby`, e se il pannello mostra l'avviso sull'altra app. Poi scollega ManyChat.
+
+**Passo 10 — stato del servizio e dashboard (browser)**: con il negozio ancora «in attesa» (prima del passo 2b) e Instagram collegato,
+da **A** scrivi `CARTA`: si apre `/carta-di-prova`, nessuna carta vera. Apri `http://127.0.0.1:8001/admin`, accedi con `ADMIN_SECRET_KEY`:
+il negozio compare «In attesa» con nome ed email; prova filtro e ricerca; «Avvia» → «Attivo» e un nuovo `CARTA` da A dà la carta vera.
+«Metti in pausa»: nello scanner compare il banner e i pulsanti di aggiunta sono grigi (togliere funziona), la pagina carta del cliente è
+identica; «Riattiva». Con la sessione admin aperta, un 429 si prova con 6 password sbagliate in una finestra anonima; «Esci» chiude la sessione.
+
+**Passo 11 — account e log**: «Reimposta password» sul negozio → «Copia» la temporanea (si vede una sola volta). Verifica: con quella il
+merchant entra, con la vecchia no, la sua sessione già aperta decade (ricaricando una pagina merchant torna al login), poi la cambia da
+Impostazioni → «Cambia password». Sei password sbagliate al login merchant → 429 con l'invito a chiedere il reset; un reset lo sblocca subito.
+Infine, nel terminale 3, `Select-String -Path collaudo11.log -Pattern "<la password temporanea>|<ADMIN_SECRET_KEY>"` (incollando i valori solo qui,
+mai in chat): nessun risultato. Il log non deve contenere password, hash o chiave admin.
+
+> Le parti non-browser dei passi 10-11 (stati dello scanner, azioni admin con controllo `Origin`, reset, cambio password, freni, log senza segreti)
+> sono già state verificate via HTTP il 2026-10-27 (vedi `current.md`): nel browser si controlla ciò che quel giro non vede (pagina, pulsanti, «Copia», cookie).
 
 Esiti nel [log del collaudo](../architecture/zernio-notes.md) (tabella «Collaudo finale del ticket 14»). Il tunnel rapido
 cambia URL a ogni avvio: dopo un riavvio del tunnel riavvia il server con il nuovo `PUBLIC_BASE_URL` e rifai l'onboarding.
