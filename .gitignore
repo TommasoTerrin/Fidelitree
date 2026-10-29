@@ -29,3 +29,6 @@ desktop.ini
 
 # Output del server di collaudo
 *.out
+
+# Contesto locale della CLI Neon
+.neon

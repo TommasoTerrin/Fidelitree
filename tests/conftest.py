@@ -7,6 +7,7 @@ tramite dependency_overrides.
 """
 
 import os
+import tempfile
 
 # Chiavi obbligatorie senza default: i valori di test vanno impostati PRIMA di importare l'app.
 os.environ.setdefault("ENCRYPTION_KEY", "dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcy0hISE=")  # 32 byte base64 urlsafe
@@ -17,6 +18,9 @@ os.environ.setdefault("CARD_LINK_KEY", "test-card-link-key-0123456789-abcdefg")
 os.environ["ADMIN_SECRET_KEY"] = "admin-key-di-prova-0123456789"
 os.environ["JWT_SECRET_KEY"] = "jwt-key-di-prova-0123456789-abcdef"
 os.environ["ZERNIO_CHECK_API_KEY"] = ""
+# Il lifespan dell'app (`with TestClient(app)`) esegue create_all sull'engine di app.main: con un `.env` che punta a
+# Neon i test lo toccherebbero. Un file SQLite temporaneo (non in-memory: l'engine ha un pool) lo impedisce sempre.
+os.environ["DATABASE_URL"] = "sqlite:///" + os.path.join(tempfile.gettempdir(), "fidelitree_pytest.db").replace("\\", "/")
 
 import pytest
 from fastapi.testclient import TestClient
