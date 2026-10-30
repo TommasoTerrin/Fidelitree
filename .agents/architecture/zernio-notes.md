@@ -176,7 +176,7 @@
 
 ## Collaudo finale del ticket 14 (esiti del founder, 2026-10-28)
 
-Procedura con i comandi: «Collaudo end-to-end» in [deploy.md](../workflows/deploy.md). Per ogni riga si scrive l'esito
+Procedura con i comandi: sezione «v0.3.0» di [collaudo.md](../workflows/collaudo.md) (fino al 2026-10-30 stava in `deploy.md`). Per ogni riga si scrive l'esito
 e, dove serve, i numeri misurati; nessun dato personale, token, IGSID o chiave.
 
 ### Non confermato o non riuscito (riepilogo, 2026-10-28)

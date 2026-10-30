@@ -161,6 +161,9 @@ ruff (lint) + mypy (type check) in pre-commit locale (vedi CI/CD sopra per il li
 
 ## Changelog
 
+- **2026-10-30** — **v0.3.0 in produzione** su `https://fidelitree.app` (tag `v0.3.0` su `a83cd64`): collaudo su Neon
+  `development`, env var cifrate su DO, Neon `production` azzerato con backup, dipendenze fissate dopo il primo deploy fallito
+  (SQLAlchemy 2.1), procedura di collaudo per feature (`collaudo.md`) e rollback di codice e schema in `deploy.md`.
 - **2026-10-27** — **v0.3.0** completa su `feature/instagram-cards` (ticket 01-13, 1049 test): carta via DM Instagram con
   Zernio (webhook, card con link segreto `/c/<token>`, invito a seguire per i non follower), onboarding Instagram del
   merchant dal pannello, pagina carta e PWA solo merchant, vecchio flusso cliente (OTP, wallet, `/join`, `Customer`)

@@ -2,28 +2,62 @@
 
 ## Come funziona
 
-- L'app su **DigitalOcean App Platform** builda il `Dockerfile` e fa **auto-deploy a ogni push su `main`**.
-- Il container ascolta su `$PORT` (iniettata da DO; default 8000 in locale).
-- Il database è **PostgreSQL** (Neon oggi, Supabase in un rilascio successivo): l'app lo raggiunge tramite `DATABASE_URL`.
-- Lo schema viene creato da `create_all()` all'avvio: crea **solo le tabelle mancanti**. Non aggiunge colonne a una tabella già esistente, né la modifica o la elimina (verificato: su una tabella `merchant` creata prima, una colonna nuova come `is_paused` non compare). Un DB già creato con un modello precedente va resettato con `python -m scripts.reset_db`.
+- **Due ambienti, nessuno staging** (AGENTS.md «Ambienti»): locale = app avviata direttamente con `.env` su Neon `development`;
+  produzione = app DO **`fidelitree`** (id `afc495df-7eb6-4da0-81f0-879446e1e710`, regione `fra`, `basic-xxs`, **1 istanza**,
+  dominio `https://fidelitree.app`) su Neon `production` (progetto `still-firefly-21838974`).
+- L'app builda il `Dockerfile` e fa **auto-deploy a ogni push su `main`** (con «Wait for CI» attivo DO aspetta prima la CI di
+  GitHub; controllarlo nella console, impostazioni della sorgente GitHub del componente).
+- Il container ascolta su `$PORT` (DO la imposta a 8080 = `http_port`), **un solo processo** uvicorn: il freno ai tentativi
+  di login sta in memoria, quindi niente `--workers` né più istanze finché non passa su DB.
+- **Health check** su `/health` (non tocca il DB) con 30 s di ritardo iniziale: all'avvio l'app crea le tabelle mancanti su Neon,
+  che può essere sospeso.
+- **Deploy fallito → DO torna da solo al deploy precedente** («automated rollback after failed deployment»): container che esce
+  con errore o health check che non passa. Il sito resta sulla versione di prima.
+- **Dipendenze fissate** in `requirements.txt` (`==`): senza versioni il build prendeva l'ultima release di tutto, e al primo
+  deploy di v0.3.0 SQLAlchemy 2.1 ha rotto l'avvio (per `postgresql://` sceglie psycopg 3, non installato). La CI gira su SQLite
+  e non lo vede: per aggiornarle vedi «Aggiornare le dipendenze».
+- **Database**: Neon, endpoint **diretto** (host senza `-pooler`). L'app è un processo con il suo pool SQLAlchemy
+  (5 connessioni, `pool_pre_ping`) e psycopg2: il pooler (PgBouncer in transaction mode) servirebbe con molti processi o istanze.
+- Lo schema viene creato da `create_all()` all'avvio: crea **solo le tabelle mancanti**, non aggiunge colonne né modifica tabelle
+  esistenti. **Dal 2026-10-30 in produzione ci sono dati veri: ogni modifica allo schema richiede prima uno script SQL/Alembic
+  provato su un branch Neon, e un branch di backup** (AGENTS.md «Modifiche allo schema»).
 
-## Env vars richieste su DigitalOcean
+## Env vars su DigitalOcean
+
+**Dove**: a livello del **componente `fidelitree`**, non «App-Level Environment Variables». Se la stessa variabile esiste in
+entrambi vince quella del componente (un vecchio `DATABASE_URL` sul componente scavalcherebbe quello nuovo dell'app).
+
+**Come (consigliato)**: Settings → card **App Spec** → Edit, incollando lo spec intero. Nello spec ogni variabile ha
+`scope: RUN_TIME`; quelle sensibili hanno `type: SECRET` e DO le **cifra al salvataggio** (poi compaiono come `EV[...]`, anche
+in `doctl`). Lo spec sostituisce tutte le variabili del componente, quindi toglie anche le vecchie. In alternativa la console
+del componente (editor in blocco): lì le variabili arrivano in chiaro, vanno cifrate e messe a «Run time» una per una e quelle
+vecchie cancellate a mano.
+
+> ⚠️ **Salvare lo spec o una variabile ridistribuisce subito il commit attivo**, anche con «Wait for CI». Prima del primo deploy
+> di v0.3.0 il commit attivo era v0.1.0: il suo deploy è fallito (`MERCHANT_PASSWORD` mancante) e DO è tornato da solo al
+> precedente, come atteso. **v0.1.0 stampa le variabili nel suo errore di validazione**: i log di quel deploy fallito
+> (`98569d46`) contengono frammenti di segreti. v0.3.0 no (`hide_input_in_errors`).
+
+> Una volta cifrato, `DATABASE_URL` non è più leggibile da `doctl`: l'host si verifica dopo il deploy registrando un negozio di
+> prova e controllando su quale branch Neon compare.
 
 Se ne manca una l'app **crasha all'avvio** (Settings pydantic con campi obbligatori):
 
 | Variabile | Descrizione |
 |---|---|
-| `DATABASE_URL` | URL Postgres completo (`postgresql://...?sslmode=require`) |
-| `JWT_SECRET_KEY` | firma dei token di sessione |
-| `ADMIN_SECRET_KEY` | chiave per gli endpoint admin (`X-Admin-Key`) e **password della dashboard `/admin`**. Non lasciarla vuota: con un valore vuoto l'accesso admin resta chiuso |
-| `ENCRYPTION_KEY` | (v0.3.0) chiave AES-256-GCM, 32 byte in base64 urlsafe: cifra chiave Zernio e secret del webhook dei merchant |
-| `IGSID_HMAC_KEY` | (v0.3.0) indice cieco dell'IGSID dei clienti. **Non ruotabile**: cambiarla scollega tutte le carte |
-| `CARD_LINK_KEY` | (v0.3.0) deriva il token dei link delle carte; cambiarla invalida tutti i link già inviati |
+| `DATABASE_URL` | URL Postgres del branch **`production`**, endpoint **diretto**: `neon connection-string production --project-id still-firefly-21838974` (restituisce il diretto con `sslmode=require&channel_binding=require`; **non stamparlo**: passalo in una variabile o in un file temporaneo fuori da OneDrive) |
+| `JWT_SECRET_KEY` | firma dei token di sessione. Generazione: `python -c "import secrets; print(secrets.token_urlsafe(32))"` |
+| `ADMIN_SECRET_KEY` | chiave degli endpoint admin (`X-Admin-Key`) e **password della dashboard `/admin`**. Lunga (≥ 20 caratteri; anche una passphrase di parole a caso): l'header `X-Admin-Key` **non ha freno ai tentativi**. Vuota = accesso admin chiuso |
+| `ENCRYPTION_KEY` | chiave AES-256-GCM, 32 byte in base64 urlsafe: cifra chiave Zernio e secret del webhook dei merchant |
+| `IGSID_HMAC_KEY` | indice cieco dell'IGSID dei clienti. **Non ruotabile**: cambiarla scollega tutte le carte |
+| `CARD_LINK_KEY` | deriva il token dei link delle carte; cambiarla invalida tutti i link già inviati |
 
-Generazione (una per variabile, valori diversi): `python -c "import secrets, base64; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())"`.
-Conservale anche fuori da DigitalOcean (password manager): perderle significa perdere le chiavi Zernio dei merchant e il collegamento delle carte.
+Generazione delle tre chiavi a 32 byte (una per variabile, valori diversi):
+`python -c "import secrets, base64; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())"`.
+Conserva tutte le chiavi anche fuori da DigitalOcean (password manager): perderle significa perdere le chiavi Zernio dei merchant
+e il collegamento delle carte. Le chiavi di produzione sono **diverse** da quelle del `.env` locale.
 
-Variabili **opzionali** (hanno un default), introdotte con v0.2.0:
+Variabili **opzionali** (hanno un default):
 
 | Variabile | Default | Descrizione |
 |---|---|---|
@@ -33,45 +67,61 @@ Variabili **opzionali** (hanno un default), introdotte con v0.2.0:
 | `ECOLOGI_BASE_URL` | `https://public.ecologi.com` | URL dell'API Ecologi, **unico** per test e produzione (non esiste un sandbox: la prova è il flag `"test": true`) |
 | `ECOLOGI_API_KEY` | vuota | chiave Ecologi **reale** di piattaforma (paga il founder); usata con `ECOLOGI_TEST_MODE=false` |
 | `ECOLOGI_TEST_API_KEY` | vuota | chiave Ecologi **di prova**; usata con `ECOLOGI_TEST_MODE=true`. Nessun fallback tra le due chiavi |
-| `ECOLOGI_TEST_MODE` | `true` | `true` = chiave di test + flag `test` (nessun addebito, nulla sul profilo Ecologi); `false` SOLO in produzione. In produzione: `ECOLOGI_TEST_MODE=false` + `ECOLOGI_API_KEY`; in locale: `true` + `ECOLOGI_TEST_API_KEY` |
+| `ECOLOGI_TEST_MODE` | `true` | `true` = chiave di test + flag `test` (nessun addebito, nulla sul profilo Ecologi); `false` SOLO in produzione, con `ECOLOGI_API_KEY` |
 | `ECOLOGI_GLOBAL_MONTHLY_CAP` | `20` | massimo alberi piantati in una chiusura mensile |
 | `TIER_BRONZE_POINTS` / `TIER_SILVER_POINTS` / `TIER_GOLD_POINTS` | `100` / `300` / `600` | soglie di default dei livelli del pool (override per negozio nel DB) |
-| `ENCRYPTION_KEY_ID` | `1` | (v0.3.0) id della chiave di cifratura salvato con ogni dato cifrato (rotazione futura) |
-| `PUBLIC_BASE_URL` | `http://127.0.0.1:8001` | (v0.3.0) URL pubblico **https** dell'app: link delle carte e URL del webhook su Zernio. In produzione il dominio dell'app. **Se cambia, i merchant devono rifare l'onboarding Instagram** (il webhook su Zernio punta al vecchio URL) |
-| `ZERNIO_BASE_URL` | `https://zernio.com/api` | (v0.3.0) URL dell'API Zernio (valore della spec ufficiale, confermato nel collaudo del ticket 05) |
-| `INSTAGRAM_CARD_KEYWORD` | `CARTA` | (v0.3.0) parola chiave che il cliente scrive in DM al negozio |
-| `ZERNIO_MONTHLY_SEND_LIMIT` | `10000` | (v0.3.0) invii gratuiti al mese per team Zernio (solo per l'avviso: è Zernio a fermare gli invii) |
-| `ZERNIO_SEND_WARN_PERCENT` | `75` | (v0.3.0) soglia di avviso nel pannello del merchant |
-| `ZERNIO_CHECK_API_KEY` | vuota | (v0.3.0) **solo locale**, per `scripts.zernio_check` senza `--merchant-id`: chiave Zernio di prova, letta dal `.env` o dall'ambiente (campo opzionale di `Settings`, mai stampato). Vuota = lo script la chiede a video. Non serve in produzione |
+| `ENCRYPTION_KEY_ID` | `1` | id della chiave di cifratura salvato con ogni dato cifrato (rotazione futura) |
+| `PUBLIC_BASE_URL` | `http://127.0.0.1:8001` | URL pubblico **https** dell'app: link delle carte e URL del webhook su Zernio. In produzione `https://fidelitree.app`. **Se cambia, i merchant devono rifare l'onboarding Instagram** (il webhook su Zernio punta al vecchio URL) |
+| `ZERNIO_BASE_URL` | `https://zernio.com/api` | URL dell'API Zernio (valore della spec ufficiale, confermato nel collaudo del ticket 05) |
+| `INSTAGRAM_CARD_KEYWORD` | `CARTA` | parola chiave che il cliente scrive in DM al negozio |
+| `ZERNIO_MONTHLY_SEND_LIMIT` | `10000` | invii gratuiti al mese per team Zernio (solo per l'avviso: è Zernio a fermare gli invii) |
+| `ZERNIO_SEND_WARN_PERCENT` | `75` | soglia di avviso nel pannello del merchant |
+| `ZERNIO_CHECK_API_KEY` | vuota | **solo locale**, per `scripts.zernio_check` senza `--merchant-id`. Non serve in produzione |
 
-Eliminate da v0.2.0 (cancellabili da DO): `MERCHANT_PASSWORD`. Storiche non più usate: `HUMANI_*`, `TELEGRAM_BOT_TOKEN`, `BASE_URL`, `DATABASE_PASSWORD`.
+**In produzione dal 2026-10-30** (10 variabili, tutte `RUN_TIME`): `ENVIRONMENT=production`, `AUTH_PROVIDER=local`,
+`PUBLIC_BASE_URL=https://fidelitree.app`, `ECOLOGI_TEST_MODE=true` in chiaro; `DATABASE_URL`, `ENCRYPTION_KEY`, `IGSID_HMAC_KEY`,
+`CARD_LINK_KEY`, `ADMIN_SECRET_KEY`, `JWT_SECRET_KEY` come `SECRET`. **Manca `ECOLOGI_TEST_API_KEY`** (serve a `ecologi_check` e
+`close_period` dalla console, non all'avvio). Tolte dallo spec le variabili di v0.1.0: `HUMANI_*`, `TELEGRAM_BOT_TOKEN`,
+`MERCHANT_PASSWORD`, `DATABASE_PASSWORD`, `BASE_URL`, `ECOLOGI_URL`, `ECOLOGI_SANDBOX_URL`, `ECOLOGI_SANDBOX_API_KEY`.
 
-> ⚠️ **`ENCRYPTION_KEY` torna in v0.3.0 con un significato nuovo** (AES-256-GCM per le chiavi Zernio). Se su DigitalOcean
-> è rimasta la vecchia chiave Fernet di v0.1.0, **sostituiscila con una generata da zero**: ha lo stesso formato e
-> verrebbe accettata in silenzio. Lo stesso vale per `IGSID_HMAC_KEY` e `CARD_LINK_KEY`: tre valori nuovi e diversi.
+## Primo deploy di v0.3.0 (fatto il 2026-10-30)
 
-> ⚠️ **Schema v0.3.0**: `create_all()` non modifica le tabelle esistenti. Il passaggio al nuovo modello (email, pool, carte con indice cieco, webhook, `AuthCredential`, `Merchant.is_paused` e `Merchant.created_at`...) richiede il reset del DB (`python -m scripts.reset_db`): i dati di v0.1.0 non si migrano. **Anche un DB di sviluppo o di collaudo creato prima del ticket 12** (Neon di sviluppo, `collaudo*.db`) va resettato: senza le colonne nuove l'app dà errore alla prima lettura dei merchant. Vedi «Primo deploy di v0.3.0».
+Com'è andato davvero, in ordine. Vale anche come procedura per un ambiente nuovo.
 
-> **Accesso in produzione**: con `ENVIRONMENT=production` il provider `dev` non parte e `supabase` è uno stub, quindi si usa **`AUTH_PROVIDER=local`** (i merchant si registrano da `/merchant/register`, accedono e cambiano la password dalle impostazioni). Il founder li gestisce dalla dashboard **`/admin`** (password = `ADMIN_SECRET_KEY`): avvia (approva), mette in pausa, riattiva e reimposta le password (vedi «Procedure del founder»). Auth locale (ticket 11), stato del servizio (12) e dashboard (13) sono fatti: il primo deploy aspetta solo il collaudo end-to-end (ticket 14) e l'ok esplicito al merge.
-
-## Primo deploy di v0.3.0 (ordine delle operazioni)
-
-v0.3.0 è la prima release dopo v0.1.0: schema e variabili cambiano insieme. Ordine:
-
-1. **Env var su DigitalOcean, prima del merge**: genera da zero `ENCRYPTION_KEY`, `IGSID_HMAC_KEY` e `CARD_LINK_KEY` (tre valori diversi, comando sopra) e salvale nel password manager; imposta `PUBLIC_BASE_URL` = dominio https di produzione, `ENVIRONMENT=production`, **`AUTH_PROVIDER=local`**; lascia `DEV_AUTH_PASSWORD` non impostata. Senza le tre chiavi l'app non parte; la vecchia `ENCRYPTION_KEY` Fernet va sostituita.
-2. **Reset del DB di produzione** (distruttivo: i dati di v0.1.0 non si migrano). In locale, in un terminale dedicato e solo dopo aver controllato **a quale DB punta**:
-   ```powershell
-   $env:DATABASE_URL = "<URL Postgres di produzione>"    # solo in questo terminale
-   python -m scripts.reset_db                             # chiede conferma
-   Remove-Item Env:DATABASE_URL
-   ```
-   Il seed non è per la produzione (richiede `AUTH_PROVIDER=dev`). Eventuali tabelle di versioni precedenti non più nel modello (per esempio `customer`) restano nel DB come orfane, innocue: si possono eliminare a mano dalla console. Il reset lascia l'app vecchia senza schema valido fino al deploy: fallo subito prima del merge.
-3. Procedura di release (sotto): merge su `main`, deploy, smoke test.
-4. **Verifica del login (dopo il deploy)**: registra un negozio di prova e sbaglia la password: dal 3° errore la risposta avvisa del blocco, al 6° tentativo (anche con la password giusta) arriva 429 con l'invito a chiedere il reset al founder; dopo 15 minuti si rientra. Il freno è **per email** e il contatore sta in **memoria** (un solo processo: non impostare `--workers` né più istanze su DO finché non è spostato su DB; vedi roadmap).
-4b. **Verifica della dashboard (dopo il deploy)**: apri `https://<app>/admin`, accedi con `ADMIN_SECRET_KEY` (in produzione il cookie è `Secure`: serve https), controlla che il negozio di prova del passo 4 compaia «In attesa» con nome ed email, «Avvia» lo rende «Attivo», «Metti in pausa» e «Riattiva» funzionano, «Reimposta password» mostra una password di 12 caratteri una sola volta; poi elimina il negozio di prova (API admin: `DELETE /api/merchant/{id}` con `X-Admin-Key`, che toglie anche la sua credenziale). Lo smoke test controlla già `/admin/login` e l'API admin.
-5. **Onboarding dei merchant pilota**: ogni merchant, dalle impostazioni, incolla la **propria** chiave Zernio e sceglie il suo account Instagram; il DM di prova collega Instagram, e il founder lo **avvia** dalla dashboard (finché non è avviato i clienti nuovi vedono la carta di prova). Zernio deve poter raggiungere `PUBLIC_BASE_URL`. Se `PUBLIC_BASE_URL` cambia, ogni merchant deve rifare l'onboarding (scollega/ricollega): il webhook su Zernio punta al vecchio URL.
-6. **`/privacy`**: il testo è una bozza; il founder la fa verificare (e prepara il DPA, fuori scope) prima di dare il link ai primi clienti.
-7. **Istruzioni ai merchant, una riga sul QR in negozio**: per stampare un QR che apre la chat, contattare il founder, che lo prepara a mano da `https://ig.me/m/<username>`.
+1. **Collaudo in locale** su Neon `development` con tunnel, `ENVIRONMENT=production` e `AUTH_PROVIDER=local` (`collaudo.md`).
+2. **Password del DB di produzione ruotata.** I branch Neon nati da `production` ereditano ruolo e password: `development` aveva la
+   stessa password di `production`, ed era in chiaro su DO e nel `.env`. Il reset vale per un solo branch:
+   `neon api /projects/still-firefly-21838974/branches/<id-branch>/roles/neondb_owner/reset_password -X POST`
+   (la risposta contiene la password nuova: non stamparla). Il `.env` (development) non cambia.
+3. **Env var su DO** con lo spec (sezione sopra). Il salvataggio ha ridistribuito v0.1.0, fallito, e DO è tornato al precedente.
+4. **Backup e azzeramento di Neon `production`**, subito prima del merge su `main` (dopo il punto 3: se v0.1.0 fosse ripartito su
+   `production` avrebbe potuto ricreare le sue tabelle):
+   - backup: `neon branches create --project-id still-firefly-21838974 --name backup-pre-v0.3.0 --parent production --no-compute --no-secrets`;
+   - azzeramento: `DROP SCHEMA public CASCADE; CREATE SCHEMA public;` e poi `SQLModel.metadata.create_all(engine)`, con uno script
+     usa-e-getta che riceve l'URL in una variabile d'ambiente, **verifica l'host atteso** (`ep-proud-darkness`) e non stampa l'URL.
+     **Non `scripts.reset_db`**: fa `drop_all` delle sole tabelle del modello attuale, lascia le tabelle orfane delle versioni
+     precedenti (`treecard`, `alembic_version`) e fallisce sulle loro chiavi esterne;
+   - verifica: 8 tabelle (`authcredential`, `card`, `merchant`, `merchantpool`, `pointtransaction`, `processedwebhookevent`,
+     `treeplanting`, `zerniosendcounter`), 0 righe, enum `webhookoutcome` con `SEND_UNCERTAIN`.
+5. **PR e deploy**: `feature/instagram-cards` → `develop` (PR #2) → `main` (PR #3), CI verde a ogni passo. Il deploy di `956583c` è
+   fallito all'avvio (`No module named 'psycopg'`, SQLAlchemy 2.1): corretto con le dipendenze fissate (PR #4 e #5), deploy riuscito
+   su **`a83cd64`**, `/health` 0.3.0, log di avvio senza segreti. Tag **`v0.3.0`** su `a83cd64`.
+6. **Dopo il deploy** (passi del founder):
+   - smoke test (sotto, «Procedura di release»);
+   - **verifica del login**: registra un negozio di prova e sbaglia la password: dal 3° errore la risposta avvisa, al 6° tentativo
+     (anche con la password giusta) arriva 429 con l'invito a chiedere il reset; dopo 15 minuti si rientra;
+   - **verifica della dashboard**: `https://fidelitree.app/admin`, accedi con `ADMIN_SECRET_KEY`; il negozio di prova compare «In
+     attesa», «Avvia» lo rende «Attivo», «Metti in pausa» e «Riattiva» funzionano, «Reimposta password» mostra una password di 12
+     caratteri una sola volta;
+   - **DM in produzione**: collega Instagram al negozio di prova (`/merchant/settings`), `CARTA` da un profilo che segue → card →
+     `https://fidelitree.app/c/<token>`;
+   - **DB giusto**: il negozio di prova deve comparire su Neon `production` e non su `development` (prova che il `DATABASE_URL`
+     cifrato punta al branch giusto);
+   - negozio di prova: tenerlo come demo del founder, oppure scollegarlo ed eliminarlo (`DELETE /api/merchant/{id}` con `X-Admin-Key`,
+     toglie anche la credenziale).
+7. **Prima di dare il link ai pilota**: `/privacy` verificata (il testo è una bozza; DPA fuori scope); ai merchant una riga sul QR in
+   negozio: per stamparlo contattano il founder, che lo prepara a mano da `https://ig.me/m/<username>`. Onboarding di ogni merchant
+   con la **propria** chiave Zernio; il founder lo **avvia** dalla dashboard (finché non è avviato i clienti nuovi vedono la carta di prova).
 
 ## Procedure del founder (dashboard `/admin`)
 
@@ -110,18 +160,61 @@ history della shell, mettila in una variabile d'ambiente del terminale.
 
 ## Procedura di release
 
-1. Completa la checklist `.agents/checklists/pre-release.md` e i passi 1-2 di «Primo deploy di v0.3.0» (solo la prima volta).
-2. `git checkout main && git merge develop && git push` → parte il deploy automatico.
-3. Attendi il deploy dalla console DO (build + health check su `/health`).
-4. Smoke test: `python scripts/smoke_test_prod.py https://<app>.ondigitalocean.app <ADMIN_SECRET_KEY>` (controlla versione `0.3.0`, `/privacy`, `/carta-di-prova`, `/admin/login`, `/c/<inesistente>` 404, webhook con hook sconosciuto 404, manifest e service worker, pagine del vecchio flusso 404, API admin senza chiave 403, `/admin/api/merchants` 401 senza credenziali e 200 con `X-Admin-Key`).
-5. Verifica il DB (console Neon/Supabase → tabelle `merchant`, `authcredential`, `card`, `pointtransaction`, `merchantpool`, `treeplanting`, `processedwebhookevent`, `zerniosendcounter` presenti).
-6. Tag: `git tag vX.Y.Z && git push --tags`.
-7. Riallinea develop: `git checkout develop && git merge main && git push`.
+1. **Collaudo manuale** in locale (`collaudo.md`) e checklist `pre-release.md`.
+2. **Se cambia lo schema**: script SQL/Alembic provato su un branch Neon, e branch di backup di `production` subito prima del merge
+   (vedi «Rollback»). Se cambiano le env var: spec DO aggiornato prima del merge (ricorda che il salvataggio ridistribuisce il commit attivo).
+3. **PR** `feature/<nome>` → `develop` (`gh pr create --base develop`), CI verde, merge; poi PR `develop` → `main`, CI verde, merge:
+   parte il deploy automatico. Nessun merge su `develop`/`main` senza l'ok esplicito del founder.
+4. **Segui il deploy**: console DO, oppure `doctl apps list-deployments afc495df-7eb6-4da0-81f0-879446e1e710` (fasi
+   `PENDING_BUILD` → `BUILDING` → `DEPLOYING` → `ACTIVE`). Se compare `automated rollback after failed deployment`, il deploy è
+   fallito e il sito è rimasto com'era: leggi la causa con
+   `doctl apps logs afc495df-7eb6-4da0-81f0-879446e1e710 --deployment <id> --type deploy` (senza incollare in chat righe con valori).
+5. **Smoke test** con la chiave admin digitata nascosta (una riga per volta; lo script legge `ADMIN_SECRET_KEY` dall'ambiente se non
+   gliela passi come argomento, così non finisce nella history):
+   ```powershell
+   $k = Read-Host "Chiave admin" -AsSecureString
+   $env:ADMIN_SECRET_KEY = [Net.NetworkCredential]::new('', $k).Password
+   python scripts/smoke_test_prod.py https://fidelitree.app
+   Remove-Item Env:ADMIN_SECRET_KEY; Remove-Variable k
+   ```
+   Controlla versione, `/privacy`, `/carta-di-prova`, `/admin/login`, `/c/<inesistente>` 404, webhook con hook sconosciuto 404,
+   manifest e service worker, pagine del vecchio flusso 404, API admin senza chiave rifiutata e con `X-Admin-Key` 200, creazione e
+   cancellazione di un merchant di prova.
+6. **Verifica il DB** (console Neon, branch `production`): le 8 tabelle presenti.
+7. **Tag**, con l'ok del founder: `git tag -a vX.Y.Z <commit di main> -m "..."` e `git push origin vX.Y.Z` (stesso valore di `pyproject.toml`).
+8. **Riallinea develop**: `git checkout develop`, `git merge --ff-only origin/main`, `git push`.
 
 ## Rollback
 
-Dalla console DigitalOcean: Deployments → seleziona il deploy precedente → "Rollback".
-In alternativa: `git revert` del merge su main e push (nuovo deploy).
+- **Deploy fallito**: non serve fare nulla, DO torna da solo al deploy precedente (successo due volte al primo deploy di v0.3.0).
+- **Deploy riuscito ma con un bug grave** (codice):
+  1. subito: console DO → **Activity / Deployments** → deploy precedente → **«Rollback»** (torna all'immagine di prima, senza build);
+  2. poi: `git revert -m 1 <commit di merge su main>` su un branch, PR verso `main` e merge: senza questo il prossimo push su `main`
+     ripubblica il bug. In alternativa al punto 1 basta il revert (nuovo deploy, qualche minuto di build).
+- **Schema o dati** (git non basta: il codice torna indietro, il DB no):
+  1. **prima** di ogni modifica allo schema, un branch di backup:
+     `neon branches create --project-id still-firefly-21838974 --name backup-<AAAA-MM-GG> --parent production --no-compute --no-secrets`;
+  2. per tornare indietro: `neon branches restore production backup-<AAAA-MM-GG> --preserve-under-name production-rotto --project-id still-firefly-21838974`
+     (il branch `production` riprende i dati del backup, quello rotto resta come `production-rotto` per capire cosa è successo). Secondo
+     la documentazione Neon il ripristino mantiene branch ed endpoint, quindi `DATABASE_URL` non cambia: **da provare la prima volta su
+     un branch di prova** (per esempio `development` ripristinato da un suo backup);
+  3. senza backup, un istante del passato: `neon branches restore production ^self@<timestamp ISO> --preserve-under-name production-rotto`
+     (solo entro la finestra di cronologia del piano Neon);
+  4. **codice e schema tornano indietro insieme**: un codice vecchio che si aspetta lo schema vecchio vuole anche il DB ripristinato
+     (e i dati scritti dopo il backup si perdono).
+- **Env var**: i valori `SECRET` di uno spec precedente non si rileggono dalla console: le chiavi stanno nel password manager. Un
+  `IGSID_HMAC_KEY` o un `CARD_LINK_KEY` diversi scollegano le carte o invalidano i link.
+- Backup esistenti: `backup-pre-v0.3.0` (resti del prototipo v0.1.0 prima dell'azzeramento del 2026-10-30, nessun dato di valore:
+  si può eliminare).
+
+## Aggiornare le dipendenze
+
+Le versioni in `requirements.txt` sono fissate. Per aggiornarle:
+1. nel venv: `pip install -U <pacchetti>` (SQLAlchemy resta `<2.1` finché il driver è psycopg2), poi `pip check`;
+2. `python -m pytest`;
+3. **avvio vero su Neon `development`**: `python -m scripts.run_collaudo`, poi `/health` e una pagina che legge il DB
+   (`/admin` → lista dei merchant). La CI non lo fa: gira su SQLite;
+4. riporta in `requirements.txt` le versioni installate (`pip show <pacchetto>`), PR: la CI ripete pytest, build Docker e pip-audit.
 
 ## Chiusura mensile degli alberi (`scripts.close_period`)
 
@@ -141,134 +234,14 @@ python -m scripts.close_period --yes            # salta la conferma (NON il bloc
 - Codici di uscita: `0` ok · `1` divergenze contatore/registro o cap sforato non autorizzato · `2` annullato · `3` almeno un negozio fallito (si ritenta rilanciando).
 - Lo scan del merchant non pianta mai alberi: la piantumazione avviene solo qui.
 
-## Collaudo locale (DB usa-e-getta)
+## Collaudo manuale
 
-`reset_db` e `seed_db` agiscono sul `DATABASE_URL` del `.env`: **se punta a Neon/Supabase cancellano i dati veri**.
-Per il collaudo usa un SQLite su file, sovrascrivendo la variabile solo nel terminale (le env var vincono sul `.env`):
+Procedura, regole e passi per feature: [collaudo.md](collaudo.md).
 
-```powershell
-$env:DATABASE_URL = "sqlite:///collaudo.db"     # file ignorato da git (*.db)
-python -m scripts.reset_db --force
-python -m scripts.seed_db --links                # stampa credenziali, id delle carte e (con --links) link /c/<token> di prova
-python local_main.py                             # http://127.0.0.1:8001
-```
+## Reset/seed di un DB (distruttivo!)
 
-Per tornare al DB del `.env`: chiudi il terminale o `Remove-Item Env:DATABASE_URL`. Checklist completa: `pre-release.md`.
-
-### Collaudo end-to-end del flusso Instagram (v0.3.0)
-
-Zernio deve raggiungere il server locale via https: si usa un tunnel rapido **cloudflared** (gratuito, nessun account;
-installazione: `winget install --id Cloudflare.cloudflared`). Servono: un account Instagram **Business o Creator** di
-prova (il "negozio") collegato a un account Zernio gratuito; un profilo personale **A** che **segue** il negozio e uno
-**B** che **non** lo segue; uno smartphone (PWA e Instagram mobile); ManyChat scollegato dal negozio (salvo il passo 9).
-Tre terminali PowerShell nella root del progetto. **Mai** incollare in chat chiavi, token dei link, IGSID o testo dei
-messaggi: negli esiti si scrive solo «ok/non ok» e i numeri misurati.
-
-**Passo 1 — tunnel, DB usa-e-getta, server con log**
-
-```powershell
-# Terminale 1: tunnel. Copia l'URL https://<nome>.trycloudflare.com stampato (cambia a ogni avvio)
-cloudflared tunnel --url http://127.0.0.1:8001
-```
-
-```powershell
-# Terminale 2: server. Le env var del terminale vincono sul .env: il DB vero NON viene toccato
-$env:DATABASE_URL = "sqlite:///collaudo11.db"
-$env:AUTH_PROVIDER = "local"      # serve ai passi 10-11: con `dev` il reset password dalla dashboard risponde 400
-$env:PUBLIC_BASE_URL = "https://<nome>.trycloudflare.com"
-python -m scripts.reset_db --force
-python -c "import logging,sys; h=logging.StreamHandler(sys.stdout); h.setFormatter(logging.Formatter('%(asctime)s.%(msecs)03d %(name)s %(message)s')); a=logging.getLogger('app'); a.setLevel(logging.INFO); a.addHandler(h); import uvicorn; uvicorn.run('app.main:app', host='127.0.0.1', port=8001)" | Tee-Object -FilePath collaudo11.log
-```
-
-Il comando `python -c` avvia lo stesso `app.main:app` di `local_main.py` (senza hot-reload) ma mostra anche i log
-`info` dell'app con l'ora (`local_main.py` mostra solo quelli di uvicorn) e li copia in `collaudo11.log` (ignorato da
-git). Prima di lanciare gli script, nel **terminale 3** imposta lo stesso `$env:DATABASE_URL = "sqlite:///collaudo11.db"`
-(gli script `--merchant-id` leggono il DB da lì) e verifica con `$env:DATABASE_URL` che non punti a Neon.
-
-**Passo 2 — registrazione e onboarding**: nel browser apri `http://127.0.0.1:8001/merchant/register`, registra un
-negozio (nome ≤ 80 caratteri: è il titolo della card), poi `/merchant/settings` → sezione Instagram: incolla la tua
-chiave Zernio, «COLLEGA ZERNIO», scegli l'account, «COLLEGA ACCOUNT». Controlla: il pannello passa allo stato «in attesa del DM di prova»; su Zernio
-(dashboard) compare un webhook con URL `<tunnel>/webhooks/zernio/…`; nella chat del negozio su Instagram (mobile)
-compare il menu «🌳 La mia carta». Poi, nel terminale 3: `python -m scripts.zernio_check conversations --merchant-id 1`
-(stampa lo stato del negozio con la chiave mascherata e le conversazioni: `id  data`).
-
-**Passo 2b — approva il negozio** (dal ticket 12): un negozio appena registrato è «in attesa», quindi il DM `CARTA` di un cliente nuovo porta alla **carta di prova** (`/carta-di-prova`), non a `/c/<token>`, e lo scanner non aggiunge nulla. Per provare la carta vera avvia il negozio dalla dashboard: apri `http://127.0.0.1:8001/admin`, accedi con `ADMIN_SECRET_KEY` del tuo `.env` (non incollarla in chat né nei log) e premi «Avvia» (in alternativa `POST http://127.0.0.1:8001/api/merchant/1/approve` con l'header `X-Admin-Key`). Se vuoi provare anche la carta di prova, fai prima il passo 3 **senza** approvare: deve aprirsi `/carta-di-prova` con l'etichetta «CARTA DI PROVA», senza QR e senza dati; poi approva e riscrivi `CARTA`.
-
-**Passo 3 — DM da un follower**: da **A** scrivi `CARTA` al negozio. Annota l'ora sul telefono in cui invii, l'ora
-della riga `Webhook: negozio=1 evento=… esito=sent` nel terminale 2 e l'ora in cui la card compare sul telefono (per
-la latenza). Tocca «Apri la carta» (il link passa dal tunnel): deve aprirsi `/c/<token>` con i punti a 0 e il QR. Il
-pannello del negozio passa allo stato «attivo». Sul telefono del merchant apri `<tunnel>/merchant/login`, accedi, installa la
-PWA (menu del browser → «Aggiungi a schermata Home»), apri lo **scanner**, inquadra il QR della pagina carta
-(mostrata su un altro schermo), aggiungi **60 tree points**: toast di conversione; ricarica la pagina carta: punti e
-cashback nuovi.
-
-**Passo 4 — voce di menu**: da **A**, nella chat del negozio tocca «🌳 La mia carta»: arriva la stessa card con lo stesso
-link (riga di log `esito=sent`; se non arriva nulla annota anche se compare una riga di log).
-
-**Passo 5 — non follower**: da **B** scrivi `CARTA`. Annota: la riga di log (`esito=follow_requested` = `isFollower`
-falso, testo di invito consegnato; `sent`/`fallback_sent` = la card è partita, quindi `isFollower` era `true`/`null`;
-nessuna riga = il webhook non è arrivato, per esempio DM in **Requests**: guarda anche i tentativi di consegna del
-webhook nella dashboard Zernio, se li mostra), dove compare il messaggio su Instagram (Generale o Requests) e se la
-risposta è arrivata. Poi **B segue il negozio** e riscrive `CARTA` subito dopo (se arriva ancora l'invito, riprova dopo
-uno-due minuti e annota il ritardo di `isFollower`): deve arrivare la card. Se la dashboard Zernio mostra i payload
-consegnati, annota il valore di `isFollower` visto (`true`, `false`, `null` o assente).
-
-**Passo 6 — evento duplicato** (terminale 3; usa un `conversation.id` di `zernio_check conversations --merchant-id 1`,
-è quello della chat di **A**; il server proverà un invio **vero** su quella chat):
-
-```powershell
-python -m scripts.replay_webhook --merchant-id 1 --conversation-id <ID> --follower si --event-id collaudo-dup-1
-python -m scripts.replay_webhook --merchant-id 1 --conversation-id <ID> --follower si --event-id collaudo-dup-1
-```
-
-Atteso: entrambe `HTTP 200`, **una sola** card in arrivo sul telefono di A, nel log una riga `evento già visto`. Altre
-prove con lo stesso comando (ogni volta un `--event-id` nuovo): senza `--follower` (`isFollower` assente → card),
-`--follower no` (invito), `--standby` (esito `standby` e avviso nel pannello del negozio), `--hours-ago 25` (esito
-`out_of_window`, nessun invio).
-
-**Passo 7 — controllo dei log** (a fine collaudo, nel terminale 3):
-
-```powershell
-Select-String -Path collaudo11.log -Pattern "/c/|/webhooks/zernio/"     # solo /c/*** e /webhooks/zernio/***
-Select-String -Path collaudo11.log -Pattern "sk_|zrk_|igsid|Authorization|secret"   # nessun risultato
-```
-
-In più cerca nel log il testo che un cliente ha scritto e, se la conosci, la parte finale del token del tuo link:
-non devono comparire. Il log mostra solo id del negozio, id dell'evento ed esito.
-
-**Passo 8 — «Scollega»**: dal pannello, «Scollega»: il webhook sparisce dalla dashboard Zernio (la voce di menu resta
-su Instagram, è atteso); il pannello torna al form di collegamento; una nuova `CARTA` non riceve risposta. Se vuoi
-ripetere il collaudo, ricollega (nuovo webhook) o riparti dal passo 1.
-
-**Passo 9 — ManyChat/standby (facoltativo)**: collega ManyChat (o un'altra app di messaggistica) all'account del
-negozio, imposta il negozio come in passo 2 e scrivi `CARTA` da **A**: annota se la card parte, se la riga di log è
-`esito=standby`, e se il pannello mostra l'avviso sull'altra app. Poi scollega ManyChat.
-
-**Passo 10 — stato del servizio e dashboard (browser)**: con il negozio ancora «in attesa» (prima del passo 2b) e Instagram collegato,
-da **A** scrivi `CARTA`: si apre `/carta-di-prova`, nessuna carta vera. Apri `http://127.0.0.1:8001/admin`, accedi con `ADMIN_SECRET_KEY`:
-il negozio compare «In attesa» con nome ed email; prova filtro e ricerca; «Avvia» → «Attivo» e un nuovo `CARTA` da A dà la carta vera.
-«Metti in pausa»: nello scanner compare il banner e i pulsanti di aggiunta sono grigi (togliere funziona), la pagina carta del cliente è
-identica; «Riattiva». Con la sessione admin aperta, un 429 si prova con 6 password sbagliate in una finestra anonima; «Esci» chiude la sessione.
-
-**Passo 11 — account e log**: «Reimposta password» sul negozio → «Copia» la temporanea (si vede una sola volta). Verifica: con quella il
-merchant entra, con la vecchia no, la sua sessione già aperta decade (ricaricando una pagina merchant torna al login), poi la cambia da
-Impostazioni → «Cambia password». Sei password sbagliate al login merchant → 429 con l'invito a chiedere il reset; un reset lo sblocca subito.
-Infine, nel terminale 3, `Select-String -Path collaudo11.log -Pattern "<la password temporanea>|<ADMIN_SECRET_KEY>"` (incollando i valori solo qui,
-mai in chat): nessun risultato. Il log non deve contenere password, hash o chiave admin.
-
-> Le parti non-browser dei passi 10-11 (stati dello scanner, azioni admin con controllo `Origin`, reset, cambio password, freni, log senza segreti)
-> sono già state verificate via HTTP il 2026-10-27 (vedi `current.md`): nel browser si controlla ciò che quel giro non vede (pagina, pulsanti, «Copia», cookie).
-
-Esiti nel [log del collaudo](../architecture/zernio-notes.md) (tabella «Collaudo finale del ticket 14»). Il tunnel rapido
-cambia URL a ogni avvio: dopo un riavvio del tunnel riavvia il server con il nuovo `PUBLIC_BASE_URL` e rifai l'onboarding.
-A fine collaudo: chiudi i terminali (le env var spariscono) ed elimina `collaudo11.db` e `collaudo11.log`.
-
-## Reset/seed del DB remoto (distruttivo!)
-
-Solo se i dati sono sacrificabili (il seed richiede `AUTH_PROVIDER=dev`, quindi non è per la produzione vera).
-In locale, con il `DATABASE_URL` remoto nel `.env`:
-
-```bash
-python -m scripts.reset_db      # chiede conferma (--force per saltare)
-python -m scripts.seed_db       # solo con AUTH_PROVIDER=dev
-```
+- **Mai su Neon `production`**: lì ci sono dati veri. Per lo schema vale «Modifiche allo schema = migrazione preparata prima».
+- `scripts.reset_db` e `scripts.seed_db` agiscono sul `DATABASE_URL` del `.env` (Neon `development`) o su quello del terminale
+  (SQLite usa-e-getta: `collaudo.md`). Il seed richiede `AUTH_PROVIDER=dev`.
+- `reset_db` non elimina le tabelle che non sono nel modello attuale: per ripartire davvero da zero su un branch Neon serve
+  `DROP SCHEMA public CASCADE; CREATE SCHEMA public;` e `create_all` (punto 4 di «Primo deploy di v0.3.0»).
