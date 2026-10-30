@@ -1,0 +1,12 @@
+{# Toast di feedback condiviso: da includere a fine <body>; espone showToast(messaggio, isError, ms). #}
+<div id="toast"
+    class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 px-6 py-3 rounded-2xl text-white font-bold shadow-xl z-50 transition-all">
+</div>
+<script>
+    function showToast(message, isError = false, durationMs = 3000) {
+        const toast = document.getElementById('toast');
+        toast.textContent = message;
+        toast.className = `fixed bottom-6 left-1/2 -translate-x-1/2 px-6 py-3 rounded-2xl text-white font-bold shadow-xl z-50 transition-all ${isError ? 'bg-red-500' : 'bg-green-600'}`;
+        setTimeout(() => { toast.classList.add('hidden'); }, durationMs);
+    }
+</script>

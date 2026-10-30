@@ -1,0 +1,12 @@
+{# Macro condivise per i livelli del pool: {% from 'partials/levels.html' import level_name, level_medal %} #}
+{% macro level_name(level) -%}
+{{ {'none': 'Nessun livello', 'bronze': 'Bronzo', 'silver': 'Argento', 'gold': 'Oro'}[level.value] }}
+{%- endmacro %}
+
+{% macro level_medal(level) -%}
+{{ {'none': '🌱', 'bronze': '🥉', 'silver': '🥈', 'gold': '🥇'}[level.value] }}
+{%- endmacro %}
+
+{% macro trees_phrase(n) -%}
+{{ n }} {{ 'albero' if n == 1 else 'alberi' }}
+{%- endmacro %}

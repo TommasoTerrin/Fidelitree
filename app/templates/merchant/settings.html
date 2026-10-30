@@ -1,0 +1,366 @@
+{% from 'partials/service_banner.html' import service_banner %}
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Impostazioni - Fidelitree</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    {% include 'partials/pwa.html' %}
+</head>
+
+<body class="bg-slate-50 min-h-screen p-6 font-sans">
+    <div class="max-w-sm mx-auto space-y-6">
+
+        <div class="flex justify-between items-center">
+            <h1 class="text-xl font-black text-slate-800">Impostazioni 🌳</h1>
+            <a href="/merchant/scanner" class="text-xs bg-slate-900 text-white px-4 py-2 rounded-xl font-bold">Scanner</a>
+        </div>
+
+        <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
+            <p class="text-xs text-slate-400 font-bold uppercase mb-1">Attività</p>
+            <h2 class="font-black text-lg text-slate-800">{{ merchant.business_name }}</h2>
+            <p class="text-sm text-slate-500">{{ merchant.email }}</p>
+            {% if service_state.value == 'active' %}
+            <span class="inline-block mt-3 text-xs font-bold px-3 py-1 rounded-full bg-green-100 text-green-700">Approvato ✅</span>
+            {% endif %}
+        </div>
+
+        {{ service_banner(service_state.value) }}
+
+        <!-- ===================== INSTAGRAM (Zernio): uno stato per volta ===================== -->
+
+        {% set ig_state = instagram.status.value %}
+        <section id="instagram-section" data-state="{{ ig_state }}"
+            class="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 space-y-4">
+            <div>
+                <p class="text-xs text-slate-400 font-bold uppercase mb-1">Instagram</p>
+                <p class="text-xs text-slate-400">I clienti ricevono la carta scrivendo {{ instagram.keyword }} in DM al tuo negozio.</p>
+            </div>
+
+            {% for w in instagram.warnings %}
+            <div data-warning="{{ w.code }}"
+                class="text-xs font-bold rounded-2xl p-3 border {% if w.code == 'key_invalid' %}bg-red-50 border-red-200 text-red-700{% else %}bg-yellow-50 border-yellow-200 text-yellow-800{% endif %}">
+                {{ w.message }}
+            </div>
+            {% endfor %}
+
+            {% if ig_state in ('not_connected', 'key_invalid') %}
+            {% if ig_state == 'not_connected' %}
+            <ol class="text-xs text-slate-500 list-decimal pl-4 space-y-1">
+                <li>Crea un account gratuito su Zernio (zernio.com).</li>
+                <li>Collega il tuo Instagram Business o Creator.</li>
+                <li>Crea una API key e incollala qui sotto.</li>
+            </ol>
+            {% endif %}
+            {% if instagram.key_masked and ig_state == 'not_connected' %}
+            <p class="text-xs text-slate-500">Chiave salvata: <span class="font-mono">{{ instagram.key_masked }}</span>. Scegli l'account o incolla un'altra chiave.</p>
+            {% endif %}
+            <form id="instagram-key-form" class="space-y-3">
+                <input type="password" id="zernio-key" autocomplete="off" placeholder="sk_..."
+                    class="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-mono text-sm focus:border-green-500 focus:outline-none">
+                <button type="submit" id="btn-instagram-key"
+                    class="w-full bg-slate-900 text-white font-bold py-3 rounded-2xl active:scale-95 transition-transform">
+                    {% if ig_state == 'key_invalid' %}USA LA NUOVA CHIAVE{% else %}COLLEGA ZERNIO{% endif %}
+                </button>
+            </form>
+            <div id="account-picker" class="hidden space-y-3"
+                {% if instagram.key_saved and ig_state == 'not_connected' %}data-autoload="1"{% endif %}>
+                <p class="text-xs font-bold text-slate-500 uppercase tracking-wider">Scegli l'account Instagram</p>
+                <select id="account-select"
+                    class="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm focus:border-green-500 focus:outline-none"></select>
+                <button type="button" id="btn-instagram-account"
+                    class="w-full bg-green-600 text-white font-bold py-3 rounded-2xl shadow-lg active:scale-95 transition-transform">
+                    COLLEGA ACCOUNT
+                </button>
+            </div>
+
+            {% elif ig_state == 'awaiting_test_dm' %}
+            <div class="bg-green-50 rounded-2xl p-4 space-y-1">
+                <p class="text-sm font-bold text-green-800">Quasi fatto! Ultimo passo: la prova</p>
+                <p class="text-sm text-green-800">Scrivi {{ instagram.keyword }} al tuo negozio{% if instagram.username %} (@{{ instagram.username }}){% endif %} da un altro profilo Instagram: quando la carta arriva, il collegamento con Zernio è completo.</p>
+            </div>
+            {% if instagram.key_masked %}<p class="text-xs text-slate-400">Chiave Zernio <span class="font-mono">{{ instagram.key_masked }}</span></p>{% endif %}
+            <div class="grid grid-cols-2 gap-3">
+                <button type="button" id="btn-instagram-refresh"
+                    class="bg-slate-900 text-white font-bold py-3 rounded-2xl text-sm active:scale-95 transition-transform">
+                    Aggiorna
+                </button>
+                <button type="button" id="btn-instagram-disconnect"
+                    class="bg-slate-100 text-slate-600 font-bold py-3 rounded-2xl text-sm active:scale-95 transition-transform">
+                    Scollega
+                </button>
+            </div>
+
+            {% elif ig_state == 'active' %}
+            <div class="space-y-1">
+                <span class="inline-block text-xs font-bold px-3 py-1 rounded-full bg-green-100 text-green-700">Collegato con Zernio ✅</span>
+                {% if instagram.username %}<p class="font-black text-slate-800">@{{ instagram.username }}</p>{% endif %}
+                {% if instagram.key_masked %}<p class="text-xs text-slate-400">Chiave Zernio <span class="font-mono">{{ instagram.key_masked }}</span></p>{% endif %}
+            </div>
+            {% if instagram.quota %}
+            <div>
+                <p class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Invii di questo mese</p>
+                <div class="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
+                    <div id="quota-bar" class="h-3 rounded-full {% if instagram.quota.warning %}bg-yellow-500{% else %}bg-green-500{% endif %}"
+                        style="width: {{ [instagram.quota.percent, 100] | min }}%"></div>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">{{ instagram.quota.sent }} / {{ instagram.quota.limit }} invii gratuiti</p>
+            </div>
+            {% endif %}
+            <button type="button" id="btn-instagram-disconnect"
+                class="w-full bg-slate-100 text-slate-600 font-bold py-3 rounded-2xl text-sm active:scale-95 transition-transform">
+                Scollega
+            </button>
+            {% endif %}
+        </section>
+
+        <form id="settings-form" class="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 space-y-5">
+
+            <label class="flex items-start gap-3 cursor-pointer">
+                <input type="checkbox" id="conversion_enabled" class="mt-1 accent-green-600"
+                    {% if merchant.conversion_enabled %}checked{% endif %}>
+                <span class="text-sm text-slate-700"><b>Converti i tree points in cashback</b><br>
+                    <span class="text-xs text-slate-400">Disattivando, i clienti accumulano solo tree points.</span></span>
+            </label>
+
+            <div>
+                <p class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Tree points per ogni conversione</p>
+                <input type="number" id="conversion_threshold" min="1" value="{{ merchant.conversion_threshold }}"
+                    class="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-center font-bold focus:border-green-500 focus:outline-none">
+            </div>
+
+            <div>
+                <p class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Cashback per conversione (€)</p>
+                <input type="number" id="conversion_value_eur" min="0.01" step="0.01" value="{{ '%.2f'|format(merchant.conversion_value_cents / 100) }}"
+                    class="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-center font-bold focus:border-green-500 focus:outline-none">
+                <p class="text-xs text-slate-400 mt-1">Il cashback è a tuo carico: scegli un valore sostenibile.</p>
+            </div>
+
+            <p id="conversion-preview" class="text-sm text-center font-bold text-green-700 bg-green-50 rounded-xl p-3"></p>
+
+            <button type="submit" id="btn-save"
+                class="w-full bg-green-600 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition-transform">
+                SALVA IMPOSTAZIONI
+            </button>
+        </form>
+
+        {% if password_change %}
+        <!-- ===================== CAMBIA PASSWORD (solo provider che gestisce le password) ===================== -->
+
+        <form id="password-form" autocomplete="off"
+            class="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 space-y-4">
+            <div>
+                <p class="text-xs text-slate-400 font-bold uppercase mb-1">Cambia password</p>
+                <p class="text-xs text-slate-400">Se il founder ti ha dato una password temporanea, cambiala qui.</p>
+            </div>
+            <input type="password" id="current-password" required autocomplete="current-password" placeholder="Password attuale"
+                class="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm focus:border-green-500 focus:outline-none">
+            <input type="password" id="new-password" required minlength="8" maxlength="128" autocomplete="new-password"
+                placeholder="Nuova password (8-128 caratteri)"
+                class="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm focus:border-green-500 focus:outline-none">
+            <button type="submit" id="btn-password"
+                class="w-full bg-slate-900 text-white font-bold py-3 rounded-2xl active:scale-95 transition-transform">
+                CAMBIA PASSWORD
+            </button>
+        </form>
+        {% endif %}
+
+        <!-- ===================== SOGLIE DEI LIVELLI (sola lettura) ===================== -->
+
+        <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
+            <p class="text-xs text-slate-400 font-bold uppercase mb-1">Livelli del negozio</p>
+            <p class="text-xs text-slate-400 mb-4">Punti del mese da raggiungere per far piantare alberi. Li imposta Fidelitree.</p>
+            <div class="grid grid-cols-3 gap-3 text-center">
+                <div class="bg-slate-50 rounded-2xl p-3">
+                    <p class="text-2xl">🥉</p>
+                    <p class="font-black text-slate-800" id="threshold-bronze">{{ thresholds.bronze }}</p>
+                    <p class="text-xs text-slate-400">1 albero</p>
+                </div>
+                <div class="bg-slate-50 rounded-2xl p-3">
+                    <p class="text-2xl">🥈</p>
+                    <p class="font-black text-slate-800" id="threshold-silver">{{ thresholds.silver }}</p>
+                    <p class="text-xs text-slate-400">3 alberi</p>
+                </div>
+                <div class="bg-slate-50 rounded-2xl p-3">
+                    <p class="text-2xl">🥇</p>
+                    <p class="font-black text-slate-800" id="threshold-gold">{{ thresholds.gold }}</p>
+                    <p class="text-xs text-slate-400">5 alberi</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast di feedback -->
+    <div id="toast"
+        class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 px-6 py-3 rounded-2xl text-white font-bold shadow-xl z-50 transition-all">
+    </div>
+
+    <script>
+        const form = document.getElementById('settings-form');
+        const btn = document.getElementById('btn-save');
+        const toast = document.getElementById('toast');
+
+        function showToast(message, isError = false) {
+            toast.textContent = message;
+            toast.className = `fixed bottom-6 left-1/2 -translate-x-1/2 px-6 py-3 rounded-2xl text-white font-bold shadow-xl z-50 transition-all ${isError ? 'bg-red-500' : 'bg-green-600'}`;
+            toast.classList.remove('hidden');
+            setTimeout(() => { toast.classList.add('hidden'); }, 4000);
+        }
+
+        // Instagram: chiamate all'API del merchant; la chiave non resta nel campo dopo l'invio
+        async function instagramCall(method, path, body) {
+            const res = await fetch('/api/merchant/instagram' + path, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: body ? JSON.stringify(body) : undefined
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Operazione non riuscita');
+            return data;
+        }
+
+        const accountPicker = document.getElementById('account-picker');
+        function showAccounts(accounts) {
+            const select = document.getElementById('account-select');
+            select.replaceChildren(...accounts.map(a => {
+                const option = document.createElement('option');
+                option.value = a.id;
+                option.textContent = a.username ? '@' + a.username : a.id;
+                return option;
+            }));
+            accountPicker.classList.remove('hidden');
+        }
+
+        const keyForm = document.getElementById('instagram-key-form');
+        if (keyForm) {
+            keyForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const keyInput = document.getElementById('zernio-key');
+                const keyBtn = document.getElementById('btn-instagram-key');
+                keyBtn.disabled = true;
+                try {
+                    const data = await instagramCall('POST', '/key', { api_key: keyInput.value });
+                    showAccounts(data.accounts);
+                } catch (err) {
+                    showToast(err.message, true);
+                } finally {
+                    keyInput.value = '';
+                    keyBtn.disabled = false;
+                }
+            });
+            document.getElementById('btn-instagram-account').addEventListener('click', async (e) => {
+                e.target.disabled = true;
+                try {
+                    await instagramCall('POST', '/account', { account_id: document.getElementById('account-select').value });
+                    window.location.reload();
+                } catch (err) {
+                    showToast(err.message, true);
+                    e.target.disabled = false;
+                }
+            });
+            if (accountPicker.dataset.autoload) {
+                instagramCall('GET', '/accounts').then(data => showAccounts(data.accounts))
+                    .catch(err => showToast(err.message, true));
+            }
+        }
+
+        const refreshBtn = document.getElementById('btn-instagram-refresh');
+        if (refreshBtn) refreshBtn.addEventListener('click', () => window.location.reload());
+
+        const disconnectBtn = document.getElementById('btn-instagram-disconnect');
+        if (disconnectBtn) {
+            disconnectBtn.addEventListener('click', async () => {
+                if (!confirm('Scollegare Instagram? Le carte dei clienti restano, ma nessuna nuova carta verrà inviata.')) return;
+                disconnectBtn.disabled = true;
+                try {
+                    await instagramCall('DELETE', '');
+                    window.location.reload();
+                } catch (err) {
+                    showToast(err.message, true);
+                    disconnectBtn.disabled = false;
+                }
+            });
+        }
+
+        // Cambio password: i campi si svuotano sempre dopo l'invio; il cookie di sessione nuovo arriva con la risposta
+        const passwordForm = document.getElementById('password-form');
+        if (passwordForm) {
+            passwordForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const currentInput = document.getElementById('current-password');
+                const newInput = document.getElementById('new-password');
+                const passwordBtn = document.getElementById('btn-password');
+                passwordBtn.disabled = true;
+                try {
+                    const res = await fetch('/api/merchant/me/password', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ current_password: currentInput.value, new_password: newInput.value })
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Operazione non riuscita');
+                    showToast('Password cambiata ✅');
+                } catch (err) {
+                    showToast(err.message, true);
+                } finally {
+                    currentInput.value = '';
+                    newInput.value = '';
+                    passwordBtn.disabled = false;
+                }
+            });
+        }
+
+        // Anteprima testuale della conversione, aggiornata mentre si digita
+        const enabledInput = document.getElementById('conversion_enabled');
+        const thresholdInput = document.getElementById('conversion_threshold');
+        const valueInput = document.getElementById('conversion_value_eur');
+        const preview = document.getElementById('conversion-preview');
+
+        function updatePreview() {
+            const threshold = parseInt(thresholdInput.value, 10);
+            const value = parseFloat(valueInput.value);
+            if (!enabledInput.checked) {
+                preview.textContent = 'Conversione disattivata: i clienti accumulano solo tree points';
+            } else if (threshold >= 1 && value > 0) {
+                preview.textContent = `Ogni ${threshold} tree points → € ${value.toFixed(2).replace('.', ',')} di cashback`;
+            } else {
+                preview.textContent = 'Inserisci soglia e valore validi';
+            }
+        }
+        [enabledInput, thresholdInput, valueInput].forEach(el => el.addEventListener('input', updatePreview));
+        updatePreview();
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            btn.disabled = true;
+            btn.textContent = 'Salvataggio...';
+
+            const payload = {
+                conversion_enabled: document.getElementById('conversion_enabled').checked,
+                conversion_threshold: parseInt(document.getElementById('conversion_threshold').value, 10),
+                conversion_value_eur: parseFloat(document.getElementById('conversion_value_eur').value),
+            };
+            try {
+                const res = await fetch('/api/merchant/me/settings', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(typeof err.detail === 'string' ? err.detail : 'Dati non validi');
+                }
+                showToast('Impostazioni salvate ✅');
+            } catch (err) {
+                showToast(err.message, true);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'SALVA IMPOSTAZIONI';
+            }
+        });
+    </script>
+</body>
+
+</html>

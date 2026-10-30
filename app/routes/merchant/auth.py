@@ -1,53 +1,66 @@
 """
-Gestione dell'autenticazione per gli esercenti.
-Include login, logout e gestione dei cookie di sessione JWT.
+Gestione dell'autenticazione per gli esercenti: registrazione, login, logout e cookie di sessione.
+
+L'identità è verificata dal provider di autenticazione (`app/core/auth.py`); la logica di
+registrazione e login vive in `merchant_service`. Un merchant appena registrato è in attesa di approvazione:
+può collegare Instagram, ma i clienti nuovi vedono una carta di prova e lo scanner può solo togliere saldo,
+finché il founder non lo approva. Il login ha un freno ai tentativi
+(avviso dal 3° errore, 429 al 6° tentativo dopo 5 errori in 15 minuti, per email).
 """
-#
-# Endpoint previsti:
-#   POST /merchant/auth/login     → Verifica password, crea sessione/token
-#   POST /merchant/auth/logout    → Invalida sessione
-#
-# Dipendenze esportate:
-#   get_current_merchant()        → Dependency per proteggere gli endpoint merchant
-from fastapi import APIRouter, Form, Depends, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Form, Depends
+from fastapi.responses import JSONResponse, RedirectResponse
 from sqlmodel import Session
 
-from app.core.dependencies import get_session
-from app.models.models import Merchant
-from app.core.security import decrypt_key, create_jwt_token
+from app.core.auth import get_auth_provider
+from app.core.clock import utc_now
+from app.core.dependencies import get_session, set_session_cookie
+from app.schemas.merchant import RegisterRequest
+from app.services import merchant_service
 
 router = APIRouter(prefix="/merchant", tags=["Merchant Auth"])
 
-from sqlmodel import select
+
+@router.post("/register")
+async def register(
+    body: RegisterRequest,
+    session: Session = Depends(get_session),
+):
+    """
+    Registra un nuovo merchant (non approvato) e lo autentica col cookie di sessione.
+    Errori: 400 dati non validi (password di 8-128 caratteri), 409 email già in uso.
+    """
+    data = merchant_service.validate_registration(
+        body.business_name, body.email, body.password, body.contact_phone,
+    )
+    merchant, token = merchant_service.register_merchant(session, get_auth_provider(), data)
+
+    response = JSONResponse({
+        "status": "success",
+        "merchant_id": merchant.id,
+        "is_approved": merchant.is_approved,
+    })
+    set_session_cookie(response, token)
+    return response
+
 
 @router.post("/login")
 async def login(
-    phone_number: str = Form(...),
+    email: str = Form(...),
     password: str = Form(...),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
 ):
-    """Esegue il login del merchant cercandolo per numero di telefono."""
-    statement = select(Merchant).where(Merchant.phone_number == phone_number)
-    merchant = session.exec(statement).first()
-    
-    if not merchant:
-        raise HTTPException(status_code=404, detail="Merchant non trovato")
-        
-    try:
-        decrypted_password = decrypt_key(merchant.password)
-        if password != decrypted_password:
-            raise HTTPException(status_code=401, detail="Password errata")
-    except Exception as e:
-        print(f"Login error decryption: {e}")
-        raise HTTPException(status_code=401, detail="Credenziali non valide")
-    
-    token = create_jwt_token({"sub": str(merchant.id)})
+    """
+    Login del merchant con email e password. Errori: 401 credenziali errate (stesso messaggio per email
+    sconosciuta e password errata; dal 3° errore il testo avvisa del blocco), 403 identità valida ma non collegata
+    a un merchant, 429 troppi tentativi (header `Retry-After`).
+    """
+    token = merchant_service.login_merchant(session, get_auth_provider(), email, password, now=utc_now())
 
     # Redirect al frontend dello scanner con il cookie inserito
     response = RedirectResponse(url="/merchant/scanner", status_code=303)
-    response.set_cookie("access_token", token, httponly=True, max_age=60*24*7*60)
+    set_session_cookie(response, token)
     return response
+
 
 @router.get("/logout")
 async def logout():

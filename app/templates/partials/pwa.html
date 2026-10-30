@@ -1,0 +1,13 @@
+{# Partial PWA condiviso dalle pagine merchant (scanner, impostazioni, gestione carta, login, registrazione): da includere dentro <head>. La pagina carta del cliente NON lo include. #}
+<link rel="manifest" href="/static/manifest.webmanifest">
+<meta name="theme-color" content="#16a34a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Fidelitree">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js', { scope: '/merchant/' }).catch(() => {});
+        });
+    }
+</script>

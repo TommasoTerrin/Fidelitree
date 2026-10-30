@@ -7,20 +7,39 @@ import uuid
 import pytest
 from fastapi import HTTPException
 
-from app.core.security import decrypt_key
+from app.core.errors import DomainError, InsufficientBalanceError, NotFoundError
+from sqlmodel import select
+
 from app.services.db_crud import merchant_crud, card_crud
 from app.services import card_service
-from tests.conftest import TEST_PASSWORD
 
 
 # ---------------------------------------------------------------------------
 # Merchant CRUD
 # ---------------------------------------------------------------------------
 
-def test_create_merchant_cifra_password(session, merchant):
-    assert merchant.id is not None
-    assert merchant.password != TEST_PASSWORD  # mai in chiaro nel DB
-    assert decrypt_key(merchant.password) == TEST_PASSWORD
+def test_create_merchant_normalizza_email_e_applica_default(session):
+    m = merchant_crud.create_merchant(session, {
+        "business_name": "Bar Nuovo", "email": "  Bar@Nuovo.IT ",
+    })
+    assert m.id is not None
+    assert m.email == "bar@nuovo.it"
+    assert m.is_approved is False
+    assert m.conversion_threshold == 50
+    assert m.conversion_value_cents == 200
+
+
+def test_create_merchant_dati_non_validi(session):
+    with pytest.raises(HTTPException) as exc:
+        merchant_crud.create_merchant(session, {
+            "business_name": "Bar", "email": "a@b.it", "contact_phone": "123",
+        })
+    assert exc.value.status_code == 400
+
+
+def test_get_by_email_ignora_maiuscole(session, merchant):
+    assert merchant_crud.get_merchant_by_email(session, " MERCHANT@test.IT ").id == merchant.id
+    assert merchant_crud.get_merchant_by_email(session, "boh@test.it") is None
 
 
 def test_get_e_update_merchant(session, merchant):
@@ -31,10 +50,11 @@ def test_get_e_update_merchant(session, merchant):
     assert updated.business_name == "Nuovo Nome"
 
 
-def test_update_password_viene_ricifrata(session, merchant):
-    updated = merchant_crud.update_merchant(session, merchant, {"password": "nuova-password"})
-    assert updated.password != "nuova-password"
-    assert decrypt_key(updated.password) == "nuova-password"
+def test_update_merchant_valore_non_valido_non_sporca_la_sessione(session, merchant):
+    with pytest.raises(HTTPException) as exc:
+        merchant_crud.update_merchant(session, merchant, {"conversion_threshold": 0})
+    assert exc.value.status_code == 400
+    assert merchant.conversion_threshold == 50
 
 
 def test_delete_merchant_cascata_su_card(session, merchant, card):
@@ -53,42 +73,43 @@ def test_delete_merchant_inesistente(session):
 # Card CRUD + service
 # ---------------------------------------------------------------------------
 
-def test_create_card(session, merchant):
-    card = card_service.create_card(session, merchant.id)
-    assert card.merchant_id == merchant.id
-    assert card.cashback_point == 0.0
-
-
-def test_create_card_merchant_inesistente(session):
-    with pytest.raises(HTTPException) as exc:
-        card_service.create_card(session, 99999)
-    assert exc.value.status_code == 404
-
-
 def test_update_cashback_aggiunta_e_rimozione(session, merchant, card):
     updated = card_service.update_cashback(session, merchant, card.id, 5.50)
-    assert updated.cashback_point == pytest.approx(5.50)
+    assert updated.cashback_cents == 550
 
     updated = card_service.update_cashback(session, merchant, card.id, -3.00)
-    assert updated.cashback_point == pytest.approx(2.50)
+    assert updated.cashback_cents == 250
+
+
+def test_update_cashback_centesimi_esatti(session, merchant, card):
+    updated = card_service.update_cashback(session, merchant, card.id, 19.99)
+    assert updated.cashback_cents == 1999
+    assert isinstance(updated.cashback_cents, int)
 
 
 def test_update_cashback_non_va_sotto_zero(session, merchant, card):
     card_service.update_cashback(session, merchant, card.id, 2.0)
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(InsufficientBalanceError):
         card_service.update_cashback(session, merchant, card.id, -5.0)
-    assert exc.value.status_code == 400
+
+
+def test_update_cashback_importo_non_finito(session, merchant, card):
+    with pytest.raises(DomainError):
+        card_service.update_cashback(session, merchant, card.id, float("nan"))
 
 
 def test_update_cashback_card_di_altro_merchant(session, merchant, card):
     other = merchant_crud.create_merchant(session, {
         "business_name": "Altro Merchant",
-        "phone_number": "+393330000001",
-        "password": TEST_PASSWORD,
+        "email": "altro@test.it",
     })
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(NotFoundError):
         card_service.update_cashback(session, other, card.id, 1.0)
-    assert exc.value.status_code == 404
+
+
+def test_update_cashback_funziona_con_conversione_disattivata(session, merchant, card):
+    merchant_crud.update_merchant(session, merchant, {"conversion_enabled": False})
+    assert card_service.update_cashback(session, merchant, card.id, 1.0).cashback_cents == 100
 
 
 def test_delete_card(session, card):

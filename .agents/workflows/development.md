@@ -18,11 +18,20 @@ Flusso: `develop` → `feature/<nome>` → merge in `develop` → (quando pronta
 2. **Branch**: `git checkout develop && git pull && git checkout -b feature/<nome>`.
 3. **Sviluppo**: commit piccoli e frequenti; il progetto deve restare funzionante dopo ogni commit.
 4. **Test automatici**: `python -m pytest` (obbligatorio verde prima del merge). Aggiungi test per la nuova feature.
-5. **Test manuali**: `python local_main.py` e verifica il flusso toccato (vedi flusso principale in `.agents/architecture/overview.md`).
+5. **Test manuali**: collaudo locale su DB usa-e-getta (`deploy.md`, sezione "Collaudo locale") e verifica il flusso toccato (vedi flussi in `.agents/architecture/overview.md`).
 6. **Merge in develop**: `git checkout develop && git merge feature/<nome>` e push.
 7. **Release** (solo quando develop è pronto): segui `.agents/checklists/pre-release.md`, poi merge in `main` + tag.
-8. **Post-deploy**: `.agents/workflows/deploy.md` per la verifica su DigitalOcean e Neon.
+8. **Post-deploy**: `.agents/workflows/deploy.md` per la verifica su DigitalOcean e sul database.
 9. **Documentazione**: aggiorna AGENTS.md / .agents/ se sono cambiati comandi, endpoint o architettura; sposta l'item da `current.md` al changelog di `roadmap.md`.
+
+## Rito di release (versione)
+
+La versione ha **una sola fonte**: `[project] version` in `pyproject.toml` (SemVer 0.x), esposta da `GET /health`.
+
+1. Bump di `version` in `pyproject.toml`.
+2. Merge su `main` (deploy automatico).
+3. Tag git `vX.Y.Z` **identico** al valore in `pyproject.toml` (`git tag vX.Y.Z && git push --tags`).
+4. Dopo il deploy verifica che `/health` riporti la nuova versione.
 
 ## Convenzioni
 

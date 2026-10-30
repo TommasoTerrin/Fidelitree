@@ -7,5 +7,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Avvio con porta dinamica (richiesto da Railway)
+# Avvio con porta dinamica ($PORT è iniettata da DigitalOcean App Platform)
 CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}

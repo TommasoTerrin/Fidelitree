@@ -8,22 +8,25 @@ from fastapi import HTTPException
 from sqlmodel import Session, select
 
 from app.models.models import Merchant
-from app.core.security import encrypt_key
 
 logger = logging.getLogger(__name__)
 
+# Campi impostabili alla creazione (il chiamante decide cosa passare: l'API admin non espone auth_user_id)
+_CREATE_FIELDS = (
+    "business_name", "email", "auth_user_id", "contact_phone", "type", "is_approved", "is_paused",
+    "conversion_enabled", "conversion_threshold", "conversion_value_cents",
+    "bronze_threshold", "silver_threshold", "gold_threshold",
+)
+
 
 def create_merchant(session: Session, merchant_data: dict) -> Merchant:
-    """Crea un nuovo merchant. La password viene cifrata prima del salvataggio."""
+    """Crea un nuovo merchant; i campi non indicati prendono i default del modello."""
     try:
         # model_validate è necessario: con table=True i validatori
         # non girano sul costruttore diretto
-        new_merchant = Merchant.model_validate({
-            "business_name": merchant_data.get("business_name"),
-            "phone_number": merchant_data.get("phone_number"),
-            "password": encrypt_key(merchant_data.get("password")),
-            "type": merchant_data.get("type", "test"),
-        })
+        new_merchant = Merchant.model_validate(
+            {k: merchant_data[k] for k in _CREATE_FIELDS if k in merchant_data}
+        )
         session.add(new_merchant)
         session.commit()
         session.refresh(new_merchant)
@@ -40,23 +43,50 @@ def get_merchant_by_id(session: Session, merchant_id: int) -> Optional[Merchant]
     return session.get(Merchant, merchant_id)
 
 
+def get_merchant_by_webhook_hook_id(session: Session, hook_id: str) -> Optional[Merchant]:
+    """Recupera il merchant dall'id opaco nel path del suo webhook Zernio (`Merchant.webhook_hook_id`)."""
+    return session.exec(select(Merchant).where(Merchant.webhook_hook_id == hook_id)).first()
+
+
+def get_merchant_by_zernio_account_id(session: Session, account_id: str) -> Optional[Merchant]:
+    """Recupera il merchant a cui è collegato un account Instagram di Zernio (`Merchant.zernio_account_id`, unico)."""
+    return session.exec(select(Merchant).where(Merchant.zernio_account_id == account_id)).first()
+
+
+def get_merchant_by_auth_user_id(session: Session, auth_user_id: str) -> Optional[Merchant]:
+    """Recupera il merchant collegato a un'identità del provider di autenticazione."""
+    statement = select(Merchant).where(Merchant.auth_user_id == auth_user_id)
+    return session.exec(statement).first()
+
+
+def get_merchant_by_email(session: Session, email: str) -> Optional[Merchant]:
+    """Recupera un merchant per email (unica, confronto in minuscolo)."""
+    statement = select(Merchant).where(Merchant.email == email.strip().lower())
+    return session.exec(statement).first()
+
+
 def get_all_merchants(session: Session, skip: int = 0, limit: int = 100) -> List[Merchant]:
     """Restituisce la lista di tutti i merchant."""
     statement = select(Merchant).offset(skip).limit(limit)
     return session.exec(statement).all()
 
 
-def update_merchant(session: Session, merchant: Merchant, update_data: dict) -> Merchant:
-    """Aggiorna i dati di un merchant esistente."""
-    try:
-        for key, value in update_data.items():
-            if key == "password" and value:
-                setattr(merchant, key, encrypt_key(value))
-            else:
-                setattr(merchant, key, value)
+def get_newest_merchants(session: Session, limit: int) -> List[Merchant]:
+    """I merchant dal più recente (per iscrizione, poi per id), al massimo `limit`."""
+    statement = select(Merchant).order_by(Merchant.created_at.desc(), Merchant.id.desc()).limit(limit)
+    return session.exec(statement).all()
 
-        # Rivalida i dati aggiornati (i validatori non girano su setattr)
-        Merchant.model_validate(merchant.model_dump())
+
+def update_merchant(session: Session, merchant: Merchant, update_data: dict) -> Merchant:
+    """Aggiorna i dati di un merchant esistente (rivalidando il risultato)."""
+    try:
+        # Valida su una copia: se fallisce il merchant in sessione resta intatto
+        # (i validatori non girano su setattr)
+        # getattr (non model_dump): ricarica l'istanza se la sessione l'ha scaduta dopo un commit
+        current = {name: getattr(merchant, name) for name in Merchant.model_fields}
+        validated = Merchant.model_validate({**current, **update_data})
+        for key in update_data:
+            setattr(merchant, key, getattr(validated, key))
 
         session.add(merchant)
         session.commit()
@@ -70,7 +100,7 @@ def update_merchant(session: Session, merchant: Merchant, update_data: dict) -> 
 
 
 def delete_merchant(session: Session, merchant_id: int):
-    """Elimina un merchant (le sue carte vengono eliminate in cascata)."""
+    """Elimina un merchant (carte, movimenti, pool e piantumazioni vanno in cascata)."""
     merchant = session.get(Merchant, merchant_id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant non trovato")

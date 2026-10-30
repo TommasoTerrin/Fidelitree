@@ -6,6 +6,7 @@ __pycache__/
 # Environment
 .env
 .env.*
+!.env.example
 
 # SQLite Database locale
 *.db
@@ -23,3 +24,11 @@ Thumbs.db
 
 #appunti miei
 appunti_agente.txt
+# Cartelle di sistema (OneDrive/Windows)
+desktop.ini
+
+# Output del server di collaudo
+*.out
+
+# Contesto locale della CLI Neon
+.neon
