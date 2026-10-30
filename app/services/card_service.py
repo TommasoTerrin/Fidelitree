@@ -9,6 +9,9 @@ Regole di business
 - Se il negozio ha la conversione attiva, a soglia raggiunta i tree points diventano cashback:
   la conversione scrive un movimento `conversion` e **non** riduce il pool.
 - I saldi non scendono mai sotto zero; il cashback è in centesimi interi, senza tolleranze.
+- **Stato del servizio** (in attesa / attivo / in pausa, derivato da `is_approved` e `is_paused`): solo un
+  negozio attivo può **aggiungere** tree points o cashback; togliere si può sempre. Fuori dallo stato
+  attivo non scatta nessuna conversione (sarebbe un accredito). Il controllo precede ogni scrittura.
 
 La sezione `# --- Core puro ---` usa solo Pydantic e stdlib e solleva errori di dominio;
 la sezione `# --- Shell ---` esegue le query e conserva gli import di infrastruttura.
@@ -16,9 +19,45 @@ la sezione `# --- Shell ---` esegue le query e conserva gli import di infrastrut
 
 from pydantic import BaseModel
 
-from app.core.errors import InsufficientBalanceError
+from app.core.enums import ServiceState
+from app.core.errors import ForbiddenError, InsufficientBalanceError
 
 # --- Core puro ---
+
+_PENDING_MESSAGE = "In attesa di approvazione: non puoi aggiungere punti"
+_PAUSED_MESSAGE = "Servizio in pausa: puoi solo togliere il saldo esistente"
+
+
+def service_state(is_approved: bool, is_paused: bool) -> ServiceState:
+    """
+    Stato del servizio di un negozio: non approvato → `PENDING` (la pausa non conta); approvato e in
+    pausa → `PAUSED`; approvato e non in pausa → `ACTIVE`.
+    """
+    if not is_approved:
+        return ServiceState.PENDING
+    return ServiceState.PAUSED if is_paused else ServiceState.ACTIVE
+
+
+def can_add_balance(state: ServiceState) -> bool:
+    """Aggiungere tree points o cashback è consentito solo a un negozio attivo."""
+    return state is ServiceState.ACTIVE
+
+
+def can_remove_balance(state: ServiceState) -> bool:
+    """Togliere saldo è consentito sempre, in ogni stato."""
+    return True
+
+
+def check_balance_change(state: ServiceState, delta: int) -> None:
+    """
+    Controlla che un movimento di saldo (tree points o centesimi di cashback) sia ammesso nello stato dato:
+    delta positivo solo se `can_add_balance`, negativo solo se `can_remove_balance`, zero sempre.
+    Solleva `ForbiddenError` (403) con un messaggio chiaro per il merchant.
+    """
+    if delta > 0 and not can_add_balance(state):
+        raise ForbiddenError(_PENDING_MESSAGE if state is ServiceState.PENDING else _PAUSED_MESSAGE)
+    if delta < 0 and not can_remove_balance(state):
+        raise ForbiddenError(_PAUSED_MESSAGE)
 
 
 class ConversionResult(BaseModel):
@@ -110,6 +149,11 @@ class ScanResult:
     cashback_added_cents: int = 0
 
 
+def merchant_state(merchant: Merchant) -> ServiceState:
+    """Stato del servizio del negozio (letto da `is_approved` e `is_paused`)."""
+    return service_state(merchant.is_approved, merchant.is_paused)
+
+
 def _increment_pool(session: Session, merchant_id: int, period: str, delta: int) -> None:
     """Crea la riga del pool se manca, poi incrementa `points` con un UPDATE SQL atomico."""
     if session.get(MerchantPool, (merchant_id, period)) is None:
@@ -132,13 +176,16 @@ def add_tree_points(
     """
     Scan: aggiorna il saldo, scrive il movimento, incrementa il pool del mese ed eventualmente
     converte in cashback. Tutto in un'unica transazione con un solo commit; in caso di errore
-    non resta nulla di scritto.
+    non resta nulla di scritto. Un negozio non attivo può solo togliere (`ForbiddenError` per un delta
+    positivo, prima di scrivere) e non converte mai: la conversione sarebbe un accredito di cashback.
     """
     now = now or utc_now()
+    state = merchant_state(merchant)
     try:
         card = session.exec(select(Card).where(Card.id == card_id).with_for_update()).first()
         if card is None or card.merchant_id != merchant.id:
             raise NotFoundError(_CARD_NOT_VALID)
+        check_balance_change(state, points)  # dopo la proprietà della carta, prima di ogni scrittura
 
         card.tree_points = apply_tree_points_delta(card.tree_points, points)
         period = period_for(now)
@@ -149,7 +196,7 @@ def add_tree_points(
         _increment_pool(session, merchant.id, period, points)
 
         result = ScanResult(card=card)
-        if merchant.conversion_enabled:
+        if merchant.conversion_enabled and can_add_balance(state):
             conversion = compute_conversion(
                 card.tree_points, merchant.conversion_threshold, merchant.conversion_value_cents
             )
@@ -186,7 +233,8 @@ def update_cashback(
     Aggiunge (o rimuove, se negativo) credito cashback a una carta.
     L'importo arriva in euro e viene convertito in centesimi interi al bordo.
     La carta deve appartenere al merchant autenticato; è sempre disponibile,
-    anche con la conversione disattivata.
+    anche con la conversione disattivata. Un negozio non attivo può solo togliere:
+    `ForbiddenError` per un importo che in centesimi è positivo, prima di scrivere.
     """
     card = card_crud.get_card_by_id(session, card_id)
     if not card or card.merchant_id != merchant.id:
@@ -196,6 +244,7 @@ def update_cashback(
         delta_cents = euro_to_cents(cb_points)
     except ValueError as e:
         raise DomainError(str(e))
+    check_balance_change(merchant_state(merchant), delta_cents)
 
     card.cashback_cents = apply_cashback_delta(card.cashback_cents, delta_cents)
     session.add(card)

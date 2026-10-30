@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from app.core.errors import DomainError, InsufficientBalanceError, NotFoundError
 from sqlmodel import select
 
-from app.services.db_crud import merchant_crud, card_crud, customer_crud
+from app.services.db_crud import merchant_crud, card_crud
 from app.services import card_service
 
 
@@ -67,17 +67,6 @@ def test_delete_merchant_inesistente(session):
     with pytest.raises(HTTPException) as exc:
         merchant_crud.delete_merchant(session, 99999)
     assert exc.value.status_code == 404
-
-
-# ---------------------------------------------------------------------------
-# Customer CRUD
-# ---------------------------------------------------------------------------
-
-def test_create_e_get_customer(session):
-    c = customer_crud.create_customer(session, "  Mario@Rossi.IT ")
-    assert c.email == "mario@rossi.it"
-    assert customer_crud.get_customer_by_email(session, "MARIO@rossi.it").id == c.id
-    assert customer_crud.get_customer_by_email(session, "altro@rossi.it") is None
 
 
 # ---------------------------------------------------------------------------

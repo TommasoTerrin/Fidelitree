@@ -4,20 +4,34 @@ Gli importi escono ed entrano in euro; in DB sono centesimi interi.
 """
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, computed_field
-from typing import Annotated, Optional, Literal
+from typing import Annotated, Any, Optional, Literal
 
 from app.core.money import cents_to_euro
+from app.services.merchant_service import AdminMerchantRow, InstagramPanel
 from app.services.tree_service import LevelThresholds
 
 NonBlankStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
 class RegisterRequest(BaseModel):
-    """Registrazione self-service di un merchant (la validazione di dominio è in `merchant_service`)."""
-    business_name: str
-    email: str
-    password: str
-    contact_phone: Optional[str] = None
+    """
+    Registrazione self-service di un merchant. Nessun vincolo Pydantic e tutti i campi con un default: la
+    validazione sta in `merchant_service.validate_registration` (400), perché un 422 di FastAPI su un campo
+    mancante o del tipo sbagliato rimanderebbe indietro il corpo della richiesta, password compresa.
+    """
+    business_name: Any = ""
+    email: Any = ""
+    password: Any = ""
+    contact_phone: Any = None
+
+
+class ChangePasswordRequest(BaseModel):
+    """
+    Cambio password del merchant autenticato. Come `RegisterRequest`: nessun vincolo né campo obbligatorio,
+    si valida nel service (400/401) e nessuna risposta riporta le password.
+    """
+    current_password: Any = ""
+    new_password: Any = ""
 
 
 class MerchantCreateRequest(BaseModel):
@@ -36,6 +50,7 @@ class MerchantUpdateRequest(BaseModel):
     contact_phone: Optional[str] = None
     type: Optional[Literal['test', 'free', 'pro']] = None
     is_approved: Optional[bool] = None
+    is_paused: Optional[bool] = None
     bronze_threshold: Optional[int] = Field(default=None, ge=1)
     silver_threshold: Optional[int] = Field(default=None, ge=1)
     gold_threshold: Optional[int] = Field(default=None, ge=1)
@@ -63,6 +78,7 @@ class MerchantResponse(BaseModel):
     contact_phone: Optional[str] = None
     type: str
     is_approved: bool
+    is_paused: bool
     conversion_enabled: bool
     conversion_threshold: int
     conversion_value_cents: int = Field(exclude=True)
@@ -80,3 +96,48 @@ class MerchantResponse(BaseModel):
 class MerchantProfileResponse(MerchantResponse):
     """Profilo del merchant autenticato: in più le soglie EFFETTIVE dei livelli (default + override)."""
     effective_thresholds: LevelThresholds
+
+
+class AdminMerchantsResponse(BaseModel):
+    """Lista della dashboard admin: una riga per merchant (`AdminMerchantRow`: nessun segreto)."""
+    merchants: list[AdminMerchantRow]
+
+
+class AdminResetPasswordResponse(BaseModel):
+    """
+    Risposta del reset della password: la password temporanea compare **solo qui**, una volta. Fuori dal
+    `repr` (un log accidentale dell'oggetto non la stampa).
+    """
+    merchant_id: int
+    temporary_password: str = Field(repr=False)
+
+
+class InstagramKeyRequest(BaseModel):
+    """
+    Chiave Zernio incollata dal merchant. Resta un valore qualunque senza vincoli Pydantic: la forma si controlla
+    in `merchant_service.validate_zernio_key` (400), perché l'errore 422 di FastAPI rimanderebbe indietro il valore.
+    """
+    api_key: Any = ""
+
+
+class InstagramAccountRequest(BaseModel):
+    """Account Instagram scelto tra quelli collegati alla chiave Zernio (`id` di Zernio)."""
+    account_id: Any = ""
+
+
+class InstagramAccountResponse(BaseModel):
+    """Account Instagram collegato a Zernio, come lo vede il merchant (nessun dato riservato)."""
+    id: str
+    username: Optional[str] = None
+
+
+class InstagramAccountsResponse(BaseModel):
+    """Elenco degli account Instagram tra cui scegliere."""
+    accounts: list[InstagramAccountResponse]
+
+
+class InstagramPanelResponse(InstagramPanel):
+    """
+    Pannello Instagram del merchant: stato, `@username`, chiave mascherata (`…1234`), parola chiave, quota e avvisi.
+    **Non contiene mai** la chiave Zernio, il secret o l'id del webhook.
+    """

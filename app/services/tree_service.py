@@ -267,6 +267,17 @@ def pool_points(session: Session, merchant_id: int, period: str) -> int:
     return pool.points if pool else 0
 
 
+def pool_points_by_merchant(session: Session, merchant_ids: list[int], period: str) -> dict[int, int]:
+    """Punti del pool di un periodo per più negozi con una sola query (chi non ha la riga manca dal dizionario)."""
+    if not merchant_ids:
+        return {}
+    rows = session.exec(
+        select(MerchantPool.merchant_id, MerchantPool.points)
+        .where(MerchantPool.merchant_id.in_(merchant_ids), MerchantPool.period == period)
+    ).all()
+    return {merchant_id: points for merchant_id, points in rows}
+
+
 def current_pool_progress(session: Session, merchant: Merchant, now: datetime) -> PoolProgress:
     """Avanzamento del pool del mese di `now`, con le soglie effettive del negozio."""
     points = pool_points(session, merchant.id, period_for(now))

@@ -75,7 +75,7 @@ def test_merchant_contact_phone_non_valido(client, admin_headers):
 
 
 # Registrazione e login merchant: vedi tests/test_merchant_auth.py
-# Iscrizione cliente, wallet e proprietà della carta: vedi tests/test_customer.py
+# Carta del cliente (webhook, pagina /c/<token>) e vecchio flusso rimosso: vedi test_card_page.py e test_old_flow_removed.py
 
 
 # ---------------------------------------------------------------------------

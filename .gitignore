@@ -26,3 +26,9 @@ Thumbs.db
 appunti_agente.txt
 # Cartelle di sistema (OneDrive/Windows)
 desktop.ini
+
+# Output del server di collaudo
+*.out
+
+# Contesto locale della CLI Neon
+.neon

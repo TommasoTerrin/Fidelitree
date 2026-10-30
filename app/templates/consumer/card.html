@@ -8,7 +8,9 @@
     <title>La tua carta fedeltà - Fidelitree</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    {% include 'partials/pwa.html' %}
+    {# Pagina web semplice, non una PWA: niente manifest né service worker. Il percorso contiene il segreto. #}
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="referrer" content="no-referrer">
 </head>
 
 <body class="bg-gray-50 flex justify-center items-center min-h-screen p-4">
@@ -84,14 +86,14 @@
         <div class="p-8 flex flex-col items-center">
             <div id="qrcode" class="p-4 bg-white border-2 border-slate-200 rounded-3xl shadow-inner"></div>
             <p class="mt-4 text-xs text-gray-400 font-medium text-center uppercase tracking-widest">Mostra allo scanner</p>
-            <a href="/wallet" class="mt-6 text-xs text-gray-400 font-bold uppercase tracking-widest">← Le tue carte</a>
+            <a href="/privacy" class="mt-6 text-xs text-gray-400 font-bold uppercase tracking-widest">Privacy</a>
         </div>
     </div>
 
     <script>
-        // Genera il QR Code dinamicamente usando l'URL della pagina corrente
+        // Il QR contiene solo l'id della carta (non il link di questa pagina): lo legge lo scanner del negozio
         new QRCode(document.getElementById("qrcode"), {
-            text: "{{ full_url }}",
+            text: "{{ scan_code }}",
             width: 180,
             height: 180,
             colorDark: "#111827",

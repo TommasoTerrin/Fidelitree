@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex">
+    <title>Accesso admin - Fidelitree</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-slate-50 flex items-center justify-center min-h-screen p-6">
+    <div class="max-w-sm w-full space-y-8 text-center">
+        <div>
+            <img src="/static/logo_stacked.jpg" alt="Fidelitree" class="w-44 mx-auto mb-2 mix-blend-multiply">
+            <h1 class="text-2xl font-black text-slate-800 tracking-tight">Accesso admin</h1>
+            <p class="text-slate-500 text-sm mt-2">Inserisci la password del founder</p>
+        </div>
+
+        <form id="admin-login-form" action="/admin/login" method="POST" class="space-y-4">
+            <input type="password" name="password" id="admin-password" required autocomplete="current-password"
+                class="w-full p-4 bg-white border-2 border-slate-100 rounded-2xl text-center text-lg focus:border-green-500 focus:outline-none transition-all shadow-sm"
+                placeholder="Password">
+            <p id="login-error" class="hidden text-sm font-bold text-red-600" role="alert"></p>
+            <button type="submit" id="btn-admin-login"
+                class="w-full bg-slate-900 text-white font-bold py-5 rounded-2xl shadow-lg active:scale-95 transition-transform text-lg">
+                ACCEDI
+            </button>
+        </form>
+    </div>
+
+    <script>
+        // Il form funziona anche senza JS (POST classico). Con JS si resta sulla pagina per mostrare l'errore
+        // (password errata, troppi tentativi) invece del JSON grezzo; al successo il server rimanda a /admin.
+        const form = document.getElementById('admin-login-form');
+        const errorBox = document.getElementById('login-error');
+        const button = document.getElementById('btn-admin-login');
+
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            errorBox.classList.add('hidden');
+            button.disabled = true;
+            try {
+                const response = await fetch('/admin/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ password: document.getElementById('admin-password').value }),
+                });
+                // Cookie accettato = il redirect ha portato a /admin (senza cookie rimanderebbe di nuovo al login)
+                if (response.redirected && response.ok && new URL(response.url).pathname === '/admin') {
+                    window.location.href = '/admin';
+                    return;
+                }
+                let detail = 'Accesso non riuscito';
+                try {
+                    const data = await response.json();
+                    if (typeof data.detail === 'string') detail = data.detail;
+                } catch (e) { /* corpo non JSON: resta il messaggio generico */ }
+                errorBox.textContent = detail;
+                errorBox.classList.remove('hidden');
+                document.getElementById('admin-password').value = '';
+            } catch (e) {
+                errorBox.textContent = 'Connessione non riuscita: riprova';
+                errorBox.classList.remove('hidden');
+            } finally {
+                button.disabled = false;
+            }
+        });
+    </script>
+</body>
+
+</html>

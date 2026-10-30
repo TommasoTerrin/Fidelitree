@@ -6,9 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scanner - Fidelitree</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    {% include 'partials/pwa.html' %}
     <script src="https://unpkg.com/html5-qrcode"></script>
 </head>
 
+{% from 'partials/service_banner.html' import service_banner %}
 <body class="bg-black min-h-screen flex flex-col font-sans">
 
     <div class="p-6 bg-slate-900 flex justify-between items-center text-white">
@@ -18,6 +20,10 @@
             <a href="/merchant/logout" class="text-xs bg-slate-800 px-3 py-2 rounded-lg">Esci</a>
         </div>
     </div>
+
+    {% if service_state.value != 'active' %}
+    <div class="px-6 pt-6">{{ service_banner(service_state.value, dark=true) }}</div>
+    {% endif %}
 
     <div class="flex-1 flex flex-col items-center justify-center p-6">
         <div id="reader-container" class="relative w-full max-w-sm">
@@ -43,23 +49,38 @@
 
     <div class="p-10 bg-slate-900 text-center text-slate-400">
         <p class="text-sm">Inquadra il QR code del cliente per gestire il cashback</p>
+        <p id="scan-unrecognized" class="hidden mt-3 text-sm font-bold text-red-400">QR non riconosciuto</p>
     </div>
 
     <script>
         const html5QrCode = new Html5Qrcode("reader");
+        // Il QR della pagina carta contiene solo l'id (UUID) della carta: qualsiasi altro contenuto non è nostro
+        const CARD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        const unrecognized = document.getElementById("scan-unrecognized");
+        let unrecognizedTimer = null;
+
+        // La callback scatta ~15 volte al secondo sullo stesso QR: il messaggio si mostra una volta sola
+        // e si riarma dopo qualche secondo, senza ridisegnare la pagina a ogni lettura.
+        function showUnrecognized() {
+            if (unrecognizedTimer) return;
+            if (navigator.vibrate) navigator.vibrate([100, 60, 100]);
+            unrecognized.classList.remove("hidden");
+            unrecognizedTimer = setTimeout(() => {
+                unrecognized.classList.add("hidden");
+                unrecognizedTimer = null;
+            }, 3000);
+        }
+
         const qrCodeSuccessCallback = (decodedText, decodedResult) => {
+            const code = decodedText.trim();
+            if (!CARD_ID.test(code)) {
+                showUnrecognized();
+                return;
+            }
             // Vibrazione per feedback (se supportata)
             if (navigator.vibrate) navigator.vibrate(200);
-
-            // Reindirizzamento corretto per le rotte merchant
-            if (decodedText.startsWith("http")) {
-                // Se l'URL è https://.../card/ID lo trasformiamo in https://.../merchant/card/ID/manage
-                const newUrl = decodedText.replace("/card/", "/merchant/card/") + "/manage";
-                window.location.href = newUrl;
-            } else {
-                // Se è solo un ID, costruiamo l'URL completo
-                window.location.href = "/merchant/card/" + decodedText + "/manage";
-            }
+            try { html5QrCode.pause(true); } catch (e) { /* niente seconde letture mentre la pagina cambia */ }
+            window.location.href = "/merchant/card/" + code.toLowerCase() + "/manage";
         };
 
         const config = { fps: 15, qrbox: { width: 250, height: 250 } };

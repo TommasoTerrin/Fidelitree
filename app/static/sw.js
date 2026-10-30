@@ -1,4 +1,4 @@
-// Service worker minimale di Fidelitree.
+// Service worker minimale di Fidelitree, solo per la PWA del merchant (scope /merchant/).
 // Scopo: rendere l'app installabile. NON mette in cache pagine o API autenticate
 // (dati personali): solo la "shell" statica (icone, manifest), con rete per prima.
 const CACHE = "fidelitree-shell-v2";

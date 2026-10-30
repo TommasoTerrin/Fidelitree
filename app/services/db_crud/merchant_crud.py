@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 # Campi impostabili alla creazione (il chiamante decide cosa passare: l'API admin non espone auth_user_id)
 _CREATE_FIELDS = (
-    "business_name", "email", "auth_user_id", "contact_phone", "type", "is_approved",
+    "business_name", "email", "auth_user_id", "contact_phone", "type", "is_approved", "is_paused",
     "conversion_enabled", "conversion_threshold", "conversion_value_cents",
     "bronze_threshold", "silver_threshold", "gold_threshold",
 )
@@ -43,6 +43,16 @@ def get_merchant_by_id(session: Session, merchant_id: int) -> Optional[Merchant]
     return session.get(Merchant, merchant_id)
 
 
+def get_merchant_by_webhook_hook_id(session: Session, hook_id: str) -> Optional[Merchant]:
+    """Recupera il merchant dall'id opaco nel path del suo webhook Zernio (`Merchant.webhook_hook_id`)."""
+    return session.exec(select(Merchant).where(Merchant.webhook_hook_id == hook_id)).first()
+
+
+def get_merchant_by_zernio_account_id(session: Session, account_id: str) -> Optional[Merchant]:
+    """Recupera il merchant a cui è collegato un account Instagram di Zernio (`Merchant.zernio_account_id`, unico)."""
+    return session.exec(select(Merchant).where(Merchant.zernio_account_id == account_id)).first()
+
+
 def get_merchant_by_auth_user_id(session: Session, auth_user_id: str) -> Optional[Merchant]:
     """Recupera il merchant collegato a un'identità del provider di autenticazione."""
     statement = select(Merchant).where(Merchant.auth_user_id == auth_user_id)
@@ -58,6 +68,12 @@ def get_merchant_by_email(session: Session, email: str) -> Optional[Merchant]:
 def get_all_merchants(session: Session, skip: int = 0, limit: int = 100) -> List[Merchant]:
     """Restituisce la lista di tutti i merchant."""
     statement = select(Merchant).offset(skip).limit(limit)
+    return session.exec(statement).all()
+
+
+def get_newest_merchants(session: Session, limit: int) -> List[Merchant]:
+    """I merchant dal più recente (per iscrizione, poi per id), al massimo `limit`."""
+    statement = select(Merchant).order_by(Merchant.created_at.desc(), Merchant.id.desc()).limit(limit)
     return session.exec(statement).all()
 
 

@@ -11,6 +11,7 @@ psycopg2-binary       # Driver PostgreSQL (Neon/Supabase)
 
 # --- Security & Auth ---
 python-jose           # Per la creazione e validazione dei JWT (HS256, backend Python puro)
+cryptography          # AES-256-GCM: la chiave Zernio va recuperata per usarla e la stdlib non ha cifratura autenticata
 
 # --- Utility ---
 requests              # Per lo script di smoke test in produzione

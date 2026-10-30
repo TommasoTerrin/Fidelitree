@@ -12,7 +12,8 @@ from app.core.enums import Level, PointTransactionKind
 from app.core.errors import InsufficientBalanceError, NotFoundError
 from app.models.models import Card, MerchantPool, PointTransaction
 from app.services import card_service, tree_service
-from app.services.db_crud import customer_crud, merchant_crud
+from app.services.db_crud import merchant_crud
+from tests.conftest import make_card
 
 NOW = datetime(2026, 10, 12, 10, 0, tzinfo=timezone.utc)
 
@@ -30,13 +31,8 @@ def _pool_rows(session):
     return session.exec(select(MerchantPool)).all()
 
 
-def _new_card(session, merchant, email):
-    customer = customer_crud.create_customer(session, email)
-    card = Card(merchant_id=merchant.id, customer_id=customer.id)
-    session.add(card)
-    session.commit()
-    session.refresh(card)
-    return card
+def _new_card(session, merchant, igsid):
+    return make_card(session, merchant, igsid=igsid)
 
 
 def _other_merchant(session):

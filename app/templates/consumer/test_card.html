@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carta di prova - Fidelitree</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    {# Pagina pubblica e statica: nessun dato del cliente né del negozio, nessun QR vero, niente manifest né service worker. #}
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="referrer" content="no-referrer">
+</head>
+
+<body class="bg-gray-50 flex justify-center items-center min-h-screen p-4">
+
+    <div class="max-w-sm w-full bg-white rounded-[2rem] shadow-2xl overflow-hidden border border-gray-100">
+        <div id="test-card-label" class="bg-yellow-100 text-yellow-800 text-sm font-black text-center py-3 tracking-widest">
+            CARTA DI PROVA
+        </div>
+
+        <div class="p-8 pb-4 text-center">
+            <h1 class="text-2xl font-black text-gray-800">Il tuo negozio</h1>
+            <p class="text-green-600 font-medium">Carta Fedeltà Fidelitree</p>
+            <p class="mt-3 text-sm text-gray-500">
+                Questo negozio sta provando Fidelitree e deve ancora richiedere l'approvazione per attivare il servizio.
+                Qui sotto trovi una carta di esempio: i valori non sono veri e nessun dato viene salvato.
+            </p>
+        </div>
+
+        <div class="px-8 py-2 space-y-3">
+            <div class="bg-green-50 rounded-2xl p-6 border border-green-100">
+                <div class="flex justify-between items-center mb-3">
+                    <span class="text-sm text-green-700 font-bold uppercase tracking-wider">I tuoi Tree Points</span>
+                    <span class="text-3xl font-black text-green-900">🌳 20</span>
+                </div>
+                <div class="w-full bg-green-100 rounded-full h-2.5">
+                    <div class="bg-green-600 h-2.5 rounded-full" style="width: 40%"></div>
+                </div>
+                <p class="mt-3 text-xs text-green-600 text-center">Ancora 30 punti per € 2.00 di cashback</p>
+            </div>
+
+            <div class="bg-blue-50 rounded-2xl p-6 border border-blue-100">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm text-blue-700 font-bold uppercase tracking-wider">Cashback</span>
+                    <span class="text-3xl font-black text-blue-900">€ 2.00</span>
+                </div>
+            </div>
+
+            <div class="bg-amber-50 rounded-2xl p-6 border border-amber-100">
+                <p class="text-sm text-amber-700 font-bold uppercase tracking-wider mb-3">Il progetto del negozio</p>
+                <div class="mb-3">
+                    <p class="text-xl font-black text-amber-900">🥉 Bronzo</p>
+                    <p class="text-sm text-amber-700">120 punti questo mese</p>
+                </div>
+                <div class="w-full bg-amber-100 rounded-full h-2.5">
+                    <div class="bg-amber-500 h-2.5 rounded-full" style="width: 30%"></div>
+                </div>
+                <p class="mt-2 text-xs text-amber-700 text-center">Ancora 180 punti al livello Argento</p>
+                <p class="mt-3 text-sm font-bold text-green-700 text-center">Insieme questo mese stiamo piantando 1 albero 🌳</p>
+            </div>
+        </div>
+
+        <div class="p-8 flex flex-col items-center">
+            <div class="w-[180px] h-[180px] p-4 bg-gray-100 border-2 border-dashed border-slate-300 rounded-3xl flex items-center justify-center">
+                <span class="text-xs text-gray-400 font-bold uppercase tracking-widest text-center">QR di esempio</span>
+            </div>
+            <a href="/privacy" class="mt-6 text-xs text-gray-400 font-bold uppercase tracking-widest">Privacy</a>
+        </div>
+    </div>
+
+</body>
+
+</html>

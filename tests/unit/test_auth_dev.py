@@ -59,12 +59,9 @@ def test_sign_up_email_duplicata(provider):
         provider.sign_up("A@B.it ", "altra")
 
 
-def test_otp_000000_ok_altro_codice_errore(provider):
-    provider.request_otp("c@b.it")
-    token = provider.verify_otp("c@b.it", "000000")
-    assert provider.verify_token(token).email == "c@b.it"
-    with pytest.raises(AuthError):
-        provider.verify_otp("c@b.it", "123456")
+def test_il_provider_non_ha_piu_l_accesso_con_otp(provider):
+    assert not hasattr(provider, "request_otp") and not hasattr(provider, "verify_otp")
+    assert not hasattr(auth, "DEV_OTP_CODE")
 
 
 def test_verify_token_spazzatura_e_scaduto(provider):
@@ -112,8 +109,6 @@ def test_supabase_e_uno_stub(monkeypatch):
     for call in (
         lambda: p.sign_up("a@b.it", "x"),
         lambda: p.sign_in_password("a@b.it", "x"),
-        lambda: p.request_otp("a@b.it"),
-        lambda: p.verify_otp("a@b.it", "000000"),
         lambda: p.verify_token("t"),
     ):
         with pytest.raises(NotImplementedError):

@@ -1,21 +1,27 @@
 """
-Popola il database con merchant, clienti, carte e movimenti di prova per il collaudo locale.
+Popola il database con merchant, carte e movimenti di prova per il collaudo locale.
 
-Crea 2 merchant approvati con identità del provider `dev`, 2 clienti con la loro carta
-presso ciascun negozio e alcuni scan, così i pool del mese partono da livelli diversi:
+Crea 2 merchant approvati con identità del provider `dev`, 2 clienti Instagram finti (IGSID inventati,
+solo l'indice cieco finisce nel DB) con la loro carta presso ciascun negozio e alcuni scan, così i
+pool del mese partono da livelli diversi:
 - Bar Demo: conversione attiva, soglie del pool basse, pool a livello oro;
 - Forno Solo Alberi: conversione disattivata, soglie di default, pool sotto il bronzo.
 I punti si aggiungono sempre con `card_service.add_tree_points` (mai a mano nel registro),
 così movimenti e contatore `MerchantPool` restano coerenti.
 
 Utilizzo (dalla root del progetto):
-    python -m scripts.seed_db
+    python -m scripts.seed_db            # credenziali dei merchant e id delle carte
+    python -m scripts.seed_db --links    # in più, il link /c/<token> di ogni carta
 
 Funziona solo con `AUTH_PROVIDER=dev`. È idempotente: NON cancella i dati esistenti, crea solo
 ciò che manca e non ripete gli scan di un negozio che ha già movimenti.
-Accesso: cliente con email + codice `000000`; merchant con email + `DEV_AUTH_PASSWORD`.
+Accesso: merchant con email + `DEV_AUTH_PASSWORD`. Il cliente non ha accesso: la carta si apre solo con il
+link segreto. Il token è un segreto anche per carte finte, quindi i link si stampano solo con `--links`
+(solo su stdout, mai nei log). L'id della carta è invece il contenuto del QR dello scanner.
+La stampa è ASCII-safe: su una console Windows cp1252 caratteri come la freccia darebbero `UnicodeEncodeError`.
 """
 
+import argparse
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -28,13 +34,14 @@ from app.core.clock import utc_now
 from app.core.config import settings
 from app.main import engine
 from app.models.models import Card, Merchant, PointTransaction
-from app.services import card_service, customer_service
+from app.services import card_service, instagram_service
 from app.services.db_crud import merchant_crud
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-CUSTOMER_EMAILS = ["anna@fidelitree.it", "luca@fidelitree.it"]
+# Clienti finti: nome -> IGSID inventato (mai un IGSID vero)
+CUSTOMER_IGSIDS = {"anna": "igsid-seed-anna", "luca": "igsid-seed-luca"}
 
 MERCHANTS = [
     {
@@ -48,8 +55,8 @@ MERCHANTS = [
         "bronze_threshold": 20,
         "silver_threshold": 60,
         "gold_threshold": 100,
-        # (email cliente, tree points): 60 convertono subito 50 punti in 2 €; pool = 105 → oro
-        "scans": [("anna@fidelitree.it", 60), ("luca@fidelitree.it", 45)],
+        # (cliente, tree points): 60 convertono subito 50 punti in 2 €; pool = 105 → oro
+        "scans": [("anna", 60), ("luca", 45)],
     },
     {
         "business_name": "Forno Solo Alberi",
@@ -58,14 +65,14 @@ MERCHANTS = [
         "is_approved": True,
         "conversion_enabled": False,
         # pool = 30, sotto la soglia di bronzo di default → nessun livello
-        "scans": [("anna@fidelitree.it", 30)],
+        "scans": [("anna", 30)],
     },
 ]
 
 
 @dataclass
 class SeedEntry:
-    """Un merchant del seed con le carte dei clienti (chiave: email del cliente)."""
+    """Un merchant del seed con le carte dei clienti finti (chiave: nome del cliente)."""
 
     merchant: Merchant
     cards: dict[str, Card] = field(default_factory=dict)
@@ -106,58 +113,61 @@ def _has_movements(session: Session, merchant_id: int) -> bool:
 
 def seed(session: Session, now: Optional[datetime] = None) -> list[SeedEntry]:
     """
-    Crea clienti, merchant, carte e scan di prova (vedi docstring del modulo) e ritorna
+    Crea merchant, carte dei clienti finti e scan di prova (vedi docstring del modulo) e ritorna
     una `SeedEntry` per merchant. Rieseguirlo non duplica nulla.
     Solleva `RuntimeError` se `AUTH_PROVIDER` non è `dev`.
     """
     _require_dev_provider()
     now = now or utc_now()
 
-    customers = {
-        email: customer_service.get_or_create_customer(session, _identity(email))
-        for email in CUSTOMER_EMAILS
-    }
-
     entries = []
     for data in MERCHANTS:
         merchant = _get_or_create_merchant(session, data)
         entry = SeedEntry(merchant=merchant)
-        for email, customer in customers.items():
-            card, _ = customer_service.join_merchant(session, customer, merchant.id)
-            entry.cards[email] = card
+        for name, igsid in CUSTOMER_IGSIDS.items():
+            card, _ = instagram_service.get_or_create_card(session, merchant, igsid)
+            entry.cards[name] = card
 
         if _has_movements(session, merchant.id):
             logger.info("Scan già presenti per %s: non li ripeto", merchant.business_name)
         else:
-            for email, points in data["scans"]:
-                card_service.add_tree_points(session, merchant, entry.cards[email].id, points, now=now)
+            for name, points in data["scans"]:
+                card_service.add_tree_points(session, merchant, entry.cards[name].id, points, now=now)
         entries.append(entry)
     return entries
 
 
-def print_links(entries: list[SeedEntry], base_url: str) -> None:
-    """Stampa i link e le credenziali per il collaudo manuale."""
+def print_access(entries: list[SeedEntry], base_url: str, show_links: bool = False) -> None:
+    """
+    Stampa l'accesso merchant e gli id delle carte di prova (il contenuto del QR per lo scanner). Solo con
+    `show_links` stampa anche il link segreto `/c/<token>` di ogni carta (`card_link_url`, quindi con
+    `PUBLIC_BASE_URL`): il token non va in nessun altro posto. Solo caratteri ASCII.
+    """
     print("\n--- ACCESSI DI PROVA ---")
-    print(f"Cliente:  {base_url}/customer/login  → email + codice 000000")
-    print(f"Merchant: {base_url}/merchant/login  → email + password '{settings.DEV_AUTH_PASSWORD}'")
-    print(f"Wallet:   {base_url}/wallet")
+    print(f"Merchant: {base_url}/merchant/login  -> email + password '{settings.DEV_AUTH_PASSWORD}'")
     for entry in entries:
         merchant = entry.merchant
         print(f"\nMERCHANT: {merchant.business_name} (id={merchant.id})")
         print(f"  Email:  {merchant.email}")
-        print(f"  JOIN (QR del negozio): {base_url}/join/{merchant.id}")
-        for email, card in entry.cards.items():
-            print(f"  Carta di {email}: {base_url}/card/{card.id}")
-    print("\nClienti:", ", ".join(CUSTOMER_EMAILS))
+        for name, card in entry.cards.items():
+            print(f"  Carta di {name}: id {card.id}")
+            if show_links:
+                print(f"    Link: {instagram_service.card_link_url(card)}")
     print("-------------------------\n")
 
 
-def main() -> None:
-    """Esegue il seed sul DB di `DATABASE_URL` e stampa i link (a sessione ancora aperta)."""
+def main(argv: Optional[list[str]] = None) -> None:
+    """
+    Esegue il seed sul DB di `DATABASE_URL` e stampa gli accessi (a sessione ancora aperta). `argv` si passa
+    nei test; `--links` aggiunge i link `/c/<token>` delle carte.
+    """
+    parser = argparse.ArgumentParser(prog="python -m scripts.seed_db", description="Seed del DB di collaudo.")
+    parser.add_argument("--links", action="store_true", help="stampa anche il link segreto /c/<token> di ogni carta")
+    args = parser.parse_args(argv)
     try:
         with Session(engine) as db_session:
             entries = seed(db_session)
-            print_links(entries, f"http://{settings.APP_HOST}:{settings.APP_PORT}")
+            print_access(entries, f"http://{settings.APP_HOST}:{settings.APP_PORT}", show_links=args.links)
     except RuntimeError as e:
         raise SystemExit(f"ERRORE: {e}")
 
