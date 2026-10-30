@@ -8,9 +8,9 @@
 > v0.1.0: assorbe v0.2.x (pool del negozio, auth merchant), mai rilasciata. Storia di v0.2.0:
 > [`.agents/tickets/v0.2.0/`](.agents/tickets/v0.2.0/README.md). Lo stato del lavoro è in
 > [`.agents/planner/current.md`](.agents/planner/current.md).
-> Auth locale dei merchant (ticket 11), stato del servizio (12) e dashboard admin `/admin` (13) **sono implementati**.
-> Resta il ticket 14 (collaudo end-to-end del founder, esiti in `zernio-notes.md`, ok al merge): nessun merge su
-> `develop`/`main` e nessun tag prima dell'ok esplicito dell'utente.
+> **In produzione dal 2026-10-30** su `https://fidelitree.app` (tag `v0.3.0` su `a83cd64`, Neon `production`): da qui
+> ogni modifica allo schema richiede la migrazione preparata prima (vedi «Vincoli»). Nessun merge su `develop`/`main` e
+> nessun tag senza l'ok esplicito dell'utente. Cosa manca prima dei pilota: `.agents/planner/current.md`.
 
 ## Contesto di business
 
@@ -79,8 +79,8 @@ python local_main.py
 python -m pytest
 python -m pytest tests/unit      # solo core puro, velocissimi
 
-# Utilità DB (ATTENZIONE: agiscono sul DATABASE_URL in .env, che può essere il DB vero:
-# per il collaudo locale usa un SQLite usa-e-getta, vedi .agents/workflows/deploy.md)
+# Utilità DB (ATTENZIONE: agiscono sul DATABASE_URL in .env = Neon development, o su quello del terminale.
+# MAI su Neon production: lì ci sono dati veri)
 python -m scripts.reset_db [--force]  # drop + ricrea schema (chiede conferma, --force la salta)
 python -m scripts.seed_db [--links]  # 2 merchant, carte "Instagram" finte e scan di prova; --links stampa anche i link /c/<token> (segreti) (solo AUTH_PROVIDER=dev)
 
@@ -96,13 +96,16 @@ python -m scripts.zernio_check accounts | conversations | send-card | send-text 
 # Collaudo locale del webhook: evento message.received firmato verso il server (che invia DAVVERO a Zernio)
 python -m scripts.replay_webhook --merchant-id N --conversation-id ID [--text CARTA | --postback] [--standby] [--follower si|no] [--event-id ID]
 
-# Tunnel https per ricevere i webhook in locale (PUBLIC_BASE_URL = URL stampato)
+# Collaudo manuale (.agents/workflows/collaudo.md): tunnel https + server con i log dell'app.
+# run_collaudo si rifiuta con un DB che non sia Neon development o SQLite
 cloudflared tunnel --url http://127.0.0.1:8001
+python -m scripts.run_collaudo | Tee-Object -FilePath collaudo.log
 
-# Dashboard admin del founder (password = ADMIN_SECRET_KEY): http://127.0.0.1:8001/admin  (in produzione: https://<app>/admin)
+# Dashboard admin del founder (password = ADMIN_SECRET_KEY): http://127.0.0.1:8001/admin  (in produzione: https://fidelitree.app/admin)
 
-# Smoke test post-deploy (non pianta alberi; controlla anche /admin/login e l'API admin)
-python scripts/smoke_test_prod.py https://<app>.ondigitalocean.app <ADMIN_SECRET_KEY>
+# Smoke test post-deploy (non pianta alberi; controlla anche /admin/login e l'API admin).
+# La chiave admin si mette nella variabile d'ambiente ADMIN_SECRET_KEY, non come argomento (vedi deploy.md)
+python scripts/smoke_test_prod.py https://fidelitree.app
 ```
 
 ## Mappa del codice
@@ -136,7 +139,7 @@ app/
     webhooks.py         # POST /webhooks/zernio/{hook_id}
   templates/            # Jinja2 (consumer/, merchant/, admin/, partials/ condivisi: pwa, toast, levels, service_banner)
   static/               # PWA merchant: manifest.webmanifest, sw.js (servito anche da GET /sw.js), icone
-scripts/                # reset_db, seed_db, close_period, ecologi_check, zernio_check, replay_webhook, smoke_test_prod
+scripts/                # reset_db, seed_db, close_period, ecologi_check, zernio_check, replay_webhook, run_collaudo, smoke_test_prod
 tests/                  # pytest + conftest (SQLite in-memory); tests/unit/ = core puro senza DB
 ```
 
@@ -157,6 +160,7 @@ tests/                  # pytest + conftest (SQLite in-memory); tests/unit/ = co
 9. **Prima di una release**: segui [.agents/checklists/pre-release.md](.agents/checklists/pre-release.md).
 10. **Decisioni architetturali importanti**: fermati e chiedi conferma all'utente prima di implementare.
 11. **Aggiorna il planner**: a inizio lavoro leggi [.agents/planner/current.md](.agents/planner/current.md) e aggiornalo a fine sessione.
+12. **Collaudo manuale per feature**: ogni feature (o ticket) che cambia ciò che vede un utente aggiunge i suoi passi (URL, azione, atteso) in fondo a [.agents/workflows/collaudo.md](.agents/workflows/collaudo.md). Il founder li esegue in locale, su Neon `development`, prima del merge su `main`.
 
 ## Vincoli e trade-off accettati (non "sistemarli" senza chiedere)
 
@@ -192,6 +196,8 @@ tests/                  # pytest + conftest (SQLite in-memory); tests/unit/ = co
 - **Niente Alembic**: lo schema è gestito da `create_all()` all'avvio; il DB si resetta con gli script. Alembic tornerà quando i dati di produzione andranno preservati.
 - **Modifiche allo schema = migrazione preparata prima** (2026-10-29, decisione del founder): `create_all()` non altera le tabelle esistenti, quindi **qualsiasi** modifica alla struttura del DB (anche una sola colonna o un valore di enum) richiede **prima** uno script SQL o Alembic preparato e provato su un branch Neon (rifare `development` da `production`, applicare, provare l'app), **poi** applicato in produzione con un branch di backup. Vale dal giorno in cui in produzione ci sono dati veri; fino al primo deploy il reset è ammesso. Nota: i valori degli enum in Postgres sono i **nomi** dei membri (es. `SEND_UNCERTAIN`) e un valore nuovo richiede `ALTER TYPE ... ADD VALUE`. La produzione usava Alembic con il prototipo precedente (tabella `alembic_version`, azzerata al primo deploy).
 - **Ambienti** (2026-10-29): **nessuno staging** (niente seconda app DO: una micro-SaaS senza ancora pilota). Locale = app avviata direttamente (non in Docker) con `.env` che punta al branch Neon **`development`** (fisso, mai a `production`); i test (`pytest`) forzano un SQLite temporaneo da `tests/conftest.py` e non toccano mai Neon. Produzione = app DO `fidelitree` (branch `main`, dominio `fidelitree.app`) con il branch Neon **`production`**. Prima di un rilascio si prova in locale con tunnel `cloudflared` e Neon `development`; in caso di errore grave si torna indietro con git (e, se lo schema è cambiato, col branch Neon di backup).
+- **Dipendenze fissate** (2026-10-30): `requirements.txt` con versioni `==`. Senza versioni il build Docker prendeva l'ultima release e SQLAlchemy 2.1 ha rotto il primo deploy (per `postgresql://` usa psycopg 3, qui c'è psycopg2): SQLAlchemy resta nella serie 2.0 finché il driver è psycopg2. Un aggiornamento passa da pytest, pip-audit e un avvio vero su Neon `development` (la CI usa SQLite). Procedura in `deploy.md`.
+- **DB di produzione: endpoint diretto di Neon** (2026-10-30), non il pooler: un solo processo con il suo pool SQLAlchemy; il pooler servirà con più istanze. Le password dei branch sono diverse (un branch nato da `production` ne eredita la password: va reimpostata).
 - Il vecchio prototipo in `feature/trees` è archivio, non mergiare.
 
 ## Approfondimenti
@@ -203,7 +209,8 @@ tests/                  # pytest + conftest (SQLite in-memory); tests/unit/ = co
 | [.agents/architecture/overview.md](.agents/architecture/overview.md) | Architettura, modello dati, segreti, flussi (webhook, onboarding, scan), punto di aggancio Zernio, endpoint |
 | [.agents/architecture/zernio-notes.md](.agents/architecture/zernio-notes.md) | Vincoli Zernio e Meta con le fonti (limiti, firma, retry, quota, standby) |
 | [.agents/workflows/development.md](.agents/workflows/development.md) | Git flow, ciclo di sviluppo di una feature |
-| [.agents/workflows/deploy.md](.agents/workflows/deploy.md) | Deploy DigitalOcean, env vars |
+| [.agents/workflows/deploy.md](.agents/workflows/deploy.md) | Deploy DigitalOcean + Neon, env vars, procedura di release, rollback (codice e schema), dipendenze |
+| [.agents/workflows/collaudo.md](.agents/workflows/collaudo.md) | Collaudo manuale in locale prima del deploy: parte fissa e passi per feature |
 | [.agents/checklists/pre-release.md](.agents/checklists/pre-release.md) | Checklist prima del merge su main |
 | [.agents/planner/roadmap.md](.agents/planner/roadmap.md) | Backlog e feature future |
 | [.agents/planner/current.md](.agents/planner/current.md) | Stato corrente del lavoro |

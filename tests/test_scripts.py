@@ -1,5 +1,5 @@
 """
-Test degli script di supporto: seed del DB, smoke test, reset del DB.
+Test degli script di supporto: seed del DB, smoke test, reset del DB, avvio per il collaudo.
 Tutto su SQLite in-memory (fixture `session`/`client`), senza rete e senza Ecologi.
 """
 
@@ -26,7 +26,7 @@ from app.models.models import (
 )
 from app.services import ecologi_service, instagram_service, tree_service, zernio_service
 from app.version import get_version
-from scripts import ecologi_check, replay_webhook, reset_db, seed_db, smoke_test_prod, zernio_check
+from scripts import ecologi_check, replay_webhook, reset_db, run_collaudo, seed_db, smoke_test_prod, zernio_check
 from scripts.smoke_test_prod import run_smoke_test
 from tests.conftest import WEBHOOK_TEST_SECRET, ZERNIO_TEST_KEY
 
@@ -815,3 +815,23 @@ def test_smoke_test_controlla_la_dashboard_admin(client, mock_ecologi, capsys):
 def test_smoke_test_controlla_la_carta_di_prova(client, mock_ecologi, capsys):
     assert run_smoke_test("", settings.ADMIN_SECRET_KEY, http=client) is True
     assert "[OK] Pagina /carta-di-prova raggiungibile" in capsys.readouterr().out
+
+
+# --- avvio per il collaudo ---
+
+def test_run_collaudo_accetta_sqlite_e_neon_development():
+    assert run_collaudo.check_database_url("sqlite:///collaudo.db") == "SQLite usa-e-getta"
+    url = "postgresql://u:p@ep-morning-credit-alqqrsao.c-3.eu-central-1.aws.neon.tech/neondb?sslmode=require"
+    assert run_collaudo.check_database_url(url) == "ep-morning-credit-alqqrsao"
+
+
+@pytest.mark.parametrize("url", [
+    "postgresql://u:segreto@ep-proud-darkness-al7fkv7n.c-3.eu-central-1.aws.neon.tech/neondb?sslmode=require",
+    "postgresql://u:segreto@db.example.com/x",
+    "postgresql:///senza-host",
+])
+def test_run_collaudo_rifiuta_ogni_altro_db_senza_stampare_l_url(url):
+    with pytest.raises(SystemExit) as exc:
+        run_collaudo.check_database_url(url)
+    assert "RIFIUTATO" in str(exc.value)
+    assert "segreto" not in str(exc.value) and "postgresql://" not in str(exc.value)
