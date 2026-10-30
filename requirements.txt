@@ -1,20 +1,20 @@
-# Versioni fissate (2026-10-30): sono quelle con cui passano i test e il collaudo su Neon.
-# Senza versione il build Docker prendeva l'ultima release (SQLAlchemy 2.1 usa psycopg 3 di default per
-# postgresql:// e l'app non partiva). Si aggiornano a mano, con test e collaudo.
+# Versioni fissate (2026-10-30): quelle con cui passano i test, pip-audit e l'avvio su Neon development.
+# Senza versione il build Docker prendeva l'ultima release di tutto: SQLAlchemy 2.1 usa psycopg 3 di default
+# per postgresql:// e l'app non partiva. Si aggiornano a mano: pytest, pip-audit e avvio su Neon development.
 
 # --- Core Web Server ---
-fastapi==0.135.1               # Framework web (include starlette e pydantic)
-starlette==0.52.1              # Base di FastAPI (fissata insieme a fastapi)
-pydantic==2.12.5               # Validazione dei dati (Settings, schemi)
-uvicorn==0.41.0                # Server ASGI (avvio locale e Docker)
+fastapi==0.162.0               # Framework web (include starlette e pydantic)
+starlette==1.10.0              # Base di FastAPI (fissata insieme a fastapi)
+pydantic==2.14.2               # Validazione dei dati (Settings, schemi)
+uvicorn==0.54.0                # Server ASGI (avvio locale e Docker)
 jinja2==3.1.6                  # Template HTML (Jinja2Templates)
-python-multipart==0.0.22       # Necessario per gestire i form di login e invio punti
-pydantic-settings==2.13.1      # Configurazione da .env
+python-multipart==0.0.32       # Necessario per gestire i form di login e invio punti
+pydantic-settings==2.16.2      # Configurazione da .env
 
 # --- Database ---
-sqlmodel==0.0.37               # L'unione tra SQLAlchemy e Pydantic
-sqlalchemy==2.0.48             # Fissata: dalla 2.1 postgresql:// usa psycopg 3, qui c'è psycopg2
-psycopg2-binary==2.9.11        # Driver PostgreSQL (Neon/Supabase)
+sqlmodel==0.0.48               # L'unione tra SQLAlchemy e Pydantic
+sqlalchemy==2.0.55             # Serie 2.0: dalla 2.1 postgresql:// usa psycopg 3, qui c'è psycopg2
+psycopg2-binary==2.9.13        # Driver PostgreSQL (Neon/Supabase)
 
 # --- Security & Auth ---
 python-jose==3.5.0             # Per la creazione e validazione dei JWT (HS256, backend Python puro)
@@ -25,7 +25,7 @@ requests==2.34.2               # Per lo script di smoke test in produzione
 httpx==0.28.1                  # Client async per l'API Ecologi + TestClient dei test
 
 # --- Test ---
-pytest==9.1.1                  # Test suite (gira su SQLite in-memory, non tocca il DB reale)
+pytest==9.2.0                  # Test suite (gira su SQLite in-memory, non tocca il DB reale)
 
 # --- Production ---
-gunicorn==25.1.0               # Process manager per far girare FastAPI in produzione
+gunicorn==26.2.0               # Process manager per far girare FastAPI in produzione
