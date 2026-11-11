@@ -159,10 +159,13 @@ tests/                  # pytest + conftest (SQLite in-memory); tests/unit/ = co
 8. **Niente segreti nel codice**: tutto passa da `.env` (locale) / env vars DigitalOcean (prod). `.env.example` documenta le variabili obbligatorie.
 9. **Prima di una release**: segui [.agents/checklists/pre-release.md](.agents/checklists/pre-release.md).
 10. **Decisioni architetturali importanti**: fermati e chiedi conferma all'utente prima di implementare.
-11. **Aggiorna il planner**: a inizio lavoro leggi [.agents/planner/current.md](.agents/planner/current.md) e aggiornalo a fine sessione.
+11. **Aggiorna il planner**: a inizio lavoro leggi [.agents/planner/current.md](.agents/planner/current.md) (blocco «Harness»: versione, fase, ticket, prossimo comando) e aggiornalo a fine sessione.
 12. **Collaudo manuale per feature**: ogni feature (o ticket) che cambia ciò che vede un utente aggiunge i suoi passi (URL, azione, atteso) in fondo a [.agents/workflows/collaudo.md](.agents/workflows/collaudo.md). Il founder li esegue in locale, su Neon `development`, prima del merge su `main`.
+13. **Processo a skill**: il ciclo di una feature (grilling → spec → contract e ticket → TDD → review → release) segue le skill in [`.claude/skills/`](.claude/skills/), con ordine e gate in [CLAUDE.md](CLAUDE.md). Un agente diverso da Claude Code le legge come procedure in markdown.
 
 ## Vincoli e trade-off accettati (non "sistemarli" senza chiedere)
+
+> **Dal 2026-11-11 le decisioni nuove non si aggiungono qui**: vanno in [`.agents/decisions/`](.agents/decisions/README.md) (una scheda per decisione) e le regole vigenti per area in [`.agents/specs/`](.agents/specs/README.md). Le voci sotto restano valide finché non vengono migrate nelle schede.
 
 - **Chiave Ecologi unica di piattaforma** (decisione 2026-10-09, sostituisce quella per-merchant del 2026-07-09): sta in env (`ECOLOGI_API_KEY`), il founder paga tutti gli alberi. I merchant non hanno account Ecologi.
 - **Ecologi: due chiavi, un solo URL, nome del negozio pubblico** (2026-10-14): non esiste un sandbox, la prova è il flag `"test": true` sullo stesso `ECOLOGI_BASE_URL`; `ECOLOGI_TEST_MODE` sceglie tra `ECOLOGI_TEST_API_KEY` e `ECOLOGI_API_KEY` (nessun fallback, nessun blocco legato a `ENVIRONMENT`). Il `name` mandato a Ecologi è `<negozio> · <mese> <anno>` e compare nella foresta pubblica **senza gestione del consenso** (i merchant sono pochi e informati a voce). Si salva solo `treeUrl` in `TreePlanting.ecologi_ref`.
@@ -214,3 +217,7 @@ tests/                  # pytest + conftest (SQLite in-memory); tests/unit/ = co
 | [.agents/checklists/pre-release.md](.agents/checklists/pre-release.md) | Checklist prima del merge su main |
 | [.agents/planner/roadmap.md](.agents/planner/roadmap.md) | Backlog e feature future |
 | [.agents/planner/current.md](.agents/planner/current.md) | Stato corrente del lavoro |
+| [.agents/specs/](.agents/specs/README.md) | Come funziona oggi ogni area del sistema (spec vive) |
+| [.agents/decisions/](.agents/decisions/README.md) | Decisioni architetturali e di business, una scheda ciascuna |
+| [.agents/glossario.md](.agents/glossario.md) | Vocabolario del dominio, unico per spec, codice e test |
+| [.agents/fuori-scope.md](.agents/fuori-scope.md) | Idee valutate e scartate, con il motivo |
