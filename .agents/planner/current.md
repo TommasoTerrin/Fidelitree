@@ -10,14 +10,17 @@
 > Blocco letto per primo da ogni sessione (vedi `CLAUDE.md`). Lo aggiornano le skill a ogni cambio di fase e a ogni
 > commit di ticket. Fasi: `nessuna` · `grilling` · `spec` · `contract` · `implementazione` · `collaudo`.
 
-- **Versione**: nessuna aperta — prossima: **campagne pilota** (numero da decidere al passo 1 di `/new-feature`;
-  proposta del founder: v0.4.1)
+- **Versione**: **v0.4.1 — Campagne pilota: promo via DM e commenti Instagram**
+  ([README](../tickets/v0.4.1/README.md))
 - **Branch**: `feature/campagne-pilota` (già creato da `develop` il 2026-11-12, con le skill)
-- **Fase**: `nessuna`
+- **Fase**: `spec` (grilling chiuso il 2026-11-12)
 - **Ticket**: —
-- **Prossimo comando**: `/new-feature` con il brief [brief-campagne-pilota.md](brief-campagne-pilota.md)
+- **Prossimo comando**: `/spec`
 
 ## Dove siamo
+
+**v0.4.1 aperta (2026-11-12)**: grilling chiuso sulle campagne pilota (13 decisioni, verbale e riepilogo in
+[tickets/v0.4.1/README.md](../tickets/v0.4.1/README.md)); prossimo passo `/spec`.
 
 **Campagne pilota (2026-11-12)**: la prima v0.4.0 delle campagne (adesioni, pagina `/p/`, secondo QR) è **archiviata**
 sul branch `feature/campagne` (non mergiare; ticket 01-03 fatti, 04 parziale). Il founder l'ha ridotta per i pilota:

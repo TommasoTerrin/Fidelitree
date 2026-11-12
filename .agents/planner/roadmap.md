@@ -46,6 +46,14 @@ Il cliente commenta un post o risponde a una storia con la parola chiave e ricev
 (`InboundMessage.source`): si aggiunge la sorgente e l'evento al webhook. Attenzione: per le private reply Meta può
 rifiutare bottoni e card ai non follower (errore 2/1545133, vedi `zernio-notes.md`).
 
+### Campagne: estensioni rimandate dalla v0.4.1 (grilling del 2026-11-12)
+- **Date di inizio e fine** della campagna (ora di Roma): risposte solo nel periodo, riga «Valida dal … al …»
+  composta da sola. Nel pilota la validità la scrive il founder nel testo della promo.
+- **Campagne create dal merchant** (oggi solo il founder da `/admin`); con limiti dei campi più stretti.
+- **Promo salvata nella carta** e utilizzo unico o N volte per cliente (oggi il coupon è il DM e decide il merchant).
+- **«Porta un amico»** (affiliazione) e **dati per cliente** sulle campagne.
+- **Card inviata direttamente da un commento** `CARTA` (oggi la risposta privata invita a scrivere `CARTA` in DM).
+
 ### Follow-gate per negozio e QR temporaneo per chi non segue
 - **Opzione per singolo negozio** del blocco "carta solo a chi segue" e **testo di invito scelto dal merchant** (in
   v0.3.0 il blocco vale per tutti e il testo è fisso).
