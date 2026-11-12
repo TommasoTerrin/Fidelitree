@@ -88,9 +88,9 @@ Si copia nel ticket che ne ha bisogno, con `git cherry-pick` o `git show feature
   `send-private-reply` di `zernio_check`, test; note di collaudo in `zernio-notes.md` dell'archivio.
 - Migrazione nuova `migrations/0001_campagne.sql` con **una sola** `CREATE TABLE`.
 
-Attenzione: Neon `development` potrebbe avere le 4 tabelle della vecchia v0.4.0 (create da `create_all` durante un
-collaudo). Prima del primo collaudo vanno controllate e, con l'ok del founder, eliminate: altrimenti
-`CREATE TABLE IF NOT EXISTS campaign` lascerebbe le colonne vecchie.
+Neon `development`: le 4 tabelle della vecchia v0.4.0 (`campaign`, `promotion`, `campaign_grant`,
+`promotion_redemption`, tutte con 0 righe) sono state **eliminate il 2026-11-12** con l'ok del founder; ora il DB ha
+solo le 8 tabelle dei modelli di `develop`. Il nome `campaign` è libero per la tabella nuova.
 
 ## Fuori scope (da registrare in roadmap o in `.agents/fuori-scope.md` nel grilling)
 
