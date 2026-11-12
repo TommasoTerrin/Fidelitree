@@ -30,7 +30,9 @@ negozio-clienti su Instagram (seguire, guardare i post, commentare).
    qualsiasi post che contiene la parola chiave.
 6. **La risposta è sempre e solo un DM di testo**, mai una risposta pubblica sotto il post. Per il commento è la
    «risposta privata» di Instagram, che arriva al cliente come DM (una sola per commento, entro 7 giorni, mai
-   ritentata). Ogni risposta consuma un invio della quota Zernio (10.000 al mese), come un DM normale.
+   ritentata). Un commento con la parola chiave produce **un** invio, che arriva solo in DM: sotto il post non
+   compare niente. Se la risposta privata conti nella quota Zernio come un DM è **da verificare** (il nostro
+   `ZERNIO_MONTHLY_SEND_LIMIT`, 10.000, è solo il contatore per l'avviso, non la regola di Zernio).
 7. **Contenuto del DM**: testo della promo + «Valida dal GG/MM al GG/MM» + (da confermare il testo esatto) «Per
    usarla devi seguirci e avere la carta: scrivici CARTA». Niente card, niente bottoni, niente link: il testo arriva
    anche a chi non segue.
@@ -41,7 +43,8 @@ negozio-clienti su Instagram (seguire, guardare i post, commentare).
 10. **Scanner**: la gestione della carta (dopo lo scan del QR della carta) mostra le campagne attive del negozio con
     «Applica <nome> (+X €)» → cashback sulla carta e contatori, in una transazione. Bloccato con negozio in attesa o
     in pausa, come ogni aggiunta di cashback. Tree points e pool non cambiano. La pagina carta del cliente non cambia.
-11. **Contatori** visibili in `/admin`: richieste da DM, richieste da commento, utilizzi («Applica»), cashback erogato.
+11. **Contatori** visibili in `/admin`: richieste da DM, richieste da commento, utilizzi («Applica»). In più,
+    proposto dall'agente e da confermare: cashback erogato.
 
 ## Da decidere nel grilling (con la raccomandazione dell'agente)
 
@@ -68,6 +71,7 @@ negozio-clienti su Instagram (seguire, guardare i post, commentare).
 - risposta privata di solo testo consegnata a un **non follower**; `{postId}` = `comment.platformPostId`;
 - come riconoscere i commenti dell'account stesso (`isOwner` o altro);
 - campo del testo nella risposta a una storia (`metadata.storyReply`);
+- se la risposta privata a un commento consuma la quota Zernio come un DM;
 - cambiare gli eventi dei webhook dei negozi già collegati senza farli ricollegare (`PUT /v1/webhooks/settings`,
   dalla spec Zernio, non ancora provato).
 
