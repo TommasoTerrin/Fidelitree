@@ -13,14 +13,29 @@
 - **Versione**: **v0.4.1 — Campagne pilota: promo via DM e commenti Instagram**
   ([README](../tickets/v0.4.1/README.md))
 - **Branch**: `feature/campagne-pilota` (già creato da `develop` il 2026-11-12, con le skill)
-- **Fase**: `contract` (spec approvata il 2026-11-12, gate 1)
-- **Ticket**: —
-- **Prossimo comando**: `/spec` (fase B: modello di dominio, contract, triage e ticket → gate 2)
+- **Fase**: `implementazione` (gate 1 e gate 2 approvati il 2026-11-12)
+- **Ticket**: 01 (da fare)
+- **Prossimo comando**: `/implement 01`
 
 ## Dove siamo
 
 **v0.4.1 aperta (2026-11-12)**: spec approvata al gate 1 (30 criteri AC-01..30, schede 0001-0005 in
-`.agents/decisions/`), in [tickets/v0.4.1/README.md](../tickets/v0.4.1/README.md); prossimo passo `/spec` fase B.
+`.agents/decisions/`), in [tickets/v0.4.1/README.md](../tickets/v0.4.1/README.md). Fase B di `/spec` fatta il
+2026-11-12: `domain-model.md`, `contracts.md`, ticket 01-06 e `HANDOFF.md` nella stessa cartella. **Gate 2 approvato
+il 2026-11-12** (scostamento 3 ammesso, 04 bloccante con piano B, strumenti di collaudo sì): modello e contract congelati.
+
+### Ticket v0.4.1
+
+| # | Ticket | Priorità | Chi | Dipende da | Stato |
+|---|---|---|---|---|---|
+| 01 | [Versione, modello `Campaign`, script SQL, core delle campagne](../tickets/v0.4.1/01-modello-core-sql.md) | bloccante | agente | — | ⬜ |
+| 02 | [Dashboard admin: campagne e pausa che archivia](../tickets/v0.4.1/02-admin-campagne-pausa.md) | bloccante | agente | 01 | ⬜ |
+| 03 | [Webhook: parola chiave in DM e risposte alle storie](../tickets/v0.4.1/03-webhook-dm-campagne.md) | bloccante | agente | 01 | ⬜ |
+| 04 | [Commenti: risposta privata](../tickets/v0.4.1/04-commenti-risposta-privata.md) | bloccante (piano B) | agente | 03 | ⬜ |
+| 05 | [Scanner: «Applica»](../tickets/v0.4.1/05-scanner-applica.md) | bloccante | agente | 01 | ⬜ |
+| 06 | [Documentazione, script SQL su Neon, collaudo su Instagram vero](../tickets/v0.4.1/06-documentazione-collaudo.md) | bloccante | misto | 01-05 | ⬜ |
+
+Ordine proposto: 01 → 02 → 03 → 04 → 05 → 06 (02 prima di 03 e 05 per poter creare campagne a mano nei collaudi).
 
 **Campagne pilota (2026-11-12)**: la prima v0.4.0 delle campagne (adesioni, pagina `/p/`, secondo QR) è **archiviata**
 sul branch `feature/campagne` (non mergiare; ticket 01-03 fatti, 04 parziale). Il founder l'ha ridotta per i pilota

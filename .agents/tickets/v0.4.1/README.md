@@ -1,8 +1,11 @@
 # v0.4.1 — Campagne pilota: promo via DM e commenti Instagram
 
-> **Stato: SPEC APPROVATA il 2026-11-12** (gate 1 di 3; D1-D7, D9, D11-D13, D15 confermati; D8 sostituito dalla
-> regola di oggi; D10 cambiato: le campagne si possono anche eliminare; D14 e D16 tolti: nessun controllo sui trattini
-> e nessun filtro dei commenti del negozio, che cambia la decisione 5). Grilling chiuso il 2026-11-12 (verbale in
+> **Stato: SPEC APPROVATA il 2026-11-12, gate 2 approvato il 2026-11-12** (modello, contract e ticket 01-06:
+> [domain-model.md](domain-model.md), [contracts.md](contracts.md); scostamenti accettati, il 3 ammette campagne
+> con il negozio in pausa; 04 bloccante con piano B; strumenti di collaudo approvati). Al gate 1: D1-D7, D9,
+> D11-D13, D15 confermati; D8 sostituito dalla regola di oggi; D10 cambiato: le campagne si possono anche eliminare;
+> D14 e D16 tolti: nessun controllo sui trattini e nessun filtro dei commenti del negozio, che cambia la decisione 5.
+> Grilling chiuso il 2026-11-12 (verbale in
 > fondo). Branch `feature/campagne-pilota` da `develop` (creato il 2026-11-12, contiene il processo a skill).
 >
 > **Numero di versione**: patch per scelta del founder anche se la versione aggiunge una tabella e una migrazione (la
