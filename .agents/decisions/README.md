@@ -40,4 +40,4 @@ Cosa diventa più facile, cosa più difficile, cosa resta da fare (roadmap).
 
 | # | Decisione | Stato | Area |
 |---|---|---|---|
-| — | (nessuna scheda ancora: le decisioni fino a v0.4.0 sono in AGENTS.md, «Vincoli e trade-off accettati») | | |
+| — | (nessuna scheda ancora: le decisioni fino a v0.3.0 sono in AGENTS.md, «Vincoli e trade-off accettati») | | |

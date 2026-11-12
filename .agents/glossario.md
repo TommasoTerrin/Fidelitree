@@ -22,7 +22,4 @@ termini e non dei sinonimi. Un termine nuovo nasce nel grilling (`/new-feature`)
 | **Chiusura del periodo** | Script mensile che pianta gli alberi del livello raggiunto | `scripts.close_period` |
 | **Stato del servizio** | In attesa / attivo / in pausa, derivato da `is_approved` e `is_paused` | `ServiceState` |
 | **Carta di prova** | Carta fittizia per i clienti nuovi di un negozio in attesa | `/carta-di-prova` |
-| **Campagna** | Parola chiave, periodo e regole di un negozio, con una o più promozioni (v0.4.0) | `Campaign` |
-| **Promozione** | Etichetta + importo di cashback dentro una campagna | `Promotion` |
-| **Adesione** | Legame carta–campagna, con QR e link `/p/<token>` | `CampaignGrant` |
-| **Utilizzo** | Un «Utilizza» del merchant che accredita una promozione | `PromotionRedemption` |
+| **Campagna** | Parola chiave, testo della promo e periodo di un negozio; il DM ricevuto è il coupon (campagne pilota, termini da fissare nella spec) | — |

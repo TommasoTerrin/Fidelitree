@@ -4,8 +4,10 @@ Le spec delle versioni (`.agents/tickets/vX.Y.Z/README.md`) raccontano **cosa ca
 questa cartella raccontano **come funziona oggi** ogni area del sistema, già sommando tutte le versioni rilasciate.
 Chi deve toccare un'area legge prima il suo file qui, non la storia dei ticket.
 
-**Si parte da v0.5.0** (decisione del founder del 2026-11-11): v0.4.0 si chiude con il metodo di prima (regole in
-AGENTS.md); i file di questa cartella li crea la prima versione dalla v0.5.0 in poi che tocca l'area.
+**Si parte dalle campagne pilota**, la prima versione aperta con le skill. La decisione del 2026-11-11 diceva «da
+v0.5.0», perché v0.4.0 doveva chiudersi con il metodo di prima; il 2026-11-12 quella v0.4.0 è stata archiviata
+(branch `feature/campagne`) e le campagne ripartono da zero con le skill. I file di questa cartella li crea la prima
+versione che tocca l'area.
 
 ## Regole
 
@@ -30,5 +32,5 @@ AGENTS.md); i file di questa cartella li crea la prima versione dalla v0.5.0 in 
 | Pool del negozio, livelli, chiusura mensile, Ecologi | `pool-alberi.md` | da creare |
 | Auth dei merchant e stato del servizio | `merchant-auth-stato.md` | da creare |
 | Dashboard admin del founder | `admin.md` | da creare |
-| Campagne promozionali | `campagne.md` | da creare (v0.4.0, in sviluppo) |
+| Campagne promozionali | `campagne.md` | da creare (campagne pilota, in sviluppo) |
 | Dati, segreti, privacy, log | `dati-e-segreti.md` | da creare |

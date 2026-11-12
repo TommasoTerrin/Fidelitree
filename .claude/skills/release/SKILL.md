@@ -84,11 +84,10 @@ Su un branch `docs/chiusura-vX.Y.Z` da `develop`:
 1. `.agents/tickets/vX.Y.Z/STORICO.md`: cronologia breve (formato di `v0.2.0/STORICO.md`) presa da `current.md` e dai
    ticket; esito della release;
 2. `roadmap.md`: riga nel «Changelog», versione segnata come rilasciata, idee rimandate aggiunte al backlog;
-3. `.agents/specs/` (da v0.5.0 in poi): togli le note «(da vX.Y.Z, non ancora in produzione)»; controlla che ogni
+3. `.agents/specs/`: togli le note «(da vX.Y.Z, non ancora in produzione)»; controlla che ogni
    riga di «Aree toccate» della spec sia riportata nel file dell'area;
 4. `AGENTS.md`: riga «Versione corrente» in cima; «Mappa del codice» e «Comandi» se cambiati; nessun vincolo nuovo
-   (stanno in `.agents/decisions/`). **Eccezione v0.4.0**, l'ultima con il metodo di prima: i vincoli della sezione
-   «v0.4.0 campagne promozionali» di AGENTS.md diventano quelli vigenti (togli «dal rilascio» e «non in produzione»);
+   (stanno in `.agents/decisions/`);
 5. `current.md`: tolto il lavoro della versione (resta in `STORICO.md`), blocco «Harness» → fase `nessuna`, prossimo
    comando `/new-feature` o `/fix`; restano gli elenchi «cosa manca» (bloccanti / consigliati / opzionali);
 6. `.agents/checklists/pre-release.md`: aggiornato se la release ha insegnato una voce nuova che vale per tutte.

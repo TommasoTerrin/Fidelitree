@@ -5,7 +5,24 @@
 > il registro dettagliato di una versione chiusa → `.agents/tickets/vX.Y.Z/STORICO.md`
 > (v0.2.0: [STORICO.md](../tickets/v0.2.0/STORICO.md)).
 
+## Harness
+
+> Blocco letto per primo da ogni sessione (vedi `CLAUDE.md`). Lo aggiornano le skill a ogni cambio di fase e a ogni
+> commit di ticket. Fasi: `nessuna` · `grilling` · `spec` · `contract` · `implementazione` · `collaudo`.
+
+- **Versione**: nessuna aperta — prossima: **campagne pilota** (numero da decidere al passo 1 di `/new-feature`;
+  proposta del founder: v0.4.1)
+- **Branch**: `feature/campagne-pilota` (già creato da `develop` il 2026-11-12, con le skill)
+- **Fase**: `nessuna`
+- **Ticket**: —
+- **Prossimo comando**: `/new-feature` con il brief [brief-campagne-pilota.md](brief-campagne-pilota.md)
+
 ## Dove siamo
+
+**Campagne pilota (2026-11-12)**: la prima v0.4.0 delle campagne (adesioni, pagina `/p/`, secondo QR) è **archiviata**
+sul branch `feature/campagne` (non mergiare; ticket 01-03 fatti, 04 parziale). Il founder l'ha ridotta per i pilota:
+decisioni prese e punti aperti in [brief-campagne-pilota.md](brief-campagne-pilota.md). Si riparte da `develop` sul
+branch `feature/campagne-pilota`, che per ora contiene solo il processo a skill (`.claude/skills`, agenti `ft-*`).
 
 **v0.3.0 è in produzione dal 2026-10-30** su `https://fidelitree.app` (tag `v0.3.0` su `a83cd64`, Neon `production`,
 app DO `fidelitree`): vedi «Sessione 2026-10-30» in fondo per cosa manca prima dei pilota. Lo storico sotto descrive come ci si è arrivati.

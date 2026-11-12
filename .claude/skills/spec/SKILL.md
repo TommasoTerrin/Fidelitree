@@ -16,7 +16,8 @@ domande mancanti nel formato di `/new-feature` (frontiera, priorità, raccomanda
 
 Leggi `AGENTS.md`, `current.md`, `.agents/tickets/vX.Y.Z/README.md` (grilling), `.agents/glossario.md`, i file di
 `.agents/specs/` e le schede di `.agents/decisions/` delle aree toccate. Modello di riferimento per forma e livello di
-dettaglio: `.agents/tickets/v0.4.0/` (`README.md`, `domain-model.md`, `contracts.md`, ticket).
+dettaglio: la vecchia v0.4.0, archiviata sul branch `feature/campagne` (`README.md`, `domain-model.md`,
+`contracts.md`, ticket): si legge con `git show feature/campagne:.agents/tickets/v0.4.0/<file>`.
 
 Riprendi dalla fase indicata nello stato del `README.md`: `GRILLING CHIUSO` → fase A; `SPEC APPROVATA` → fase B.
 
@@ -88,7 +89,7 @@ Senza l'ok resta qui. Non cominciare la fase B «nel frattempo».
 
 ### `domain-model.md`
 
-Come quello di v0.4.0:
+Come quello della vecchia v0.4.0 (archivio `feature/campagne`):
 - **Moduli e responsabilità**: tabella `Modulo | Cosa sa | Cosa NON sa`, e le dipendenze tra moduli (nessun ciclo).
 - **Aggregati**: solo dove un invariante richiede atomicità su più righe; altrimenti dirlo («ogni invariante si regge
   su una riga o un vincolo `UNIQUE`»).
@@ -161,7 +162,7 @@ Formato del ticket:
 ```
 
 Scrivi anche:
-- `HANDOFF.md` della versione (formato di `v0.4.0/HANDOFF.md`: dove siamo, cosa fare alla ripartenza, decisioni
+- `HANDOFF.md` della versione (formato di `v0.4.0/HANDOFF.md` nell'archivio `feature/campagne`: dove siamo, cosa fare alla ripartenza, decisioni
   aperte, fatti verificati sui servizi esterni, vincoli di sicurezza, file di riferimento);
 - in `current.md` la tabella dei ticket `# | Ticket | Priorità | Chi | Dipende da | Stato`.
 

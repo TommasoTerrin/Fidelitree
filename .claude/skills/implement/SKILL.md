@@ -131,7 +131,6 @@ regola da verificare, è un criterio mancante: proponi `/fix`.
      utente;
    - file dell'area in `.agents/specs/` aggiornato se il ticket ha reso vera una regola nuova, con la nota
      «(da vX.Y.Z, non ancora in produzione)»; se il file dell'area non esiste, crealo (vedi `specs/README.md`).
-     **Solo da v0.5.0 in poi**: per v0.4.0 si salta questo punto e le regole restano in AGENTS.md;
    - `overview.md`, `zernio-notes.md`, `.env.example`, `deploy.md` se sono cambiati endpoint, flussi, vincoli dei
      servizi esterni o env var.
 3. Stato del ticket → `✅ fatto il AAAA-MM-GG (N test verdi; attende l'ok)` con: cosa è stato fatto, scelte fatte
