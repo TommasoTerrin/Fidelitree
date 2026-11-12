@@ -3,7 +3,10 @@
 > **Punto di ingresso unico** per qualsiasi coding agent (Claude Code, Codex, Gemini CLI, OpenCode, ...).
 > Leggi questo file prima di toccare il codice. Approfondimenti in [`.agents/`](.agents/).
 
-> **Versione corrente: v0.3.0 — carta fedeltà via DM Instagram (Zernio)**, sviluppata su `feature/instagram-cards`
+> **In sviluppo: v0.4.1 — Campagne pilota: promo via DM e commenti Instagram**, su `feature/campagne-pilota` (spec in
+> [`.agents/tickets/v0.4.1/`](.agents/tickets/v0.4.1/README.md), decisioni in [`.agents/decisions/`](.agents/decisions/README.md)).
+>
+> **Versione in produzione: v0.3.0 — carta fedeltà via DM Instagram (Zernio)**, sviluppata su `feature/instagram-cards`
 > (ticket in [`.agents/tickets/v0.3.0/`](.agents/tickets/v0.3.0/README.md)). È la prima release in produzione dopo
 > v0.1.0: assorbe v0.2.x (pool del negozio, auth merchant), mai rilasciata. Storia di v0.2.0:
 > [`.agents/tickets/v0.2.0/`](.agents/tickets/v0.2.0/README.md). Lo stato del lavoro è in

@@ -13,19 +13,19 @@
 - **Versione**: **v0.4.1 — Campagne pilota: promo via DM e commenti Instagram**
   ([README](../tickets/v0.4.1/README.md))
 - **Branch**: `feature/campagne-pilota` (già creato da `develop` il 2026-11-12, con le skill)
-- **Fase**: `spec` (grilling chiuso il 2026-11-12)
+- **Fase**: `contract` (spec approvata il 2026-11-12, gate 1)
 - **Ticket**: —
-- **Prossimo comando**: `/spec`
+- **Prossimo comando**: `/spec` (fase B: modello di dominio, contract, triage e ticket → gate 2)
 
 ## Dove siamo
 
-**v0.4.1 aperta (2026-11-12)**: grilling chiuso sulle campagne pilota (13 decisioni, verbale e riepilogo in
-[tickets/v0.4.1/README.md](../tickets/v0.4.1/README.md)); prossimo passo `/spec`.
+**v0.4.1 aperta (2026-11-12)**: spec approvata al gate 1 (30 criteri AC-01..30, schede 0001-0005 in
+`.agents/decisions/`), in [tickets/v0.4.1/README.md](../tickets/v0.4.1/README.md); prossimo passo `/spec` fase B.
 
 **Campagne pilota (2026-11-12)**: la prima v0.4.0 delle campagne (adesioni, pagina `/p/`, secondo QR) è **archiviata**
-sul branch `feature/campagne` (non mergiare; ticket 01-03 fatti, 04 parziale). Il founder l'ha ridotta per i pilota:
-decisioni prese e punti aperti in [brief-campagne-pilota.md](brief-campagne-pilota.md). Si riparte da `develop` sul
-branch `feature/campagne-pilota`, che per ora contiene solo il processo a skill (`.claude/skills`, agenti `ft-*`).
+sul branch `feature/campagne` (non mergiare; ticket 01-03 fatti, 04 parziale). Il founder l'ha ridotta per i pilota
+(il brief iniziale è confluito nel README di v0.4.1 ed è stato eliminato). Si riparte da `develop` sul branch
+`feature/campagne-pilota`, che contiene il processo a skill (`.claude/skills`, agenti `ft-*`).
 
 **v0.3.0 è in produzione dal 2026-10-30** su `https://fidelitree.app` (tag `v0.3.0` su `a83cd64`, Neon `production`,
 app DO `fidelitree`): vedi «Sessione 2026-10-30» in fondo per cosa manca prima dei pilota. Lo storico sotto descrive come ci si è arrivati.

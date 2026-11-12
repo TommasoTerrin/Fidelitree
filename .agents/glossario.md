@@ -22,4 +22,11 @@ termini e non dei sinonimi. Un termine nuovo nasce nel grilling (`/new-feature`)
 | **Chiusura del periodo** | Script mensile che pianta gli alberi del livello raggiunto | `scripts.close_period` |
 | **Stato del servizio** | In attesa / attivo / in pausa, derivato da `is_approved` e `is_paused` | `ServiceState` |
 | **Carta di prova** | Carta fittizia per i clienti nuovi di un negozio in attesa | `/carta-di-prova` |
-| **Campagna** | Parola chiave, testo della promo e periodo di un negozio; il DM ricevuto è il coupon (campagne pilota, termini da fissare nella spec) | — |
+| **Campagna** | Promo di un negozio: nome, parola chiave, testo della promo, importo di cashback (0 = nessuno), limite di richieste facoltativo, archiviata sì/no, contatori; il DM ricevuto è il coupon. Nessuna data nel pilota (v0.4.1) | `Campaign` |
+| **Testo della promo** | Testo libero del founder (validità compresa); prima parte del DM di risposta | `Campaign.promo_text` |
+| **Campagna archiviata** | Spenta: la parola chiave è una parola qualsiasi, non compare nello scanner; si ripristina | `Campaign.is_archived` |
+| **Campagna attiva** | Non archiviata, di un negozio attivo | — |
+| **Richiesta** | DM (risposte alle storie comprese) o commento il cui testo normalizzato è esattamente la parola chiave di una campagna attiva; contata per canale | `Campaign.dm_requests`, `comment_requests` |
+| **Limite di richieste** | Numero facoltativo: oltre, la risposta è «offerte terminate» | `Campaign.request_limit` |
+| **Risposta privata** | Il DM con cui Instagram risponde a un commento: uno per commento, solo testo | `zernio_service` |
+| **Utilizzo** | Un «Applica» confermato nello scanner: accredita l'importo della campagna e incrementa il contatore | `Campaign.uses` |

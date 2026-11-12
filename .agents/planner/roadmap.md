@@ -53,6 +53,8 @@ rifiutare bottoni e card ai non follower (errore 2/1545133, vedi `zernio-notes.m
 - **Promo salvata nella carta** e utilizzo unico o N volte per cliente (oggi il coupon è il DM e decide il merchant).
 - **«Porta un amico»** (affiliazione) e **dati per cliente** sulle campagne.
 - **Card inviata direttamente da un commento** `CARTA` (oggi la risposta privata invita a scrivere `CARTA` in DM).
+- **Script per aggiornare gli eventi dei webhook dei negozi già collegati** (`PUT /v1/webhooks/settings`, non provato):
+  oggi i collegati sono solo i profili del founder, che scollega e ricollega.
 
 ### Follow-gate per negozio e QR temporaneo per chi non segue
 - **Opzione per singolo negozio** del blocco "carta solo a chi segue" e **testo di invito scelto dal merchant** (in

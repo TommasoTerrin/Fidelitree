@@ -40,4 +40,9 @@ Cosa diventa più facile, cosa più difficile, cosa resta da fare (roadmap).
 
 | # | Decisione | Stato | Area |
 |---|---|---|---|
-| — | (nessuna scheda ancora: le decisioni fino a v0.3.0 sono in AGENTS.md, «Vincoli e trade-off accettati») | | |
+| — | Le decisioni fino a v0.3.0 sono in AGENTS.md, «Vincoli e trade-off accettati» | | |
+| [0001](0001-campagne-pilota-coupon-dm.md) | Campagne pilota: il coupon è il DM | accettata | `campagne.md` |
+| [0002](0002-commenti-risposta-privata-testo.md) | Commenti Instagram: risposta privata di solo testo | accettata | `carta-instagram.md` |
+| [0003](0003-pausa-archivia-campagne.md) | La pausa del negozio archivia le campagne | accettata | `merchant-auth-stato.md`, `admin.md` |
+| [0004](0004-applica-nello-scanner.md) | «Applica» nello scanner | accettata | `carta-e-scanner.md` |
+| [0005](0005-migrazioni-sql-a-mano.md) | Migrazioni con script SQL a mano | accettata | `dati-e-segreti.md` |
