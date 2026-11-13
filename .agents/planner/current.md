@@ -14,8 +14,8 @@
   ([README](../tickets/v0.4.1/README.md))
 - **Branch**: `feature/campagne-pilota` (già creato da `develop` il 2026-11-12, con le skill)
 - **Fase**: `implementazione` (gate 1 e gate 2 approvati il 2026-11-12)
-- **Ticket**: 02 fatto il 2026-11-13 (attende l'ok del founder); poi 03
-- **Prossimo comando**: `/implement 03` (dopo l'ok al 02)
+- **Ticket**: 03 fatto il 2026-11-13 (attende l'ok del founder); poi 04 (02 fatto, ok implicito con `/implement`)
+- **Prossimo comando**: `/implement 04` (dopo l'ok al 03)
 
 ## Dove siamo
 
@@ -30,7 +30,7 @@ il 2026-11-12** (scostamento 3 ammesso, 04 bloccante con piano B, strumenti di c
 |---|---|---|---|---|---|
 | 01 | [Versione, modello `Campaign`, script SQL, core delle campagne](../tickets/v0.4.1/01-modello-core-sql.md) | bloccante | agente | — | ✅ 2026-11-12 (1066 test) |
 | 02 | [Dashboard admin: campagne e pausa che archivia](../tickets/v0.4.1/02-admin-campagne-pausa.md) | bloccante | agente | 01 | ✅ 2026-11-13 (1074 test; attende l'ok) |
-| 03 | [Webhook: parola chiave in DM e risposte alle storie](../tickets/v0.4.1/03-webhook-dm-campagne.md) | bloccante | agente | 01 | ⬜ |
+| 03 | [Webhook: parola chiave in DM e risposte alle storie](../tickets/v0.4.1/03-webhook-dm-campagne.md) | bloccante | agente | 01 | ✅ 2026-11-13 (1098 test; attende l'ok) |
 | 04 | [Commenti: risposta privata](../tickets/v0.4.1/04-commenti-risposta-privata.md) | bloccante (piano B) | agente | 03 | ⬜ |
 | 05 | [Scanner: «Applica»](../tickets/v0.4.1/05-scanner-applica.md) | bloccante | agente | 01 | ⬜ |
 | 06 | [Documentazione, script SQL su Neon, collaudo su Instagram vero](../tickets/v0.4.1/06-documentazione-collaudo.md) | bloccante | misto | 01-05 | ⬜ |

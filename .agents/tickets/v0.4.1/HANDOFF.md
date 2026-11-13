@@ -15,6 +15,10 @@
 - **Ticket 02 FATTO il 2026-11-13** (1074 test verdi; attende l'ok del founder): API admin e sezione «Campagne» della
   dashboard, la pausa archivia le campagne nello stesso commit. Spec viva `specs/admin.md`, passi in `collaudo.md`
   («v0.4.1 — campagne»). Prossimo: `/implement 03` (dopo l'ok).
+- **Ticket 03 FATTO il 2026-11-13** (1098 test verdi; attende l'ok del founder): le parole chiave delle campagne in DM
+  e nelle risposte alle storie rispondono con la promo (`_reply_with_campaign`), contatore atomico, spec viva
+  `specs/carta-instagram.md`, passi 5-9 in `collaudo.md`. Prossimo: `/implement 04` (commenti, risposta privata,
+  `WEBHOOK_EVENTS`; riusa `_handle_send_error`/`_record_send` ma con mappatura errori propria, contract §6).
 - Nessun push, nessuna PR.
 
 ## Cosa fare alla ripartenza

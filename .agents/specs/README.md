@@ -27,7 +27,7 @@ versione che tocca l'area.
 
 | Area | File | Stato |
 |---|---|---|
-| Carta via DM Instagram (trigger, card, follower, 24 h, quota, standby) | `carta-instagram.md` | da creare (oggi in AGENTS.md) |
+| Carta via DM Instagram (trigger, card, follower, 24 h, quota, standby) | `carta-instagram.md` | creato in v0.4.1 (ticket 03: regole di oggi più le parole chiave delle campagne in DM; i commenti col ticket 04) |
 | Pagina carta, QR, scanner del merchant | `carta-e-scanner.md` | da creare |
 | Pool del negozio, livelli, chiusura mensile, Ecologi | `pool-alberi.md` | da creare |
 | Auth dei merchant e stato del servizio | `merchant-auth-stato.md` | da creare |

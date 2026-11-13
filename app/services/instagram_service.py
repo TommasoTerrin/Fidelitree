@@ -7,6 +7,9 @@ Regole di business
   default `CARTA`) oppure tocca la voce "🌳 La mia carta" del menu persistente (postback con payload
   fisso). Maiuscole, accenti, punteggiatura ed emoji sono ignorati; la corrispondenza è esatta dopo la
   normalizzazione ("carta" vale, "vorrei la carta" no). Gli altri messaggi sono ignorati in silenzio.
+- **Parole chiave delle campagne** (v0.4.1): un testo (DM o risposta a una storia) uguale, dopo la normalizzazione,
+  alla parola di una campagna non archiviata di un negozio attivo riceve un DM di testo con la promo (o «offerte
+  terminate» oltre il limite); `isFollower` non conta e nessuna carta viene toccata. `CARTA` e il menu non cambiano.
 - **Risposta**: una sola card (generic template) con titolo = nome del negozio, sottotitolo fisso e un
   bottone "Apri la carta". Nessun dato dinamico nel messaggio. Unico ripiego: un testo fisso con il link.
 - **Carta solo a chi segue** (2026-10-23): `isFollower` falso → nessuna carta, solo un testo fisso di invito a
@@ -279,7 +282,7 @@ from app.core.enums import InstagramStatus, WebhookOutcome  # noqa: E402
 from app.core.errors import InvalidSignatureError, NotFoundError  # noqa: E402
 from app.models.models import Card, Merchant, ProcessedWebhookEvent, ZernioSendCounter  # noqa: E402
 from app.core.enums import ServiceState  # noqa: E402
-from app.services import card_service, zernio_service  # noqa: E402
+from app.services import campaign_service, card_service, zernio_service  # noqa: E402
 from app.services.db_crud import card_crud, merchant_crud  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -499,6 +502,39 @@ async def _reply_with_card(
     return WebhookOutcome.SENT
 
 
+async def _reply_with_campaign(
+    session: Session, http: httpx.AsyncClient, merchant: Merchant, creds: "zernio_service.ZernioCredentials",
+    msg: InboundMessage, now: datetime,
+) -> WebhookOutcome:
+    """
+    Passo della campagna per un DM che non è la richiesta della carta (contract §6, AC-11, AC-12).
+
+    Solo i testi si confrontano con le parole delle campagne; un postback diverso dal nostro è ignorato.
+    Nessuna campagna riconosciuta (o negozio non attivo) → `IGNORED`. La richiesta è già contata dal service:
+    fuori dalle 24 ore → `OUT_OF_WINDOW` senza invio. Altrimenti si invia il testo con chiave `<evento>:promo`
+    e si registra l'invio; `isFollower` è ignorato e nessuna carta viene letta o scritta. Un testo troppo lungo
+    → `SEND_FAILED` senza invio. Nei log solo id campagna e canale, mai testo né IGSID.
+    """
+    if msg.source != _SOURCE_TEXT:
+        return WebhookOutcome.IGNORED
+    try:
+        reply = campaign_service.handle_campaign_request(session, merchant, msg.text, campaign_service.RequestChannel.DM)
+    except MessageTooLongError:
+        logger.warning("Webhook: testo della campagna troppo lungo negozio=%s evento=%s canale=dm", merchant.id, msg.event_id)
+        return WebhookOutcome.SEND_FAILED
+    if reply is None:
+        return WebhookOutcome.IGNORED
+    logger.info("Webhook: campagna=%s canale=dm negozio=%s evento=%s", reply.campaign_id, merchant.id, msg.event_id)
+    if not can_reply(msg.sent_at, now):
+        return WebhookOutcome.OUT_OF_WINDOW
+    try:
+        await zernio_service.send_text(http, creds, msg.conversation_id, reply.text, f"{msg.event_id}:promo")
+    except zernio_service.ZernioError as error:
+        return _handle_send_error(session, merchant, creds, error, msg.event_id, now)
+    _record_send(session, merchant, creds, now)
+    return WebhookOutcome.SENT
+
+
 async def _process_message(
     session: Session, http: httpx.AsyncClient, merchant: Merchant, creds: "zernio_service.ZernioCredentials",
     payload: dict, event_id: str, now: datetime,
@@ -515,7 +551,7 @@ async def _process_message(
         _mark_standby(session, merchant, now)
         return WebhookOutcome.STANDBY
     if detect_trigger(msg, settings.INSTAGRAM_CARD_KEYWORD) is None:
-        return WebhookOutcome.IGNORED
+        return await _reply_with_campaign(session, http, merchant, creds, msg, now)
     if msg.is_follower is False:  # `None` (dato non disponibile) → card: da rivedere nel collaudo finale
         return await _invite_to_follow(session, http, merchant, creds, msg, now)
     return await _reply_with_card(session, http, merchant, creds, msg, now)

@@ -121,3 +121,13 @@ Non confermati dal log: «Riattiva», cambio password, evento duplicato con `rep
 2. Crea una seconda campagna `natale!` → errore 409 leggibile; crea `CARTA` → 409; nome di 2 caratteri → 400.
 3. Modifica importo e limite; «Archivia» → «archiviata»; «Ripristina» → «attiva»; «Elimina» → conferma → sparisce.
 4. «Metti in pausa» il negozio → le sue campagne risultano archiviate; «Riattiva» → restano archiviate.
+
+> Aggiunti dal ticket 03 (webhook dei DM). Su un negozio attivo con la campagna `NATALE` (passo 1 sopra), con
+> `python -m scripts.replay_webhook` o con un DM vero.
+
+5. `--text NATALE` → DM con la promo e la riga «Per utilizzare questa offerta devi avere la nostra carta fedeltà…»; in
+   `/admin` richieste da DM = 1.
+6. `--text "natale!!"` → stessa risposta; `--text "natale per me"` → nessuna risposta, contatore invariato.
+7. Campagna con limite 1 e una richiesta già contata → `--text NATALE` → «Le offerte disponibili sono terminate…».
+8. Campagna archiviata o negozio in pausa → nessuna risposta, contatori invariati.
+9. `--text CARTA` → la card di oggi, invariata.

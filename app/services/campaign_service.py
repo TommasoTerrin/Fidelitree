@@ -490,3 +490,52 @@ def restore_campaign(session: Session, merchant: Merchant, campaign_id: int) -> 
             raise ConflictError(f"Parola chiave: {reason}.")
         campaign = campaign_crud.set_campaign_archived(session, campaign, False)
     return campaign_row(campaign, card_service.merchant_state(merchant))
+
+
+class CampaignReply(BaseModel):
+    """Risposta da inviare a chi ha scritto la parola di una campagna (contract §5)."""
+
+    campaign_id: int
+    text: str
+    exhausted: bool  # vero se il testo è «offerte terminate»
+
+
+def register_request(session: Session, campaign_id: int, channel: RequestChannel) -> int | None:
+    """
+    Conta una richiesta della campagna (AC-12) e ritorna il totale DM + commenti dopo l'incremento.
+
+    Un solo `UPDATE ... RETURNING` atomico seguito da commit (via crud): il totale non si legge dall'oggetto
+    in memoria, quindi richieste concorrenti ricevono totali distinti. `None` se la campagna è sparita.
+    """
+    return campaign_crud.increment_request_counter(session, campaign_id, channel.value)
+
+
+def handle_campaign_request(
+    session: Session, merchant: Merchant, text: str | None, channel: RequestChannel
+) -> CampaignReply | None:
+    """
+    Riconosce la parola di una campagna non archiviata e prepara la risposta (AC-11, AC-12, AC-17).
+
+    Tra le non archiviate (created_at decrescente) cerca la parola con `match_campaign`; nessuna → `None`.
+    Negozio non ACTIVE → `None` e nessun conteggio. Altrimenti si conta la richiesta (`None` se la campagna
+    è stata eliminata nel frattempo) e si sceglie il testo in base al totale. Un `MessageTooLongError` si
+    propaga: la richiesta resta contata. Non si logga nulla del testo del cliente.
+    """
+    campaigns = sorted(
+        campaign_crud.list_active_campaigns_by_merchant(session, merchant.id),
+        key=lambda c: (c.created_at, c.id),
+        reverse=True,
+    )
+    campaign_id = match_campaign(text, [CampaignKey(id=c.id, keyword=c.keyword) for c in campaigns])
+    if campaign_id is None:
+        return None
+    if card_service.merchant_state(merchant) is not ServiceState.ACTIVE:
+        return None
+    total = register_request(session, campaign_id, channel)
+    if total is None:
+        return None
+    campaign = next(c for c in campaigns if c.id == campaign_id)
+    reply = campaign_reply_text(campaign.promo_text, total, campaign.request_limit, settings.INSTAGRAM_CARD_KEYWORD)
+    return CampaignReply(
+        campaign_id=campaign_id, text=reply, exhausted=not is_within_limit(total, campaign.request_limit)
+    )

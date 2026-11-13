@@ -122,3 +122,23 @@ def create_campaign(
     session.commit()
     session.refresh(campaign)
     return campaign
+
+
+def increment_request_counter(session: Session, campaign_id: int, channel: str) -> int | None:
+    """
+    Incrementa di 1 il contatore delle richieste del canale (`"dm"` o `"comment"`, AC-12) con UN solo
+    `UPDATE ... RETURNING` atomico e ritorna `dm_requests + comment_requests` DOPO l'incremento.
+
+    Non legge i contatori dall'oggetto in memoria, così due richieste simultanee non si sovrascrivono.
+    Ritorna `None` se la campagna non esiste più (eliminata dopo il riconoscimento). Fa commit.
+    """
+    column = Campaign.dm_requests if channel == "dm" else Campaign.comment_requests
+    statement = (
+        update(Campaign)
+        .where(Campaign.id == campaign_id)
+        .values({column.key: column + 1})
+        .returning(Campaign.dm_requests + Campaign.comment_requests)
+    )
+    total = session.execute(statement).scalar_one_or_none()
+    session.commit()
+    return total

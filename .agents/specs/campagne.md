@@ -1,7 +1,7 @@
 # Campagne promozionali
 
 > **Da v0.4.1, non ancora in produzione.** Questo file descrive le regole che il ticket 01 ha reso vere (modello e
-> core puro). La gestione dal founder (API admin, pausa che archivia) è del ticket 02 e sta in [admin.md](admin.md); webhook e scanner si aggiungono con i ticket 03-05.
+> core puro). La gestione dal founder (API admin, pausa che archivia) è del ticket 02 e sta in [admin.md](admin.md); il webhook dei DM è del ticket 03 (sezione «Richieste in DM»); commenti e scanner si aggiungono con i ticket 04-05.
 > Spec della versione: [tickets/v0.4.1/README.md](../tickets/v0.4.1/README.md); contract congelato:
 > [contracts.md](../tickets/v0.4.1/contracts.md); decisioni: [0001](../decisions/0001-campagne-pilota-coupon-dm.md),
 > [0002](../decisions/0002-commenti-risposta-privata-testo.md), [0003](../decisions/0003-pausa-archivia-campagne.md),
@@ -45,6 +45,17 @@ servizio del negozio (`campaign_status`). «Ferma» = negozio in attesa o in pau
   (`INSTAGRAM_TEXT_MAX`); oltre → `MessageTooLongError`.
 - Finito il limite (`total_requests > request_limit`, totale DM + commenti dopo l'incremento) il cliente riceve il
   testo fisso «offerte terminate».
+
+## Richieste in DM (ticket 03)
+
+- `handle_campaign_request(session, merchant, text, canale)`: cerca tra le campagne non archiviate del negozio
+  (`created_at` decrescente) quella la cui parola combacia; nessuna → `None`. **Negozio non attivo (in attesa o in
+  pausa) → `None` e nessun conteggio** (il controllo viene prima del conteggio). Poi `register_request` e il testo
+  scelto sul totale dopo l'incremento.
+- `register_request` è **un solo `UPDATE … RETURNING`** (`campaign_crud.increment_request_counter`) seguito dal
+  commit: non legge i contatori dall'oggetto in memoria. Campagna sparita nel frattempo → `None` (esito `IGNORED`).
+- Il webhook (`instagram_service`) manda il testo come DM con chiave `<evento>:promo`; regole del flusso in
+  [carta-instagram.md](carta-instagram.md).
 
 ## Validazione
 
