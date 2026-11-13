@@ -1,8 +1,8 @@
 # Carta via DM Instagram (trigger, card, follower, 24 h, quota, standby)
 
 > Regole vigenti dell'area, ricavate da AGENTS.md («Vincoli e trade-off accettati») e dal codice di
-> `instagram_service`. **Le parole chiave delle campagne in DM sono da v0.4.1, non ancora in produzione**
-> (ticket 03; i commenti arrivano con il ticket 04). Scheda: [0002](../decisions/0002-commenti-risposta-privata-testo.md).
+> `instagram_service`. **Le parole chiave delle campagne in DM e i commenti con risposta privata sono da v0.4.1, non ancora
+> in produzione** (ticket 03 e 04; nulla di Zernio/Meta sui commenti è provato dal vivo: lo fa il ticket 07). Scheda: [0002](../decisions/0002-commenti-risposta-privata-testo.md).
 > Spec della versione: [tickets/v0.4.1/README.md](../tickets/v0.4.1/README.md) (AC-09..13).
 
 ## Flusso di un `message.received`

@@ -98,6 +98,11 @@ python -m scripts.zernio_check accounts | conversations | send-card | send-text 
 
 # Collaudo locale del webhook: evento message.received firmato verso il server (che invia DAVVERO a Zernio)
 python -m scripts.replay_webhook --merchant-id N --conversation-id ID [--text CARTA | --postback] [--standby] [--follower si|no] [--event-id ID]
+# oppure un comment.received firmato (senza --conversation-id): risposta privata con post e commento finti
+python -m scripts.replay_webhook --merchant-id N --comment TESTO [--post-id ID] [--comment-id ID] [--event-id ID]
+
+# Migrazioni: script SQL a mano in migrations/ (nessun comando): console Neon, prima development poi production
+# dopo il branch di backup (procedura in .agents/workflows/deploy.md, «Applicare uno script SQL»)
 
 # Collaudo manuale (.agents/workflows/collaudo.md): tunnel https + server con i log dell'app.
 # run_collaudo si rifiuta con un DB che non sia Neon development o SQLite
@@ -129,10 +134,10 @@ app/
   schemas/              # Pydantic request/response
   services/             # un modulo per funzionalità: core puro + shell (vedi sotto)
     card_service.py     # carte, cashback, conversione tree points → cashback; stato del servizio (service_state, permessi di aggiunta/rimozione)
-    instagram_service.py # trigger, card di risposta, finestra 24 h, quota, webhook → carta (o carta di prova), link della carta
+    instagram_service.py # trigger, card di risposta, finestra 24 h, quota, webhook → carta (o carta di prova), campagne in DM e commenti (risposta privata), link della carta
     zernio_service.py   # client API Zernio + zernio_credentials_for (UNICO punto che sa da dove arriva la chiave)
     merchant_service.py # registrazione, login con freno, cambio password, impostazioni, onboarding Instagram, dashboard admin (login admin, lista, stato, reset password)
-    campaign_service.py # campagne promozionali: core puro (validazione, parola chiave, testi dei DM) + shell admin (CRUD, archivia, ripristina, elimina, archiviazione con la pausa)
+    campaign_service.py # campagne promozionali: core puro (validazione, parola chiave, testi dei DM) + shell (CRUD admin, archiviazione con la pausa, richieste da DM e commento, «Applica» dello scanner)
     tree_service.py     # pool del negozio, livelli, chiusura periodo
     ecologi_service.py  # client Impact API Ecologi
     db_crud/            # accesso DB puro (card_crud, merchant_crud, campaign_crud)
@@ -143,6 +148,7 @@ app/
     webhooks.py         # POST /webhooks/zernio/{hook_id}
   templates/            # Jinja2 (consumer/, merchant/, admin/, partials/ condivisi: pwa, toast, levels, service_banner)
   static/               # PWA merchant: manifest.webmanifest, sw.js (servito anche da GET /sw.js), icone
+migrations/             # script SQL a mano numerati (0001_campagne.sql), idempotenti: si applicano su Neon, non dall'app
 scripts/                # reset_db, seed_db, close_period, ecologi_check, zernio_check, replay_webhook, run_collaudo, smoke_test_prod
 tests/                  # pytest + conftest (SQLite in-memory); tests/unit/ = core puro senza DB
 ```

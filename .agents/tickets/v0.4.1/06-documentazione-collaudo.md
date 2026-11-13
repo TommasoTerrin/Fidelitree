@@ -39,4 +39,26 @@ Nessuno qui: i passi preparati in `collaudo.md` (sezione «v0.4.1 — campagne»
 - A fine ticket: riepilogo di 3 righe e attesa dell'ok. Niente push né PR. Push e merge solo in `/review`.
 
 ## Stato
-⬜ da fare
+✅ fatto il 2026-11-13 (1139 test verdi; attende l'ok)
+
+**Fatto**
+- `deploy.md`: sezione «Applicare uno script SQL (`migrations/`)» (backup di `production`, controllo che `campaign` non esista con
+  colonne vecchie, prova su `development`, poi `production` prima del merge, rollback di schema con `DROP TABLE campaign`);
+  richiami nei passi 2 e 6 della procedura di release.
+- `collaudo.md`: passi 22-25 (risposta a una storia, commento in locale con `replay_webhook --comment`, log, «Scollega» e ricollega);
+  i passi 1-21 dei ticket 02-05 erano già scritti.
+- `scripts/replay_webhook`: `--comment TESTO`, `--post-id`, `--comment-id` (evento `comment.received` firmato, senza `--conversation-id`).
+- Riletture: `overview.md` (modello dati, flusso del webhook con campagne e commenti, scanner, admin, endpoint, evento sottoscritto),
+  `pre-release.md` (sezione v0.4.1), `AGENTS.md` (comandi e mappa del codice, cartella `migrations/`), intestazioni delle spec vive.
+
+**Registro TDD** (nessun `AC-NN`: strumento di collaudo del contract §9, ticket 06)
+- `--comment` → tests/test_scripts.py::test_replay_webhook_comment_manda_un_comment_received_senza_conversation_id — rosso asserzione (argparse: `--conversation-id` richiesto), verde al tentativo 1
+- `--conversation-id` ancora obbligatorio per i DM → tests/test_scripts.py::test_replay_webhook_dm_senza_conversation_id_e_rifiutato_senza_inviare — passa subito (il vincolo l'ha messo l'implementer), verificato con mutazione (senza il controllo il test fallisce)
+
+**Scelte dove il contract lasciava libertà**: default `finto-post-id` e `finto-comment-id`; l'obbligo di `--conversation-id` è controllato in
+`main` con `parser.error` (messaggio in italiano), non più con `required=True`. Il payload del commento contiene solo i campi che il
+parser legge. Lo script SQL si esegue dall'SQL Editor della console Neon (non c'è `psql`), nessuno script nuovo.
+
+**Limiti noti**: i default di `--post-id`/`--comment-id` non hanno un test (solo cosmetici); `AGENTS.md` conserva ancora la riga del
+2026-10-22 «Commenti e storie → DM sono fuori scope» (le regole nuove stanno in `.agents/decisions/` e `.agents/specs/`); le spec dei
+ticket 01-05 sono state rilette solo nelle intestazioni e per coerenza con `overview.md`, non riga per riga contro il codice.

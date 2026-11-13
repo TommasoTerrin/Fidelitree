@@ -152,3 +152,20 @@ Non confermati dal log: «Riattiva», cambio password, evento duplicato con `rep
 19. Negozio senza campagne (o con tutte archiviate) → pagina come prima, nessun blocco di bottoni.
 20. Negozio in attesa con campagne: «Applica» con importo disattivato e banner; quello senza importo resta attivo.
 21. `/c/<token>` della carta → mostra solo il nuovo saldo cashback; livello e alberi invariati.
+
+> Aggiunti dal ticket 06 (completamento della sezione). Si fanno nel ticket 07, insieme ai passi 10-21.
+
+22. **Risposta a una storia**: dal profilo cliente rispondi alla storia del negozio scrivendo `NATALE` → arriva il DM con la
+    promo (stessa risposta del passo 5); in `/admin` richieste da DM +1. Se non arriva nulla il payload di Zernio per le
+    storie è diverso da quello atteso (`message.received` con `metadata.storyReply`): **fermati e chiedi**, esito in
+    `zernio-notes.md`.
+23. **Commento senza Instagram** (prova locale del flusso, con il server avviato e un negozio attivo con `NATALE`):
+    `python -m scripts.replay_webhook --merchant-id 1 --comment NATALE` → `HTTP 200` ed esito `sent` (o l'esito di
+    errore di Zernio, perché `post-id` e `comment-id` finti non esistono: l'invio è comunque **vero**, quindi lo si fa solo
+    per vedere il giro del server). Con `--comment CARTA` l'invito a scrivere `CARTA`; con `--comment "natale per me"`
+    nessuna risposta (`ignored`). `--post-id` e `--comment-id` si possono fissare, e con `--event-id` uguale due volte si
+    prova il retry (un solo invio). Non sostituisce i passi 10-14, che provano anche la consegna di Meta.
+24. **Log**: dopo i passi 5-23 la «Chiusura» (controllo dei log) non deve trovare né il testo di un commento, né
+    il testo delle promo, né id di commento o di post: nel log compaiono solo id della campagna e canale.
+25. **«Scollega» e ricollega** alla fine: dopo il ricollegamento il webhook su Zernio ha di nuovo gli eventi
+    `message.received` e `comment.received` (passo 10).

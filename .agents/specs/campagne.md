@@ -1,7 +1,8 @@
 # Campagne promozionali
 
 > **Da v0.4.1, non ancora in produzione.** Questo file descrive le regole che il ticket 01 ha reso vere (modello e
-> core puro). La gestione dal founder (API admin, pausa che archivia) è del ticket 02 e sta in [admin.md](admin.md); il webhook dei DM è del ticket 03 (sezione «Richieste in DM»); commenti e scanner si aggiungono con i ticket 04-05.
+> core puro). La gestione dal founder (API admin, pausa che archivia) è del ticket 02 e sta in [admin.md](admin.md); il webhook dei DM è del ticket 03 (sezione «Richieste in DM»); commenti e scanner sono dei ticket 04-05 e stanno in
+> [carta-instagram.md](carta-instagram.md) e [carta-e-scanner.md](carta-e-scanner.md).
 > Spec della versione: [tickets/v0.4.1/README.md](../tickets/v0.4.1/README.md); contract congelato:
 > [contracts.md](../tickets/v0.4.1/contracts.md); decisioni: [0001](../decisions/0001-campagne-pilota-coupon-dm.md),
 > [0002](../decisions/0002-commenti-risposta-privata-testo.md), [0003](../decisions/0003-pausa-archivia-campagne.md),

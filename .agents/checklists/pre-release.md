@@ -57,3 +57,12 @@ Fatto il 2026-10-28 (SQLite) e il 2026-10-30 (Neon `development`, `ENVIRONMENT=p
 ## Documentazione
 - [x] AGENTS.md / `.agents/` allineati (deploy reale, rollback, `collaudo.md`)
 - [x] `.agents/planner/current.md` aggiornato
+
+## v0.4.1 — campagne pilota (voci in più rispetto a v0.3.0, nessuna ancora spuntata)
+- [ ] **Migrazione** `migrations/0001_campagne.sql`: branch di backup di `production` creato (`deploy.md`, «Applicare uno script SQL»); controllo che `campaign` non esista; script provato su Neon `development` (12 colonne, indice `ix_campaign_merchant_id`, app avviata); poi applicato su `production` **prima** del merge su `main`, con le stesse verifiche
+- [ ] Rollback dello schema chiaro: tornare al codice v0.3.0 non richiede di toccare il DB; `DROP TABLE campaign` solo se si accettano di perdere campagne e contatori
+- [ ] Nessuna env var nuova (le campagne non ne usano): lo spec DO resta quello di v0.3.0
+- [ ] Versione in `pyproject.toml` = `0.4.1`, uguale a `EXPECTED_VERSION` in `scripts/smoke_test_prod.py`; il tag `v0.4.1` è identico
+- [ ] Collaudo su Instagram vero della sezione «v0.4.1 — campagne» di `collaudo.md` (passi 1-25) con esiti in `zernio-notes.md`: `comment.received` con l'account gratuito, risposta privata a un non follower, quota, testo lungo con emoji, risposta a una storia
+- [ ] Il profilo del negozio di prova è stato **scollegato e ricollegato** (un negozio già collegato non sottoscrive `comment.received` finché non rifà il collegamento: lo stesso vale per ogni merchant pilota già collegato in produzione, dopo il deploy)
+- [ ] Dopo il deploy: smoke test, tabella `campaign` presente su Neon `production` (9 tabelle), una campagna di prova creata e applicata, log di DO senza testo dei clienti, né id di commento o di post

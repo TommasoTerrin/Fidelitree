@@ -29,12 +29,16 @@
 - **Ticket 06 diviso il 2026-11-13** (richiesta del founder, contenuto invariato): **06** = parte dell'agente
   (`deploy.md`, `collaudo.md`, riletture, `replay_webhook --comment` in TDD); **07** = parte del founder (script SQL su
   Neon `development`, collaudo su Instagram vero, esiti in `zernio-notes.md`), tenuto per lunedì 2026-11-16.
-  Prossimo: `/implement 06`; poi `/implement 07`; poi `/review` e `/release` (deploy).
+- **Ticket 06 FATTO il 2026-11-13** (1139 test verdi; attende l'ok del founder): `deploy.md` («Applicare uno script SQL»),
+  `collaudo.md` passi 22-25, `replay_webhook --comment [--post-id] [--comment-id]` (TDD, 2 test), riletture di `overview.md`,
+  `pre-release.md` (sezione v0.4.1), `AGENTS.md`. Prossimo: `/implement 07` (lunedì 2026-11-16, con il founder: script SQL su
+  Neon `development` dall'SQL Editor della console, collaudo su Instagram vero, esiti in `zernio-notes.md`); poi `/review` e
+  `/release` (deploy).
 - Nessun push, nessuna PR.
 
 ## Cosa fare alla ripartenza
 
-1. Leggi il ticket successivo e `contracts.md` (congelato: si cambia solo con `/fix`).
+1. Leggi il ticket successivo (07, «founder»: passi a mano, nessun segreto in chat) e `contracts.md` (congelato: si cambia solo con `/fix`).
 2. Un ticket per sessione con `/implement NN` (TDD con `ft-test-writer` e `ft-implementer` separati, commit locale,
    riepilogo e attesa dell'ok). Ordine: 01 → 02 → 03 → 04 → 05 → 06 → 07.
 
