@@ -8,7 +8,10 @@
 - Branch `feature/campagne-pilota`, da `develop` (2026-11-12), con il processo a skill.
 - **Gate 1 (spec) APPROVATO il 2026-11-12**: 30 criteri AC-01..30, schede 0001-0005 in `.agents/decisions/`.
 - **Gate 2 APPROVATO il 2026-11-12**: `domain-model.md` (7 scostamenti accettati) e `contracts.md` congelati,
-  ticket `01-…06-*.md` scritti. Prossimo: `/implement 01`.
+  ticket `01-…06-*.md` scritti.
+- **Ticket 01 FATTO il 2026-11-12** (1066 test verdi; attende l'ok del founder): versione 0.4.1, `app/core/text.py`,
+  modello `Campaign`, `migrations/0001_campagne.sql`, core puro completo di `campaign_service` (nessuna shell). Spec
+  vive `campagne.md` e `dati-e-segreti.md` create. Prossimo: `/implement 02` (dopo l'ok).
 - Nessun push, nessuna PR.
 
 ## Cosa fare alla ripartenza

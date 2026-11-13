@@ -116,6 +116,12 @@ class Merchant(SQLModel, table=True):
         back_populates="merchant",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
+    # Solo lato ORM (I8): eliminare un negozio elimina le sue campagne anche su SQLite, dove i test
+    # non applicano ON DELETE CASCADE.
+    campaigns: List["Campaign"] = Relationship(
+        back_populates="merchant",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
 
     @field_validator("email")
     @classmethod
@@ -167,6 +173,28 @@ class Merchant(SQLModel, table=True):
         if len(digits) not in (9, 10):
             raise ValueError("le cifre devono essere 9 o 10")
         return v
+
+
+class Campaign(SQLModel, table=True):
+    """
+    Campagna di un negozio: parola chiave, testo promozionale e contatori delle richieste (contract §3).
+    `keyword` resta come l'ha scritta il founder (strip), mai normalizzata. `value_cents` 0 = nessun
+    importo; `request_limit` None = nessun limite. Nessun default lato DB: i valori iniziali li mette l'app.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    merchant_id: int = Field(foreign_key="merchant.id", ondelete="CASCADE", index=True)
+    name: str = Field(max_length=40)
+    keyword: str = Field(max_length=30)
+    promo_text: str = Field(max_length=850)
+    value_cents: int = Field(default=0)
+    request_limit: Optional[int] = Field(default=None)
+    is_archived: bool = Field(default=False)
+    dm_requests: int = Field(default=0)        # DM e risposte alle storie
+    comment_requests: int = Field(default=0)
+    uses: int = Field(default=0)               # «Applica» confermati
+    created_at: datetime = _created_at_field()
+
+    merchant: Merchant = Relationship(back_populates="campaigns")
 
 
 class Card(SQLModel, table=True):

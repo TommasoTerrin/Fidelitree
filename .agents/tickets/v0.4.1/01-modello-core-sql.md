@@ -44,4 +44,31 @@ Nessuno (nessuna modifica visibile).
 - A fine ticket: riepilogo di 3 righe e attesa dell'ok. Niente push né PR.
 
 ## Stato
-⬜ da fare
+✅ fatto il 2026-11-12 (1066 test verdi, partenza 1056; attende l'ok).
+
+**Fatto**: versione 0.4.1 (AC-29); `app/core/text.py` con `normalize_text` e `INSTAGRAM_TEXT_MAX` (ri-esportata da
+`instagram_service`); modello `Campaign` e `Merchant.campaigns`; `migrations/0001_campagne.sql` con il suo test
+(AC-28); tutto il core puro di `campaign_service` (AC-03, AC-27, parte pura di AC-04, AC-08, AC-01, AC-21, AC-23);
+spec vive `campagne.md` e `dati-e-segreti.md`. Nessuna shell, nessuna modifica visibile (nessun passo di collaudo).
+
+**Scelte dove il contract lasciava libertà**: un `float` senza parte decimale (`5.0`) è ammesso come limite; il
+test-writer non fissa le parole dei messaggi d'errore (il contract dice solo «campo e regola, mai il valore»), quindi i
+test controllano solo che il messaggio non sia vuoto e non contenga il valore inviato.
+
+**Limiti noti**: lo script SQL non è eseguito su Postgres (collaudo nel ticket 06); `ScannerCampaign` si costruisce
+nella shell di `scanner_campaigns` (ticket 05), qui è provata solo l'etichetta; il legame con `campaign_row`
+nella pagina admin si vede nel ticket 02.
+
+### Registro TDD
+- AC-29 → tests/test_version.py::test_versione_0_4_1_in_pyproject_e_nello_smoke_test — rosso asserzione, verde al tentativo 1 (suite: 1057)
+- AC-28 → tests/test_migrations.py::test_script_contiene_ogni_colonna_e_vincolo_del_modello_senza_alter — rosso import, verde al tentativo 1 (suite: 1058)
+- AC-03 (fetta nome e parola chiave) → tests/unit/test_campaign_core.py::test_nome_e_parola_chiave_validati_con_strip_e_senza_normalizzazione — rosso import, verde al tentativo 1 (suite: 1059)
+- AC-03 (fetta testo e importo) → tests/unit/test_campaign_core.py::test_testo_promo_e_importo_validati_ai_limiti_della_decisione_12 — rosso asserzione, verde al tentativo 1 (suite: 1060)
+- AC-03 (fetta limite e corpo non dict) → tests/unit/test_campaign_core.py::test_limite_richieste_e_corpo_non_dict_validati_ai_limiti_della_decisione_12 — rosso asserzione, verde al tentativo 1 (suite: 1061). Scelta: un `float` senza parte decimale (`5.0`) è ammesso come limite, il contract vieta solo quelli con decimali.
+- AC-27 (fetta testo promo ed «esauriti») → tests/unit/test_campaign_texts.py::test_testo_promo_ha_la_riga_fissa_e_con_850_caratteri_sta_sotto_il_limite — rosso import, verde al tentativo 1 (suite: 1062). L'implementer ha scritto già anche gli errori di `build_promo_text`, `campaign_reply_text` e `is_within_limit`: i test della fetta successiva possono passare subito (vanno letti come copertura, non come prova del rosso).
+- AC-27 (fetta errori e limite) → tests/unit/test_campaign_texts.py::test_errori_dei_testi_e_scelta_tra_promo_e_offerte_terminate_al_limite — passa subito (codice già scritto nel verde precedente): segnato `coperto`; test controllato con una mutazione (`<=` → `<` nel limite) che lo fa fallire, poi ripristinata (suite: 1063)
+- AC-04 (parte pura: `keyword_conflict`, `match_campaign`) → tests/unit/test_campaign_rules.py::test_parola_chiave_confrontata_in_forma_normalizzata_con_carta_e_altre_campagne — rosso import, verde al tentativo 1 (suite: 1064)
+- AC-08 (regola `pause_begins`), AC-01/AC-21 (`campaign_status`), AC-23 (`scanner_label`) → tests/unit/test_campaign_rules.py::test_stato_campagna_inizio_pausa_ed_etichetta_scanner — rosso import, verde al tentativo 1 (suite: 1065)
+- AC-01 / AC-21 / AC-23 (parte pura: `campaign_row`, `RequestChannel`, `ScannerCampaign`) → tests/unit/test_campaign_rows.py::test_riga_campagna_con_tutti_i_campi_stato_derivato_e_data_in_utc — rosso import, verde al tentativo 1 (suite: 1066)
+- (senza criterio) `normalize_text` spostata in `app/core/text.py` con ri-export in `instagram_service`: suite invariata a 1058.
+

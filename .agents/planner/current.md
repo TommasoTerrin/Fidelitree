@@ -14,8 +14,8 @@
   ([README](../tickets/v0.4.1/README.md))
 - **Branch**: `feature/campagne-pilota` (già creato da `develop` il 2026-11-12, con le skill)
 - **Fase**: `implementazione` (gate 1 e gate 2 approvati il 2026-11-12)
-- **Ticket**: 01 (da fare)
-- **Prossimo comando**: `/implement 01`
+- **Ticket**: 01 fatto il 2026-11-12 (attende l'ok del founder); poi 02
+- **Prossimo comando**: `/implement 02`
 
 ## Dove siamo
 
@@ -28,7 +28,7 @@ il 2026-11-12** (scostamento 3 ammesso, 04 bloccante con piano B, strumenti di c
 
 | # | Ticket | Priorità | Chi | Dipende da | Stato |
 |---|---|---|---|---|---|
-| 01 | [Versione, modello `Campaign`, script SQL, core delle campagne](../tickets/v0.4.1/01-modello-core-sql.md) | bloccante | agente | — | ⬜ |
+| 01 | [Versione, modello `Campaign`, script SQL, core delle campagne](../tickets/v0.4.1/01-modello-core-sql.md) | bloccante | agente | — | ✅ 2026-11-12 (1066 test; attende l'ok) |
 | 02 | [Dashboard admin: campagne e pausa che archivia](../tickets/v0.4.1/02-admin-campagne-pausa.md) | bloccante | agente | 01 | ⬜ |
 | 03 | [Webhook: parola chiave in DM e risposte alle storie](../tickets/v0.4.1/03-webhook-dm-campagne.md) | bloccante | agente | 01 | ⬜ |
 | 04 | [Commenti: risposta privata](../tickets/v0.4.1/04-commenti-risposta-privata.md) | bloccante (piano B) | agente | 03 | ⬜ |

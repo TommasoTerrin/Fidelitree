@@ -26,8 +26,6 @@ salva la carta, risolve il token della pagina carta e invia tramite `zernio_serv
 
 import hashlib
 import hmac
-import re
-import unicodedata
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Optional
@@ -35,6 +33,8 @@ from typing import Optional
 from pydantic import BaseModel
 
 from app.core.errors import InvalidInputError, MessageTooLongError
+# normalize_text vive in app/core/text.py; si ri-esporta qui perché `instagram_service.normalize_text` resti importabile.
+from app.core.text import normalize_text  # noqa: F401
 
 # --- Core puro ---
 
@@ -136,20 +136,6 @@ def verify_signature(secret: str, raw_body: bytes, signature: Optional[str]) -> 
         return False
     expected = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected.encode("ascii"), signature.strip().lower().encode("utf-8"))
-
-
-def normalize_text(text: Optional[str]) -> str:
-    """
-    Normalizza il testo di un messaggio per il confronto con la parola chiave: NFKD senza segni
-    diacritici, `casefold`, solo lettere, cifre e spazi (punteggiatura ed emoji cadono), spazi compattati.
-    `None` → stringa vuota.
-    """
-    if not text:
-        return ""
-    decomposed = unicodedata.normalize("NFKD", text)
-    stripped = "".join(ch for ch in decomposed if not unicodedata.combining(ch)).casefold()
-    letters = "".join(ch if ch.isalnum() else " " for ch in stripped)
-    return re.sub(r"\s+", " ", letters).strip()
 
 
 class Trigger(str, Enum):
