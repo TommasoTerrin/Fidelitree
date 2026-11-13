@@ -46,4 +46,31 @@ Passi da aggiungere in fondo a `.agents/workflows/collaudo.md` (sezione «v0.4.1
 - A fine ticket: riepilogo di 3 righe e attesa dell'ok. Niente push né PR.
 
 ## Stato
-⬜ da fare
+✅ fatto il 2026-11-13 (1074 test verdi; attende l'ok)
+
+Fatto: `campaign_crud` (nuovo), shell admin di `campaign_service` (`list_campaigns`, `create_campaign`,
+`get_campaign_for_merchant`, `update_campaign`, `archive_campaign`, `restore_campaign`, `delete_campaign`,
+`archive_on_pause`), `schemas/campaign.py`, i 6 endpoint di §9 in `routes/admin.py`, la sezione «Campagne» di
+`admin/dashboard.html` e l'archiviazione alla pausa in `merchant_service` (`_update_archiving_on_pause`, usato da
+`set_merchant_state` e `update_merchant_as_admin`). Documentazione: `specs/admin.md` (nuovo), `specs/campagne.md`,
+`specs/README.md`, mappa di AGENTS.md, passi in `collaudo.md` («v0.4.1 — campagne»).
+
+### Registro TDD
+- AC-01 → tests/test_admin_campaigns.py::test_lista_campagne_mostra_campi_stato_e_contatori_nell_ordine_di_d11 — rosso route (404), verde al tentativo 1
+- AC-02 → tests/test_admin_campaigns.py::test_creazione_salva_campagna_non_archiviata_con_contatori_a_zero_e_importo_in_centesimi — rosso route (405), verde al tentativo 1
+- AC-03 → tests/test_admin_campaigns.py::test_creazione_rifiuta_ogni_valore_fuori_dai_limiti_con_400_senza_eco_e_senza_scrivere — **coperto** (passava subito: validazione già in creazione e nel core del ticket 01; asserzioni verificate non permissive)
+- AC-04 → tests/test_admin_campaigns.py::test_parola_chiave_in_conflitto_da_409_senza_scrivere_a_creazione_modifica_e_ripristino — rosso asserzione (PUT 404 invece di 409), verde al tentativo 1
+- AC-05 → tests/test_admin_campaigns.py::test_modifica_sostituisce_ogni_campo_e_lascia_invariati_contatori_archiviazione_e_data — **coperto** (passava subito: il PUT del criterio 04 fa già tutto; attesi letterali)
+- AC-06 → tests/test_admin_campaigns.py::test_archivia_e_ripristina_cambiano_solo_lo_stato_ed_elimina_cancella_la_riga_e_libera_la_parola — rosso route (DELETE 405), verde al tentativo 1
+- AC-07 → tests/test_admin_campaigns.py::test_api_e_pagina_delle_campagne_seguono_le_regole_della_dashboard_admin — rosso asserzione (template senza «Campagne»), verde al tentativo 1; test corretto una volta prima del rosso (vedi sotto)
+- AC-08 → tests/test_campaign_pause.py::test_la_pausa_archivia_le_campagne_nella_stessa_transazione_e_nessun_ripristino — rosso asserzione, verde al tentativo 1
+
+Scelte dove il contract lasciava libertà o era ambiguo:
+- **Header privati solo sui successi** (decisione del founder, 2026-11-13): il contract §9 dice «ogni risposta», AC-07 «regole di oggi», e oggi i 401/403/404/409 della dashboard non portano `no-store`/`noindex`/`Referrer-Policy`. Scelta: come oggi. Se in futuro si vorranno su ogni risposta, è un `/fix` che tocca tutta la dashboard.
+- **`Campaign.__table_args__ = {"sqlite_autoincrement": True}`** (`models.py`, fuori dal contract §3): SQLite riusava l'id di una campagna eliminata e un secondo «Elimina» sul vecchio id cancellava quella nuova invece di dare 404. Postgres non riusa mai gli id e ignora l'opzione: lo script SQL e `test_migrations` non cambiano. Da rivedere in `/review`.
+- `create_campaign` accetta un `now` facoltativo (ripiego `utc_now()`): la firma del contract resta valida.
+- Gli import della shell di `campaign_service` stanno sotto `# --- Shell ---` (core puro solo stdlib e Pydantic).
+- Il controllo «sparisce dallo scanner» di AC-06 è omesso: `scanner_campaigns` è del ticket 05.
+
+Limiti noti: la pagina non è stata provata in un browser (passi 1-4 di `collaudo.md`, a cura del founder); l'atomicità
+della pausa è verificata su SQLite, non su Postgres.

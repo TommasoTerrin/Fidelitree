@@ -180,7 +180,13 @@ class Campaign(SQLModel, table=True):
     Campagna di un negozio: parola chiave, testo promozionale e contatori delle richieste (contract §3).
     `keyword` resta come l'ha scritta il founder (strip), mai normalizzata. `value_cents` 0 = nessun
     importo; `request_limit` None = nessun limite. Nessun default lato DB: i valori iniziali li mette l'app.
+
+    `sqlite_autoincrement` impedisce a SQLite di riusare l'id di una campagna eliminata (contract §5):
+    senza, un secondo «Elimina» sull'id vecchio cancellerebbe la campagna nuova invece di dare 404.
+    Postgres non riusa mai gli id e ignora l'opzione.
     """
+    __table_args__ = {"sqlite_autoincrement": True}
+
     id: Optional[int] = Field(default=None, primary_key=True)
     merchant_id: int = Field(foreign_key="merchant.id", ondelete="CASCADE", index=True)
     name: str = Field(max_length=40)

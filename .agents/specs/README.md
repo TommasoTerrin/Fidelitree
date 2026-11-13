@@ -31,6 +31,6 @@ versione che tocca l'area.
 | Pagina carta, QR, scanner del merchant | `carta-e-scanner.md` | da creare |
 | Pool del negozio, livelli, chiusura mensile, Ecologi | `pool-alberi.md` | da creare |
 | Auth dei merchant e stato del servizio | `merchant-auth-stato.md` | da creare |
-| Dashboard admin del founder | `admin.md` | da creare |
+| Dashboard admin del founder | `admin.md` | creato in v0.4.1 (ticket 02: accesso, lista, azioni di stato, campagne, pausa che archivia) |
 | Campagne promozionali | `campagne.md` | creato in v0.4.1 (ticket 01: modello e core; shell nei ticket 02-05) |
 | Dati, segreti, privacy, log | `dati-e-segreti.md` | creato in v0.4.1 (ticket 01: migrazioni e dati nelle campagne; il resto è ancora in AGENTS.md) |

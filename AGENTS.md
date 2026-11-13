@@ -132,11 +132,12 @@ app/
     instagram_service.py # trigger, card di risposta, finestra 24 h, quota, webhook → carta (o carta di prova), link della carta
     zernio_service.py   # client API Zernio + zernio_credentials_for (UNICO punto che sa da dove arriva la chiave)
     merchant_service.py # registrazione, login con freno, cambio password, impostazioni, onboarding Instagram, dashboard admin (login admin, lista, stato, reset password)
+    campaign_service.py # campagne promozionali: core puro (validazione, parola chiave, testi dei DM) + shell admin (CRUD, archivia, ripristina, elimina, archiviazione con la pausa)
     tree_service.py     # pool del negozio, livelli, chiusura periodo
     ecologi_service.py  # client Impact API Ecologi
-    db_crud/            # accesso DB puro
+    db_crud/            # accesso DB puro (card_crud, merchant_crud, campaign_crud)
   routes/
-    admin.py            # dashboard del founder /admin (login, lista, approva/pausa/riattiva, reset password)
+    admin.py            # dashboard del founder /admin (login, lista, approva/pausa/riattiva, reset password, campagne dei negozi)
     consumer/           # pagina carta /c/{token}, carta di prova /carta-di-prova, /privacy
     merchant/           # api + auth + pagine merchant
     webhooks.py         # POST /webhooks/zernio/{hook_id}

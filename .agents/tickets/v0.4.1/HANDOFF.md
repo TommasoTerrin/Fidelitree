@@ -12,6 +12,9 @@
 - **Ticket 01 FATTO il 2026-11-12** (1066 test verdi; attende l'ok del founder): versione 0.4.1, `app/core/text.py`,
   modello `Campaign`, `migrations/0001_campagne.sql`, core puro completo di `campaign_service` (nessuna shell). Spec
   vive `campagne.md` e `dati-e-segreti.md` create. Prossimo: `/implement 02` (dopo l'ok).
+- **Ticket 02 FATTO il 2026-11-13** (1074 test verdi; attende l'ok del founder): API admin e sezione «Campagne» della
+  dashboard, la pausa archivia le campagne nello stesso commit. Spec viva `specs/admin.md`, passi in `collaudo.md`
+  («v0.4.1 — campagne»). Prossimo: `/implement 03` (dopo l'ok).
 - Nessun push, nessuna PR.
 
 ## Cosa fare alla ripartenza
@@ -26,6 +29,13 @@
 - Ticket 04 (commenti) **bloccante**, con l'uscita del piano B se i commenti non funzionano con l'account gratuito.
 - Strumenti di collaudo **approvati**: `zernio_check send-private-reply` (04) e `replay_webhook --comment` (06).
 - Gli altri scostamenti (1, 2, 4-7) accettati come scritti.
+
+## Decisioni prese durante il ticket 02 (2026-11-13)
+
+- Header privati (`no-store`, `noindex`, `Referrer-Policy`) **solo sulle risposte di successo**, come nel resto della
+  dashboard (il contract diceva «ogni risposta»). Test e `specs/admin.md` lo riportano.
+- `Campaign` ha `sqlite_autoincrement` (solo SQLite, fuori dal contract §3): da rivedere in `/review`.
+- `scanner_campaigns` non esiste ancora: il controllo «sparisce dallo scanner» di AC-06 va aggiunto nel ticket 05.
 
 ## Fatti verificati e da verificare su Zernio
 

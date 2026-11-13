@@ -11,7 +11,7 @@ from enum import Enum
 from pydantic import BaseModel
 
 from app.core.enums import ServiceState
-from app.core.errors import InvalidInputError, MessageTooLongError
+from app.core.errors import ConflictError, InvalidInputError, MessageTooLongError, NotFoundError
 from app.core.money import euro_to_cents
 from app.core.text import INSTAGRAM_TEXT_MAX, normalize_text
 
@@ -341,3 +341,152 @@ def _parse_value_cents(value: object) -> int:
             f"Valore: deve essere tra {VALUE_MIN_CENTS / 100:.0f} e {VALUE_MAX_CENTS / 100:.0f} euro."
         )
     return cents
+
+
+# --- Shell ---
+
+# Gli import della shell stanno qui sotto, non in cima: il core puro sopra dipende solo da stdlib e Pydantic.
+from sqlmodel import Session  # noqa: E402
+
+from app.core.clock import utc_now  # noqa: E402
+from app.core.config import settings  # noqa: E402
+from app.models.models import Campaign, Merchant  # noqa: E402
+from app.services import card_service  # noqa: E402
+from app.services.db_crud import campaign_crud  # noqa: E402
+
+
+def list_campaigns(session: Session, merchant: Merchant) -> list[CampaignRow]:
+    """
+    Campagne del negozio per `/admin` (AC-01), nell'ordine D11 deciso dal crud.
+
+    Lo stato di ogni riga si deriva da quello del negozio (R3), calcolato una volta sola.
+    """
+    state = card_service.merchant_state(merchant)
+    return [campaign_row(c, state) for c in campaign_crud.list_campaigns_by_merchant(session, merchant.id)]
+
+
+def create_campaign(
+    session: Session, merchant: Merchant, raw: object, now: datetime | None = None
+) -> CampaignRow:
+    """
+    Crea una campagna del negozio (AC-02, AC-03). Ordine dei controlli: validazione (400), poi
+    conflitto di parola chiave con le non archiviate del negozio e con quella della carta (409).
+
+    Se un controllo fallisce non si scrive nulla. La campagna nasce non archiviata, con i contatori
+    a 0 e `created_at = now` (UTC aware; senza `now` si usa `utc_now()`, come dice il contract §5). La parola della carta si legge
+    qui, nella shell, e arriva al core come argomento.
+    """
+    data = validate_campaign_input(raw)
+    others = [
+        CampaignKey(id=c.id, keyword=c.keyword)
+        for c in campaign_crud.list_active_campaigns_by_merchant(session, merchant.id)
+    ]
+    reason = keyword_conflict(data.keyword, settings.INSTAGRAM_CARD_KEYWORD, others)
+    if reason is not None:
+        raise ConflictError(f"Parola chiave: {reason}.")
+    campaign = campaign_crud.create_campaign(
+        session,
+        merchant.id,
+        data.name,
+        data.keyword,
+        data.promo_text,
+        data.value_cents,
+        data.request_limit,
+        now or utc_now(),
+    )
+    return campaign_row(campaign, card_service.merchant_state(merchant))
+
+
+def get_campaign_for_merchant(session: Session, merchant_id: int, campaign_id: int) -> Campaign:
+    """
+    Campagna del negozio per id. `NotFoundError` con lo stesso messaggio se non esiste o se è di
+    un altro negozio, così l'esistenza di campagne altrui non si deduce dalla risposta.
+    """
+    campaign = campaign_crud.get_campaign(session, campaign_id)
+    if campaign is None or campaign.merchant_id != merchant_id:
+        raise NotFoundError("Campagna non trovata.")
+    return campaign
+
+
+def _keyword_conflict_for(session: Session, campaign, keyword: str, check_in_use: bool) -> str | None:
+    """
+    Motivo di conflitto della parola chiave per una campagna esistente, `None` se libera (AC-03).
+
+    Si esclude la campagna stessa. `"riservata"` vale sempre; `"in uso"` solo se `check_in_use`
+    (campagna destinata a essere non archiviata), perché le archiviate non occupano parole.
+    """
+    others = []
+    if check_in_use:
+        others = [
+            CampaignKey(id=c.id, keyword=c.keyword)
+            for c in campaign_crud.list_active_campaigns_by_merchant(session, campaign.merchant_id)
+        ]
+    return keyword_conflict(keyword, settings.INSTAGRAM_CARD_KEYWORD, others, exclude_id=campaign.id)
+
+
+def update_campaign(
+    session: Session, merchant: Merchant, campaign_id: int, raw: object
+) -> CampaignRow:
+    """
+    Modifica una campagna del negozio (AC-04). Ordine dei controlli: 404 campagna non del negozio,
+    400 validazione, 409 parola chiave.
+
+    Sostituisce tutti i campi modificabili. Il conflitto «riservata» vale sempre; «in uso» solo se
+    la campagna non è archiviata, escludendo se stessa. Se un controllo fallisce non si scrive nulla;
+    contatori, `is_archived` e `created_at` restano invariati.
+    """
+    campaign = get_campaign_for_merchant(session, merchant.id, campaign_id)
+    data = validate_campaign_input(raw)
+    reason = _keyword_conflict_for(session, campaign, data.keyword, not campaign.is_archived)
+    if reason is not None:
+        raise ConflictError(f"Parola chiave: {reason}.")
+    campaign = campaign_crud.update_campaign_fields(
+        session, campaign, data.name, data.keyword, data.promo_text, data.value_cents, data.request_limit
+    )
+    return campaign_row(campaign, card_service.merchant_state(merchant))
+
+
+def archive_on_pause(session: Session, merchant_id: int, before: ServiceState, after: ServiceState) -> int:
+    """
+    Archivia le campagne non archiviate del negozio se la pausa inizia ora (AC-08, `pause_begins`).
+
+    Ritorna quante ne ha archiviate (0 se la pausa non inizia). NON fa commit: l'archiviazione e il cambio
+    di stato del negozio vanno nello stesso commit (contract §5, §8). «Avvia» e «Riattiva» non ripristinano nulla.
+    """
+    if not pause_begins(before, after):
+        return 0
+    return campaign_crud.archive_active_campaigns_by_merchant(session, merchant_id)
+
+
+def archive_campaign(session: Session, merchant: Merchant, campaign_id: int) -> CampaignRow:
+    """Archivia una campagna del negozio (AC-05); idempotente: se è già archiviata non cambia nulla."""
+    campaign = get_campaign_for_merchant(session, merchant.id, campaign_id)
+    if not campaign.is_archived:
+        campaign = campaign_crud.set_campaign_archived(session, campaign, True)
+    return campaign_row(campaign, card_service.merchant_state(merchant))
+
+
+def delete_campaign(session: Session, merchant: Merchant, campaign_id: int) -> None:
+    """
+    Elimina definitivamente una campagna del negozio, contatori compresi (contract §5).
+
+    `NotFoundError` se non esiste o è di un altro negozio, quindi anche al secondo «Elimina». La sua
+    parola chiave torna libera perché la riga sparisce.
+    """
+    campaign = get_campaign_for_merchant(session, merchant.id, campaign_id)
+    campaign_crud.delete_campaign(session, campaign)
+
+
+def restore_campaign(session: Session, merchant: Merchant, campaign_id: int) -> CampaignRow:
+    """
+    Ripristina una campagna archiviata (AC-06). Se è già non archiviata non cambia nulla; altrimenti
+    la sua parola chiave non deve confliggere con la carta né con le non archiviate (esclusa se
+    stessa), altrimenti `ConflictError` e la campagna resta archiviata.
+    """
+    campaign = get_campaign_for_merchant(session, merchant.id, campaign_id)
+    if campaign.is_archived:
+        reason = _keyword_conflict_for(session, campaign, campaign.keyword, True)
+        if reason is not None:
+            raise ConflictError(f"Parola chiave: {reason}.")
+        campaign = campaign_crud.set_campaign_archived(session, campaign, False)
+    return campaign_row(campaign, card_service.merchant_state(merchant))

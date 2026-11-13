@@ -111,3 +111,13 @@ URL (sempre con il prefisso del tunnel `https://<nome>.trycloudflare.com`):
 Neon `development` con `ENVIRONMENT=production`: ok secondo il founder; dal log registrazione, onboarding, carta di prova,
 «Avvia», 3 card `sent`, `/c/***` aperta, pausa, 429, reset password e «Scollega» (200), 0 segreti e 0 errori 5xx.
 Non confermati dal log: «Riattiva», cambio password, evento duplicato con `replay_webhook`.
+
+## v0.4.1 — campagne
+
+> Aggiunti dal ticket 02 (dashboard admin). Altri passi (webhook, commenti, scanner) arrivano con i ticket 03-05.
+
+1. `/admin` → «Campagne» di un negozio attivo → crea `NATALE` (testo, importo 2,50 €, nessun limite): compare «attiva»
+   con contatori a 0.
+2. Crea una seconda campagna `natale!` → errore 409 leggibile; crea `CARTA` → 409; nome di 2 caratteri → 400.
+3. Modifica importo e limite; «Archivia» → «archiviata»; «Ripristina» → «attiva»; «Elimina» → conferma → sparisce.
+4. «Metti in pausa» il negozio → le sue campagne risultano archiviate; «Riattiva» → restano archiviate.
