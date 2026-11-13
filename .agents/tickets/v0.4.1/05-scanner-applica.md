@@ -48,4 +48,29 @@ Passi in `collaudo.md` (sezione «v0.4.1 — campagne»):
 - A fine ticket: riepilogo di 3 righe e attesa dell'ok. Niente push né PR.
 
 ## Stato
-⬜ da fare
+✅ fatto il 2026-11-13 (1137 test verdi; attende l'ok)
+
+Fatto: shell `scanner_campaigns` e `apply_campaign` (+ `campaign_crud.apply_to_card`), `ApplyCampaignResponse`, route
+`POST /api/merchant/card/{id}/campaigns/{cid}/apply`, contesto `campaigns` della pagina di gestione, blocco
+`campaigns-section` e JavaScript di «Applica» nel template (dentro `{% if campaigns %}`: senza campagne la pagina non
+nomina né `campaigns-section` né `data-campaign-id`). Spec viva `specs/carta-e-scanner.md`, passi 15-21 in `collaudo.md`.
+
+Scelte dove il contract lasciava libertà: la finestra di conferma mostra l'etichetta del bottone («Applica NATALE
+(+2,50 €)») con `textContent`; toast «Accreditati € X di cashback» o «Campagna applicata» (importo 0); corpo della
+POST assente.
+
+Limiti noti: AC-22 (clic su «ANNULLA») e il JavaScript del template si provano solo a mano (passi 15-17 di
+`collaudo.md`, ticket 06); nessun test controlla il JS. Sette dei test del ciclo sono passati subito (`coperto`): la
+route e i controlli erano già prodotti nel ciclo di AC-23, senza prova di mutazione; il test di importo 0 prova solo il
+ramo «pausa», non «in attesa».
+
+### Registro TDD
+- AC-21 (con campagne) → tests/test_scanner_campaigns.py::test_gestione_carta_mostra_solo_le_campagne_non_archiviate_con_la_loro_etichetta — rosso asserzione, verde al tentativo 1 (1124 test)
+- AC-23 (importo > 0) → tests/test_scanner_campaigns.py::test_applica_campagna_confermata_accredita_l_importo_attuale_e_conta_un_utilizzo — rosso import (route 404), verde al tentativo 1 dell'implementer; un giro in più sul test (difetto del test: `session.get` su `CampaignRow`, corretto dal test-writer; il tentativo non è stato contato) (1125 test)
+- AC-24 (403 API, attesa e pausa) → tests/test_scanner_campaigns.py::test_applica_campagna_con_importo_su_negozio_non_attivo_risponde_403_senza_scrivere — coperto (passa subito, già prodotto dal ticket AC-23; il test distingue 403 da 200 e controlla il DB)
+- AC-25 (404) → tests/test_scanner_campaigns.py::test_applica_campagna_con_carta_o_campagna_non_del_negozio_risponde_404_senza_scrivere — coperto (3 casi passano subito; nessuna mutazione provata)
+- AC-26 → tests/test_scanner_campaigns.py::test_applica_campagna_non_tocca_tree_points_pool_registro_e_pagina_cliente — coperto (passa subito; confronto esatto della pagina cliente, precondizioni asserite)
+- AC-25 (campagna archiviata si applica) → tests/test_scanner_campaigns.py::test_applica_campagna_archiviata_dopo_il_caricamento_della_pagina_si_applica_comunque — coperto (passa subito)
+- AC-23 (importo 0) → tests/test_scanner_campaigns.py::test_applica_campagna_senza_importo_conta_solo_l_utilizzo_anche_a_negozio_non_attivo — coperto (passa subito; solo ramo pausa)
+- AC-21 (senza campagne) → tests/test_scanner_campaigns.py::test_gestione_carta_senza_campagne_da_mostrare_non_ha_il_blocco_campagne — coperto (passa subito, già prodotto dal primo ciclo di AC-21)
+- AC-24 (pagina: bottoni disabilitati) → tests/test_scanner_campaigns.py::test_pagina_disabilita_applica_con_importo_se_il_negozio_non_e_attivo — coperto (3 casi passano subito)

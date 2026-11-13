@@ -4,7 +4,9 @@ Campagne promozionali del negozio: validazione, confronto delle parole chiave e 
 La sezione «Core puro» usa solo libreria standard e Pydantic: nessun I/O, nessun orologio.
 """
 
+import uuid
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 
@@ -350,9 +352,17 @@ from sqlmodel import Session  # noqa: E402
 
 from app.core.clock import utc_now  # noqa: E402
 from app.core.config import settings  # noqa: E402
-from app.models.models import Campaign, Merchant  # noqa: E402
+from app.models.models import Campaign, Card, Merchant  # noqa: E402
 from app.services import card_service  # noqa: E402
-from app.services.db_crud import campaign_crud  # noqa: E402
+from app.services.db_crud import campaign_crud, card_crud  # noqa: E402
+
+
+@dataclass
+class ApplyResult:
+    """Esito di un'applicazione: la carta ricaricata dopo gli UPDATE e i centesimi accreditati (contract §5)."""
+
+    card: Card
+    applied_cents: int
 
 
 def list_campaigns(session: Session, merchant: Merchant) -> list[CampaignRow]:
@@ -363,6 +373,48 @@ def list_campaigns(session: Session, merchant: Merchant) -> list[CampaignRow]:
     """
     state = card_service.merchant_state(merchant)
     return [campaign_row(c, state) for c in campaign_crud.list_campaigns_by_merchant(session, merchant.id)]
+
+
+def scanner_campaigns(session: Session, merchant: Merchant) -> list[ScannerCampaign]:
+    """
+    Campagne non archiviate del negozio per i bottoni dello scanner (AC-21, AC-23).
+
+    Ordine: `created_at` decrescente, poi `id` decrescente. Lista vuota se non ce ne sono: in quel caso
+    la pagina non mostra il blocco. L'etichetta si compone con `scanner_label` (core puro).
+    """
+    campaigns = sorted(
+        campaign_crud.list_active_campaigns_by_merchant(session, merchant.id),
+        key=lambda c: (c.created_at, c.id),
+        reverse=True,
+    )
+    return [
+        ScannerCampaign(
+            id=c.id, name=c.name, value_cents=c.value_cents, label=scanner_label(c.name, c.value_cents)
+        )
+        for c in campaigns
+    ]
+
+
+def apply_campaign(
+    session: Session, merchant: Merchant, card_id: uuid.UUID, campaign_id: int
+) -> ApplyResult:
+    """
+    Applica una campagna a una carta del negozio (AC-23, AC-24, AC-25, AC-26).
+
+    Ordine dei controlli: carta non del negozio (404), campagna non del negozio (404), negozio non
+    attivo con importo attuale positivo (403, prima di scrivere). Una campagna archiviata si applica
+    (AC-25). Si accredita il `value_cents` ATTUALE della campagna e si conta un utilizzo, con un solo
+    commit; con valore 0 conta solo l'utilizzo. Nessun movimento di tree points, pool o `PointTransaction`.
+    """
+    card = card_crud.get_card_by_id(session, card_id)
+    if card is None or card.merchant_id != merchant.id:
+        raise NotFoundError("Card non valida per questo merchant")
+    campaign = get_campaign_for_merchant(session, merchant.id, campaign_id)
+    value_cents = campaign.value_cents
+    card_service.check_balance_change(card_service.merchant_state(merchant), value_cents)
+    campaign_crud.apply_to_card(session, card.id, campaign.id, value_cents)
+    session.refresh(card)  # ricarica la carta dopo gli UPDATE atomici
+    return ApplyResult(card=card, applied_cents=value_cents)
 
 
 def create_campaign(

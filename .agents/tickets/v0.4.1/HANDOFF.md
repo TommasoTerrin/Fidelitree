@@ -23,6 +23,10 @@
   (`_process_comment`), `WEBHOOK_EVENTS` con i commenti, `zernio_check send-private-reply`; tutto «da spec», da provare nel
   ticket 06 (piano B pronto). Prossimo: `/implement 05` (scanner «Applica»; aggiungere anche `scanner_campaigns` e il controllo
   di AC-06).
+- **Ticket 05 FATTO il 2026-11-13** (1137 test verdi; attende l'ok del founder): scanner con le campagne e «Applica»
+  (service, route, template con JS, spec viva `specs/carta-e-scanner.md`, passi 15-21 in `collaudo.md`). Il JS del
+  template e AC-22 non hanno test automatici: si provano a mano. Prossimo: `/implement 06` (misto: documentazione,
+  script SQL su Neon `development` poi `production` dopo il branch di backup, collaudo su Instagram vero, `replay_webhook --comment`).
 - Nessun push, nessuna PR.
 
 ## Cosa fare alla ripartenza

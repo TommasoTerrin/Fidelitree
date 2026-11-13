@@ -140,3 +140,15 @@ Non confermati dal log: «Riattiva», cambio password, evento duplicato con `rep
 12. Commenta `CARTA` → DM «Per ricevere la tua carta scrivici CARTA qui in chat»; poi DM `CARTA` → card di oggi.
 13. Commenta `NATALE` una seconda volta dallo stesso profilo → seconda risposta privata (un commento nuovo è una richiesta nuova).
 14. Da un profilo che **non segue** il negozio: commento `NATALE` → DM consegnato? (esito in `zernio-notes.md`).
+
+> Aggiunti dal ticket 05 (scanner «Applica»). Negozio attivo con la campagna `NATALE` (2,50 €) e una seconda
+> campagna senza importo; si prova dal telefono (PWA) o dal browser, dopo aver scansionato una carta.
+
+15. Pagina di gestione della carta → in fondo i bottoni «Applica NATALE (+2,50 €)» e «Applica <nome>».
+16. «Applica NATALE» → finestra di conferma con l'etichetta → «ANNULLA»: nulla cambia, nessuna richiesta.
+17. «Applica NATALE» → «SÌ, CONFERMO» → toast «Accreditati € 2.50 di cashback», dopo l'aggiornamento il cashback è
+    +2,50 €; in `/admin` utilizzi = 1.
+18. «Applica» sulla campagna senza importo → cashback invariato, toast «Campagna applicata», utilizzi +1.
+19. Negozio senza campagne (o con tutte archiviate) → pagina come prima, nessun blocco di bottoni.
+20. Negozio in attesa con campagne: «Applica» con importo disattivato e banner; quello senza importo resta attivo.
+21. `/c/<token>` della carta → mostra solo il nuovo saldo cashback; livello e alberi invariati.

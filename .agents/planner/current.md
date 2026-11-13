@@ -14,8 +14,8 @@
   ([README](../tickets/v0.4.1/README.md))
 - **Branch**: `feature/campagne-pilota` (già creato da `develop` il 2026-11-12, con le skill)
 - **Fase**: `implementazione` (gate 1 e gate 2 approvati il 2026-11-12)
-- **Ticket**: 04 fatto il 2026-11-13 (attende l'ok del founder); poi 05 (01-03 con ok implicito da `/implement`)
-- **Prossimo comando**: `/implement 05` (dopo l'ok al 04)
+- **Ticket**: 05 fatto il 2026-11-13 (attende l'ok del founder); poi 06 (misto: SQL su Neon e collaudo su Instagram vero)
+- **Prossimo comando**: `/implement 06` (dopo l'ok al 05); l'ultimo ticket è il 06, poi `/review`
 
 ## Dove siamo
 
@@ -32,7 +32,7 @@ il 2026-11-12** (scostamento 3 ammesso, 04 bloccante con piano B, strumenti di c
 | 02 | [Dashboard admin: campagne e pausa che archivia](../tickets/v0.4.1/02-admin-campagne-pausa.md) | bloccante | agente | 01 | ✅ 2026-11-13 (1074 test; attende l'ok) |
 | 03 | [Webhook: parola chiave in DM e risposte alle storie](../tickets/v0.4.1/03-webhook-dm-campagne.md) | bloccante | agente | 01 | ✅ 2026-11-13 (1098 test; attende l'ok) |
 | 04 | [Commenti: risposta privata](../tickets/v0.4.1/04-commenti-risposta-privata.md) | bloccante (piano B) | agente | 03 | ✅ 2026-11-13 (1123 test; attende l'ok) |
-| 05 | [Scanner: «Applica»](../tickets/v0.4.1/05-scanner-applica.md) | bloccante | agente | 01 | ⬜ |
+| 05 | [Scanner: «Applica»](../tickets/v0.4.1/05-scanner-applica.md) | bloccante | agente | 01 | ✅ 2026-11-13 (1137 test; attende l'ok) |
 | 06 | [Documentazione, script SQL su Neon, collaudo su Instagram vero](../tickets/v0.4.1/06-documentazione-collaudo.md) | bloccante | misto | 01-05 | ⬜ |
 
 Ordine proposto: 01 → 02 → 03 → 04 → 05 → 06 (02 prima di 03 e 05 per poter creare campagne a mano nei collaudi).

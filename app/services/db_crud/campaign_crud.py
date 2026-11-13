@@ -2,12 +2,13 @@
 Operazioni CRUD sulle campagne promozionali (tabella `campaign`).
 """
 
+import uuid
 from datetime import datetime
 
 from sqlalchemy import update
 from sqlmodel import Session, select
 
-from app.models.models import Campaign
+from app.models.models import Campaign, Card
 
 
 def list_campaigns_by_merchant(session: Session, merchant_id: int) -> list[Campaign]:
@@ -122,6 +123,21 @@ def create_campaign(
     session.commit()
     session.refresh(campaign)
     return campaign
+
+
+def apply_to_card(session: Session, card_id: uuid.UUID, campaign_id: int, value_cents: int) -> None:
+    """
+    Applica una campagna a una carta (AC-23): due `UPDATE` atomici con un solo commit.
+
+    `cashback_cents = cashback_cents + value_cents` sulla carta e `uses = uses + 1` sulla campagna: si
+    incrementa in SQL, non dai valori in memoria, così due applicazioni simultanee non si sovrascrivono.
+    Non tocca tree points, pool né movimenti (AC-26). Il chiamante ha già verificato proprietà e permessi.
+    """
+    session.execute(
+        update(Card).where(Card.id == card_id).values(cashback_cents=Card.cashback_cents + value_cents)
+    )
+    session.execute(update(Campaign).where(Campaign.id == campaign_id).values(uses=Campaign.uses + 1))
+    session.commit()
 
 
 def increment_request_counter(session: Session, campaign_id: int, channel: str) -> int | None:
