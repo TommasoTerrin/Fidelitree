@@ -4,7 +4,7 @@
 > Priorità: bloccante, con uscita di **piano B** (decisione 13: se i commenti non funzionano con l'account Zernio
 > gratuito si spegne il ramo e `WEBHOOK_EVENTS` torna a solo `message.received`). Chi lo fa: agente.
 > Rischio esterno: **Zernio/Meta non verificati** (`comment.received` sull'account gratuito, campi del payload,
-> risposta privata a un non follower e nella quota): collaudo solo alla fine (ticket 06), per decisione del founder.
+> risposta privata a un non follower e nella quota): collaudo solo alla fine (ticket 07), per decisione del founder.
 > Contract congelato: [contracts.md](contracts.md). Spec: [README.md](README.md).
 
 ## Obiettivo
@@ -34,7 +34,7 @@ negozi collegati da ora sottoscrivono anche `comment.received`.
   (`connect_instagram_account`), archivio `feature/campagne` (`621a278`).
 
 ## Collaudo
-Passi in `collaudo.md` (sezione «v0.4.1 — campagne»), da fare con Instagram vero nel ticket 06:
+Passi in `collaudo.md` (sezione «v0.4.1 — campagne»), da fare con Instagram vero nel ticket 07:
 1. «Scollega» e ricollega il profilo del negozio (sottoscrive `comment.received`).
 2. Da un profilo cliente commenta `NATALE` sotto un post → arriva un DM con la promo; sotto il post nessuna risposta
    pubblica; in `/admin` richieste da commento = 1.
@@ -63,7 +63,7 @@ degli errori). Spec viva `carta-instagram.md`, `zernio-notes.md` (righe «da ver
 osservato prima di applicare il codice; aggiornato anche un terzo test non previsto dal ticket
 (`tests/unit/test_zernio_core.py::test_build_webhook_body`, lista degli eventi). Nessun ramo per i «commenti dell'account del
 negozio»: il contract non legge `author`, quindi seguono le stesse regole degli altri.
-**Limiti**: tutto «da spec», mai provato su Zernio/Meta (collaudo nel ticket 06); il piano B resta disponibile.
+**Limiti**: tutto «da spec», mai provato su Zernio/Meta (collaudo nel ticket 07); il piano B resta disponibile.
 
 ### Registro TDD
 - AC-20 → tests/test_zernio_client.py::test_register_webhook_corpo_e_id, tests/test_instagram_onboarding.py, tests/unit/test_zernio_core.py — rosso asserzione, verde al tentativo 1 (codice dall'archivio)

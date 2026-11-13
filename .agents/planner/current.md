@@ -14,8 +14,8 @@
   ([README](../tickets/v0.4.1/README.md))
 - **Branch**: `feature/campagne-pilota` (già creato da `develop` il 2026-11-12, con le skill)
 - **Fase**: `implementazione` (gate 1 e gate 2 approvati il 2026-11-12)
-- **Ticket**: 05 fatto il 2026-11-13 (attende l'ok del founder); poi 06 (misto: SQL su Neon e collaudo su Instagram vero)
-- **Prossimo comando**: `/implement 06` (dopo l'ok al 05); l'ultimo ticket è il 06, poi `/review`
+- **Ticket**: 05 fatto il 2026-11-13; poi 06 (agente: documentazione e `replay_webhook --comment`) e 07 (founder: SQL su Neon e collaudo su Instagram vero, lunedì 2026-11-16)
+- **Prossimo comando**: `/implement 06`; poi `/implement 07` (con il founder), poi `/review` e `/release`
 
 ## Dove siamo
 
@@ -33,9 +33,11 @@ il 2026-11-12** (scostamento 3 ammesso, 04 bloccante con piano B, strumenti di c
 | 03 | [Webhook: parola chiave in DM e risposte alle storie](../tickets/v0.4.1/03-webhook-dm-campagne.md) | bloccante | agente | 01 | ✅ 2026-11-13 (1098 test; attende l'ok) |
 | 04 | [Commenti: risposta privata](../tickets/v0.4.1/04-commenti-risposta-privata.md) | bloccante (piano B) | agente | 03 | ✅ 2026-11-13 (1123 test; attende l'ok) |
 | 05 | [Scanner: «Applica»](../tickets/v0.4.1/05-scanner-applica.md) | bloccante | agente | 01 | ✅ 2026-11-13 (1137 test; attende l'ok) |
-| 06 | [Documentazione, script SQL su Neon, collaudo su Instagram vero](../tickets/v0.4.1/06-documentazione-collaudo.md) | bloccante | misto | 01-05 | ⬜ |
+| 06 | [Documentazione e strumenti per il collaudo](../tickets/v0.4.1/06-documentazione-collaudo.md) | bloccante | agente | 01-05 | ⬜ |
+| 07 | [Script SQL su Neon e collaudo su Instagram vero](../tickets/v0.4.1/07-collaudo-instagram.md) | bloccante | founder | 06 | ⬜ (lunedì 2026-11-16) |
 
-Ordine proposto: 01 → 02 → 03 → 04 → 05 → 06 (02 prima di 03 e 05 per poter creare campagne a mano nei collaudi).
+Ordine proposto: 01 → 02 → 03 → 04 → 05 → 06 → 07 (02 prima di 03 e 05 per poter creare campagne a mano nei collaudi).
+Il 2026-11-13 il founder ha diviso il vecchio 06 «misto» in 06 (agente) e 07 (founder), senza cambiarne il contenuto.
 
 **Campagne pilota (2026-11-12)**: la prima v0.4.0 delle campagne (adesioni, pagina `/p/`, secondo QR) è **archiviata**
 sul branch `feature/campagne` (non mergiare; ticket 01-03 fatti, 04 parziale). Il founder l'ha ridotta per i pilota

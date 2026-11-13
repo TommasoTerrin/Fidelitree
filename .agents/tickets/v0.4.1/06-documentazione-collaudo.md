@@ -1,13 +1,14 @@
-# Ticket 06 — Documentazione, prova dello script SQL e collaudo su Instagram vero
+# Ticket 06 — Documentazione e strumenti per il collaudo (parte dell'agente)
 
-> v0.4.1. Dipende da: 01, 02, 03, 04, 05. Criteri: AC-30; verifica dal vivo di AC-09..20 e dei rischi aperti di
-> [domain-model.md](domain-model.md).
-> Priorità: bloccante. Chi lo fa: misto. Rischio esterno: Zernio/Meta (è il ticket in cui si verificano).
+> v0.4.1. Dipende da: 01, 02, 03, 04, 05. Criteri: AC-30 (parte documenti: `deploy.md`).
+> Priorità: bloccante. Chi lo fa: agente. Rischio esterno: nessuno (Zernio/Meta si verificano nel ticket 07).
 > Contract congelato: [contracts.md](contracts.md). Spec: [README.md](README.md).
+> **Diviso il 2026-11-13 su richiesta del founder**: il vecchio ticket 06 «misto» è ora 06 (agente, questo file) e
+> [07](07-collaudo-instagram.md) (founder: script SQL su Neon e collaudo su Instagram vero). Contenuto invariato,
+> solo smistato tra i due.
 
 ## Obiettivo
-Chiudere la documentazione, provare lo script SQL su Neon `development` e fare il collaudo su Instagram vero. Se
-Zernio o Meta si comportano diversamente dal contract ci si ferma e si apre una voce `/fix` (piano B per i commenti).
+Chiudere la documentazione e preparare gli strumenti del collaudo, così che il ticket 07 sia solo prova dal vivo.
 
 ## Da fare
 **Agente**
@@ -20,29 +21,19 @@ Zernio o Meta si comportano diversamente dal contract ci si ferma e si apre una 
   serve al collaudo locale senza Instagram (con test).
 - Riletture: `overview.md` (flusso del webhook con le campagne e i commenti), `.agents/specs/*.md` dei ticket 01-05
   contro il codice, `pre-release.md` (voce sulla migrazione), «Mappa del codice» e «Comandi» di AGENTS.md.
-- Esiti del collaudo in `zernio-notes.md` («Collaudo v0.4.1»), dettati dal founder.
-
-**Founder**
-1. Controllare su Neon `development` l'elenco delle tabelle (le 4 della vecchia v0.4.0 sono già state eliminate,
-   commit `9c3e081`) e applicare lo script; avviare l'app e verificare che parta.
-2. Collaudo locale con tunnel (`collaudo.md`): passi della sezione «v0.4.1 — campagne» su Instagram vero, compresi
-   un profilo che segue e uno che non segue, una risposta a una storia, un commento `NATALE` e uno `CARTA`.
-3. Riportare gli esiti, in particolare: `comment.received` arriva con l'account gratuito? la risposta privata arriva
-   a un non follower? conta nella quota? un testo con molte emoji vicino a 1000 caratteri passa?
-4. Se i commenti non funzionano: decidere il piano B (`/fix`).
 
 ## File coinvolti
 - **Modifica**: `.agents/workflows/deploy.md`, `.agents/workflows/collaudo.md`, `.agents/architecture/overview.md`,
-  `.agents/architecture/zernio-notes.md`, `.agents/checklists/pre-release.md`, `.agents/specs/*.md`, `AGENTS.md`,
-  `scripts/replay_webhook.py`, `tests/test_scripts.py`.
+  `.agents/checklists/pre-release.md`, `.agents/specs/*.md`, `AGENTS.md`, `scripts/replay_webhook.py`,
+  `tests/test_scripts.py`.
 - **Solo lettura** (contesto): `migrations/0001_campagne.sql`, `scripts/run_collaudo.py`.
 
 ## Collaudo
-È il ticket del collaudo: i passi stanno in `collaudo.md` (sezione «v0.4.1 — campagne»).
+Nessuno qui: i passi preparati in `collaudo.md` (sezione «v0.4.1 — campagne») si eseguono nel ticket 07.
 
 ## Metodo
-- Parte dell'agente: TDD con `/implement 06` solo per `replay_webhook` (un test da un criterio, rosso osservato);
-  il resto è documentazione verificata contro il codice.
+- TDD con `/implement 06` solo per `replay_webhook` (un test da un criterio, rosso osservato); il resto è
+  documentazione verificata contro il codice.
 - Commenti italiani precisi e completi (regola 4 di AGENTS.md), anche in test e script.
 - `python -m pytest` verde prima del commit; commit in italiano «… (ticket 06)»; aggiorna `planner/current.md`.
 - A fine ticket: riepilogo di 3 righe e attesa dell'ok. Niente push né PR. Push e merge solo in `/review`.

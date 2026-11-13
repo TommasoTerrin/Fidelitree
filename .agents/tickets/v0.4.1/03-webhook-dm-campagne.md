@@ -3,7 +3,7 @@
 > v0.4.1. Dipende da: 01 (02 consigliato prima, per creare campagne a mano nel collaudo). Criteri: AC-09..13; I1, I3,
 > I4, I6.
 > Priorità: bloccante. Chi lo fa: agente. Rischio esterno: Zernio/Meta (testo della risposta a una storia: da
-> verificare nel collaudo finale, ticket 06).
+> verificare nel collaudo finale, ticket 07).
 > Contract congelato: [contracts.md](contracts.md). Spec: [README.md](README.md).
 
 ## Obiettivo

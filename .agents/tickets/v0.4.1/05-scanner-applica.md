@@ -60,7 +60,7 @@ Scelte dove il contract lasciava libertà: la finestra di conferma mostra l'etic
 POST assente.
 
 Limiti noti: AC-22 (clic su «ANNULLA») e il JavaScript del template si provano solo a mano (passi 15-17 di
-`collaudo.md`, ticket 06); nessun test controlla il JS. Sette dei test del ciclo sono passati subito (`coperto`): la
+`collaudo.md`, ticket 07); nessun test controlla il JS. Sette dei test del ciclo sono passati subito (`coperto`): la
 route e i controlli erano già prodotti nel ciclo di AC-23, senza prova di mutazione; il test di importo 0 prova solo il
 ramo «pausa», non «in attesa».
 

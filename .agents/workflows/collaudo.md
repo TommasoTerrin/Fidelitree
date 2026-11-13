@@ -132,7 +132,7 @@ Non confermati dal log: «Riattiva», cambio password, evento duplicato con `rep
 8. Campagna archiviata o negozio in pausa → nessuna risposta, contatori invariati.
 9. `--text CARTA` → la card di oggi, invariata.
 
-> Aggiunti dal ticket 04 (commenti), da fare con Instagram vero nel ticket 06.
+> Aggiunti dal ticket 04 (commenti), da fare con Instagram vero nel ticket 07.
 
 10. «Scollega» e ricollega il profilo del negozio (sottoscrive `comment.received`).
 11. Da un profilo cliente commenta `NATALE` sotto un post → arriva un DM con la promo; sotto il post nessuna risposta
@@ -141,7 +141,7 @@ Non confermati dal log: «Riattiva», cambio password, evento duplicato con `rep
 13. Commenta `NATALE` una seconda volta dallo stesso profilo → seconda risposta privata (un commento nuovo è una richiesta nuova).
 14. Da un profilo che **non segue** il negozio: commento `NATALE` → DM consegnato? (esito in `zernio-notes.md`).
 
-> Aggiunti dal ticket 05 (scanner «Applica»). Negozio attivo con la campagna `NATALE` (2,50 €) e una seconda
+> Aggiunti dal ticket 05 (scanner «Applica»), da fare nel ticket 07. Negozio attivo con la campagna `NATALE` (2,50 €) e una seconda
 > campagna senza importo; si prova dal telefono (PWA) o dal browser, dopo aver scansionato una carta.
 
 15. Pagina di gestione della carta → in fondo i bottoni «Applica NATALE (+2,50 €)» e «Applica <nome>».

@@ -55,7 +55,7 @@ spec vive `campagne.md` e `dati-e-segreti.md`. Nessuna shell, nessuna modifica v
 test-writer non fissa le parole dei messaggi d'errore (il contract dice solo «campo e regola, mai il valore»), quindi i
 test controllano solo che il messaggio non sia vuoto e non contenga il valore inviato.
 
-**Limiti noti**: lo script SQL non è eseguito su Postgres (collaudo nel ticket 06); `ScannerCampaign` si costruisce
+**Limiti noti**: lo script SQL non è eseguito su Postgres (collaudo nel ticket 07); `ScannerCampaign` si costruisce
 nella shell di `scanner_campaigns` (ticket 05), qui è provata solo l'etichetta; il legame con `campaign_row`
 nella pagina admin si vede nel ticket 02.
 

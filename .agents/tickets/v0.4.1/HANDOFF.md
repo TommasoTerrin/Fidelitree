@@ -25,15 +25,18 @@
   di AC-06).
 - **Ticket 05 FATTO il 2026-11-13** (1137 test verdi; attende l'ok del founder): scanner con le campagne e «Applica»
   (service, route, template con JS, spec viva `specs/carta-e-scanner.md`, passi 15-21 in `collaudo.md`). Il JS del
-  template e AC-22 non hanno test automatici: si provano a mano. Prossimo: `/implement 06` (misto: documentazione,
-  script SQL su Neon `development` poi `production` dopo il branch di backup, collaudo su Instagram vero, `replay_webhook --comment`).
+  template e AC-22 non hanno test automatici: si provano a mano nel 07.
+- **Ticket 06 diviso il 2026-11-13** (richiesta del founder, contenuto invariato): **06** = parte dell'agente
+  (`deploy.md`, `collaudo.md`, riletture, `replay_webhook --comment` in TDD); **07** = parte del founder (script SQL su
+  Neon `development`, collaudo su Instagram vero, esiti in `zernio-notes.md`), tenuto per lunedì 2026-11-16.
+  Prossimo: `/implement 06`; poi `/implement 07`; poi `/review` e `/release` (deploy).
 - Nessun push, nessuna PR.
 
 ## Cosa fare alla ripartenza
 
 1. Leggi il ticket successivo e `contracts.md` (congelato: si cambia solo con `/fix`).
 2. Un ticket per sessione con `/implement NN` (TDD con `ft-test-writer` e `ft-implementer` separati, commit locale,
-   riepilogo e attesa dell'ok). Ordine: 01 → 02 → 03 → 04 → 05 → 06.
+   riepilogo e attesa dell'ok). Ordine: 01 → 02 → 03 → 04 → 05 → 06 → 07.
 
 ## Decisioni prese al gate 2 (2026-11-12)
 
@@ -70,11 +73,11 @@ Nessun collaudo anticipato (decisione 13): tutto ciò che riguarda i commenti è
 - Dashboard admin: sessione o `X-Admin-Key`, `Origin` sui POST/PUT/DELETE con cookie, `no-store`, `noindex`, DOM solo
   con `textContent`. Nello scanner il nome della campagna entra nella finestra di conferma solo con `textContent`.
 - Webhook: risposta entro 5 secondi, sempre 200 per gli esiti, nessun nuovo tentativo sugli invii.
-- Produzione con dati veri: lo script SQL si applica solo dopo il branch Neon di backup (`deploy.md`, ticket 06).
+- Produzione con dati veri: lo script SQL si applica solo dopo il branch Neon di backup (`deploy.md`, scritto nel ticket 06; prova su `development` nel 07, `production` in `/release`).
 
 ## File di riferimento
 
-- `README.md` (spec, gate 1), `domain-model.md`, `contracts.md`, ticket `01-…06-*.md` di questa cartella.
+- `README.md` (spec, gate 1), `domain-model.md`, `contracts.md`, ticket `01-…07-*.md` di questa cartella (il 07 nasce dalla divisione del 06).
 - `.agents/decisions/0001-…0005-*.md` — schede delle aree toccate.
 - `.agents/planner/current.md` — blocco «Harness» e tabella dei ticket.
 - Archivio `feature/campagne`: `git show feature/campagne:.agents/tickets/v0.4.0/<file>`; codice utile nei commit

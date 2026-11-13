@@ -217,7 +217,7 @@ e, dove serve, i numeri misurati; nessun dato personale, token, IGSID o chiave.
 
 ## Commenti e risposta privata (v0.4.1, ticket 04) — tutto «da spec», nulla provato dal vivo
 
-Da verificare nel collaudo del ticket 06 (esiti qui, come ok / non ok):
+Da verificare nel collaudo del ticket 07 (era il 06 prima della divisione del 2026-11-13) (esiti qui, come ok / non ok):
 
 | Punto | Stato |
 |---|---|
