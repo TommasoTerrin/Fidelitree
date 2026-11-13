@@ -131,3 +131,12 @@ Non confermati dal log: «Riattiva», cambio password, evento duplicato con `rep
 7. Campagna con limite 1 e una richiesta già contata → `--text NATALE` → «Le offerte disponibili sono terminate…».
 8. Campagna archiviata o negozio in pausa → nessuna risposta, contatori invariati.
 9. `--text CARTA` → la card di oggi, invariata.
+
+> Aggiunti dal ticket 04 (commenti), da fare con Instagram vero nel ticket 06.
+
+10. «Scollega» e ricollega il profilo del negozio (sottoscrive `comment.received`).
+11. Da un profilo cliente commenta `NATALE` sotto un post → arriva un DM con la promo; sotto il post nessuna risposta
+    pubblica; in `/admin` richieste da commento = 1.
+12. Commenta `CARTA` → DM «Per ricevere la tua carta scrivici CARTA qui in chat»; poi DM `CARTA` → card di oggi.
+13. Commenta `NATALE` una seconda volta dallo stesso profilo → seconda risposta privata (un commento nuovo è una richiesta nuova).
+14. Da un profilo che **non segue** il negozio: commento `NATALE` → DM consegnato? (esito in `zernio-notes.md`).

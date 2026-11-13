@@ -94,7 +94,7 @@ python -m scripts.close_period [--month AAAA-MM] [--cap N] [--yes]
 python -m scripts.ecologi_check [--trees N] [--merchant-name NOME] [--month AAAA-MM]
 
 # Zernio: chiamate reali con una chiave (ZERNIO_CHECK_API_KEY nel .env o nell'ambiente, oppure richiesta a video) o quella di un merchant
-python -m scripts.zernio_check accounts | conversations | send-card | send-text [--merchant-id N]
+python -m scripts.zernio_check accounts | conversations | send-card | send-text | send-private-reply [--merchant-id N]
 
 # Collaudo locale del webhook: evento message.received firmato verso il server (che invia DAVVERO a Zernio)
 python -m scripts.replay_webhook --merchant-id N --conversation-id ID [--text CARTA | --postback] [--standby] [--follower si|no] [--event-id ID]

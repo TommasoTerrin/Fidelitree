@@ -48,6 +48,22 @@ emoji ignorati) e **esatto**: «carta» vale, «vorrei la carta» no.
   `KEY_INVALID` e `SEND_FAILED`; conversazione di un'altra app → `STANDBY`; testo troppo lungo → `SEND_FAILED` senza invio.
 - Idempotenza verso Zernio: `Idempotency-Key` = `<event_id>:promo`.
 
+## I commenti `comment.received` (da v0.4.1, non ancora in produzione)
+
+- Stessa route, stessa firma e stessa dedup dei DM; il negozio sottoscrive `message.received` e `comment.received`
+  alla registrazione del webhook (un negozio già collegato si aggiorna con «Scollega» e nuovo collegamento) (AC-14, AC-20).
+- Si leggono solo `account.accountId`, `comment.id`, `comment.platformPostId` e `comment.text`; un commento di un altro
+  account o con campi mancanti è `IGNORED`. Una risposta a un altro commento vale come un commento.
+- Commento uguale a `CARTA` (normalizzato) → **risposta privata di solo testo** «Per ricevere la tua carta scrivici CARTA
+  qui in chat», **in ogni stato del negozio**; nessuna carta, nessun contatore (AC-16).
+- Commento uguale alla parola di una campagna non archiviata di un negozio attivo → risposta privata con lo stesso testo
+  dei DM (promo o «offerte terminate»), richieste da commento +1 (AC-15). Altrimenti `IGNORED`, nessun contatore (AC-17).
+- Nessuna risposta pubblica, nessuna finestra di 24 ore nostra (i 7 giorni li controlla Meta), nessun nuovo tentativo.
+- Errori: timeout o esito sconosciuto → `SEND_UNCERTAIN` (quota +1, negozio non attivato); chiave rifiutata →
+  `KEY_INVALID` e `SEND_FAILED`; **ogni altro** errore (anche `NOT_THREAD_OWNER`, `NOT_FOLLOWER`, già usata) →
+  `SEND_FAILED`, mai standby; la richiesta è comunque contata (AC-18). Un invio riuscito conta +1 in quota (AC-19).
+- Log: negozio, evento, esito, id campagna e canale `commento`; mai testo, id del commento o del post.
+
 ## Finestra, quota, standby
 
 - Si risponde solo entro **24 ore** dal `sentAt` del cliente (non dall'arrivo del webhook); nessun invio proattivo.

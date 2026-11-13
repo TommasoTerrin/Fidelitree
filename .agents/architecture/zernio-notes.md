@@ -214,3 +214,16 @@ e, dove serve, i numeri misurati; nessun dato personale, token, IGSID o chiave.
 | Dashboard `/admin` nel browser: lista, filtro, ricerca, «Avvia», «Metti in pausa» (banner e pulsanti grigi nello scanner, pagina carta invariata), «Riattiva», «Esci» | **parziale (2026-10-28)**, dal log: login admin, lista, «Avvia», pausa e «Riattiva» eseguiti (200). **Non confermati**: banner e pulsanti grigi nello scanner in pausa, «Esci», filtro e ricerca (girano nel browser, senza traccia nel log) |
 | Reset password (Copia, vecchia password e sessione aperta invalide, cambio dalle impostazioni) e 429 dopo 6 errori | **non eseguito dal founder (2026-10-28)**: nessuna chiamata di reset nel log. Verificato solo via HTTP il 2026-10-27 (script usa-e-getta: password temporanea, sessioni decadute, 429 al 6° errore), **non da browser** |
 | Log del server: nessuna password, temporanea o `ADMIN_SECRET_KEY` | **ok per il log del 2026-10-28** (0 occorrenze di password, secret, hash). Nessuna password temporanea è stata generata in questa sessione: quel caso resta provato solo dallo script del 2026-10-27 |
+
+## Commenti e risposta privata (v0.4.1, ticket 04) — tutto «da spec», nulla provato dal vivo
+
+Da verificare nel collaudo del ticket 06 (esiti qui, come ok / non ok):
+
+| Punto | Stato |
+|---|---|
+| Risposta privata: `POST /v1/inbox/comments/{postId}/{commentId}/private-reply`, corpo `accountId` + `message`, una per commento, entro 7 giorni | **da spec**; codice in `send_private_reply` (ripreso da `621a278`) |
+| 502 `details.privateReplyOutcome: "unknown"` → `SEND_UNCERTAIN`; 400 `details.privateReplyConsumed: true` → `SEND_FAILED` | **da spec** |
+| Payload di `comment.received`: leggiamo solo `account.accountId`, `comment.id`, `comment.platformPostId`, `comment.text` | **da verificare** (nessun altro campo letto: né `author` né `isOwner`) |
+| Account Zernio gratuito riceve `comment.received` e manda risposte private | **da verificare**; se no, piano B (decisione 13): `WEBHOOK_EVENTS` torna a `["message.received"]` e il ramo commenti si spegne |
+| Risposta privata a un **non follower** (Meta `2`/`1545133` per bottoni e card; qui solo testo) e conteggio nella quota | **da verificare** |
+| Un negozio già collegato sottoscrive `comment.received` solo dopo «Scollega» e nuovo collegamento (D9) | da spec, **da verificare** |

@@ -10,12 +10,16 @@ Utilizzo (dalla root del progetto):
     python -m scripts.zernio_check conversations [--account-id ACC | --merchant-id N] [--folder requests]
     python -m scripts.zernio_check send-card [--account-id ACC | --merchant-id N] --conversation-id CONV [--name "Bar"] [--url https://...]
     python -m scripts.zernio_check send-text [--account-id ACC | --merchant-id N] --conversation-id CONV [--name "Bar"] [--url https://...]
+    python -m scripts.zernio_check send-private-reply [--account-id ACC | --merchant-id N] --post-id POST --comment-id COMMENT [--text "..."]
 
 Senza `--merchant-id` non si tocca il DB e `--account-id` è obbligatorio (tranne per `accounts`). Con
 `--merchant-id` le credenziali si leggono dal DB del `.env` solo tramite `zernio_credentials_for`, l'account è
 quello del negozio (`--account-id` lo sostituisce) e prima del comando si stampa lo stato del negozio: stato
 Instagram, `@username`, chiave mascherata e invii del mese. Lo script non scrive mai sul DB.
 `conversations` stampa solo id e data della conversazione: niente IGSID né username dei clienti.
+`send-private-reply` manda UNA risposta privata di solo testo a un commento (ticket 04, AC-17): Meta ne ammette una
+sola per commento e un rifiuto la consuma, quindi non si ripete sullo stesso commento. `--post-id` è il
+`comment.platformPostId` dell'evento.
 Codici di uscita: 0 ok, 1 errore (chiave mancante, negozio non trovato o senza chiave, Zernio, dati non validi).
 """
 
@@ -40,6 +44,8 @@ from app.services.zernio_service import ZernioCredentials, ZernioError
 KEY_ENV = "ZERNIO_CHECK_API_KEY"
 DEFAULT_NAME = "Negozio di prova"
 DEFAULT_URL = "https://example.com/c/prova"
+# Testo di prova della risposta privata (il testo vero è `instagram_service.build_comment_card_invite_text`)
+DEFAULT_REPLY_TEXT = "Per avere la carta fedeltà scrivici CARTA in DM 💬"
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -69,6 +75,12 @@ def _build_parser() -> argparse.ArgumentParser:
         send.add_argument("--conversation-id", required=True)
         send.add_argument("--name", default=DEFAULT_NAME, help=f"nome del negozio (default: {DEFAULT_NAME})")
         send.add_argument("--url", default=DEFAULT_URL, help=f"link della carta, https (default: {DEFAULT_URL})")
+
+    reply = commands.add_parser("send-private-reply", help="invia una risposta privata di solo testo a un commento (una sola per commento)")
+    add_target(reply)
+    reply.add_argument("--post-id", required=True, help="comment.platformPostId dell'evento comment.received")
+    reply.add_argument("--comment-id", required=True, help="comment.id dell'evento comment.received")
+    reply.add_argument("--text", default=DEFAULT_REPLY_TEXT, help="testo della risposta (default: invito a scrivere CARTA in DM)")
     return parser
 
 
@@ -164,6 +176,10 @@ async def _run(args: argparse.Namespace, creds: ZernioCredentials) -> None:
                 http, creds, args.conversation_id, card, str(uuid.uuid4()),
             )
             print(f"Card inviata (messageId: {message_id or '(assente)'})")
+        elif args.command == "send-private-reply":
+            # Nessun nuovo tentativo e nessun idempotency key: una sola chiamata (R12)
+            await zernio_service.send_private_reply(http, creds, args.post_id, args.comment_id, args.text)
+            print("Risposta privata inviata")
         else:  # send-text
             text = instagram_service.build_fallback_text(args.name, args.url)
             message_id = await zernio_service.send_text(

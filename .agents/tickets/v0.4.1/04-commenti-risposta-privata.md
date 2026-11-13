@@ -52,4 +52,25 @@ Passi in `collaudo.md` (sezione «v0.4.1 — campagne»), da fare con Instagram 
 - A fine ticket: riepilogo di 3 righe e attesa dell'ok. Niente push né PR.
 
 ## Stato
-⬜ da fare
+✅ fatto il 2026-11-13 (1123 test verdi, partenza 1098; attende l'ok).
+
+**Fatto**: `zernio_service` (`build_private_reply_body`, `send_private_reply` con 502 incerto → `TIMEOUT`, `WEBHOOK_EVENTS` con
+`comment.received`) e comando `zernio_check send-private-reply`, ripresi dall'archivio `621a278`; `instagram_service` core
+(`InboundComment`, `parse_comment_received`, `build_comment_card_invite_text`) e shell (`_process_comment`, mappatura propria
+degli errori). Spec viva `carta-instagram.md`, `zernio-notes.md` (righe «da verificare»), AGENTS.md, passi 10-14 di `collaudo.md`.
+
+**Scelte**: i test e il codice di `zernio_service`/`zernio_check` sono quelli dell'archivio (autorizzato dal ticket), con il rosso
+osservato prima di applicare il codice; aggiornato anche un terzo test non previsto dal ticket
+(`tests/unit/test_zernio_core.py::test_build_webhook_body`, lista degli eventi). Nessun ramo per i «commenti dell'account del
+negozio»: il contract non legge `author`, quindi seguono le stesse regole degli altri.
+**Limiti**: tutto «da spec», mai provato su Zernio/Meta (collaudo nel ticket 06); il piano B resta disponibile.
+
+### Registro TDD
+- AC-20 → tests/test_zernio_client.py::test_register_webhook_corpo_e_id, tests/test_instagram_onboarding.py, tests/unit/test_zernio_core.py — rosso asserzione, verde al tentativo 1 (codice dall'archivio)
+- zernio_service (risposta privata, §7) → tests/test_zernio_client.py::test_send_private_reply_* — rosso import/attributo, verde al tentativo 1 (da archivio)
+- AC-16 → tests/test_webhook_comments.py::test_commento_carta_riceve_l_invito_in_risposta_privata_in_ogni_stato_senza_carta_ne_contatori — rosso asserzione, verde al tentativo 1
+- AC-15 → tests/test_webhook_comments.py::test_commento_con_parola_di_campagna_riceve_la_promo_in_risposta_privata_e_conta_come_commento — rosso asserzione, verde al tentativo 1
+- AC-17 → tests/test_webhook_comments.py::test_commento_che_non_attiva_nessuna_campagna_e_ignorato_senza_invio_ne_contatori — coperto (passa subito, 4 casi)
+- AC-18 → tests/test_webhook_comments.py::test_errore_della_risposta_privata_un_solo_tentativo_esito_giusto_e_richiesta_contata — coperto (7 casi; mappatura scritta insieme ad AC-16)
+- AC-19 → tests/test_webhook_comments.py::test_risposta_privata_riuscita_conta_nella_quota_come_un_dm_e_attiva_il_negozio_in_attesa_del_dm_di_prova — coperto
+- AC-14 → tests/test_webhook_comments.py::test_commento_ripetuto_con_lo_stesso_evento_non_invia_ne_conta_due_volte_e_firma_errata_401, ::test_risposta_a_un_altro_commento_vale_come_un_commento_normale — coperto

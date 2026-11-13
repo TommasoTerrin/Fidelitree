@@ -246,7 +246,7 @@ def test_register_webhook_corpo_e_id():
     req = seen[0]
     assert req.method == "POST" and req.url.path == "/api/v1/webhooks/settings"
     body = json.loads(req.read())
-    assert body["events"] == ["message.received"]
+    assert body["events"] == ["message.received", "comment.received"]
     assert body["secret"] == WEBHOOK_SECRET
     assert body["accountIds"] == ["acc_1"]
     assert body["isActive"] is True and body["name"] == "Fidelitree"
@@ -418,3 +418,105 @@ def test_credentials_from_key():
     assert creds.account_id is None and creds.quota_scope == ""
     assert KEY not in repr(creds)
     assert zs.credentials_from_key(KEY, "acc_3").quota_scope == "account:acc_3"
+
+
+# --- risposta privata a un commento (ticket 04, contract §7) ---
+def test_il_corpo_della_risposta_privata_e_di_solo_testo():
+    """AC-17: la risposta privata a un commento è di solo testo, mai bottoni.
+
+    Il corpo contiene esattamente due chiavi, accountId e message. L'asserzione
+    è sull'uguaglianza dell'intero dizionario (e non sulla sola presenza delle
+    chiavi attese) perché qualunque chiave in più, come buttons, quickReplies o
+    template, violerebbe il criterio: l'uguaglianza esatta la rende visibile.
+    """
+    corpo = zs.build_private_reply_body("acc_123", "Scrivimi CARTA in DM")
+
+    # AC-17
+    assert corpo == {"accountId": "acc_123", "message": "Scrivimi CARTA in DM"}
+
+
+# SEZIONE T1 (corpo)
+def test_send_private_reply_metodo_path_header_corpo_e_timeout(monkeypatch):
+    """AC-17 / R12: la risposta privata è una POST sull'endpoint dei commenti, con id in path codificati.
+
+    Il path atteso è un letterale scritto a mano: gli id `post/1` e `com/9` contengono una barra e, con
+    `quote(..., safe='')`, diventano `post%2F1` e `com%2F9` (senza, la barra spezzerebbe il path). Il corpo
+    è esattamente `{"accountId", "message"}` (nessun'altra chiave) e il timeout è quello di invio (4 s).
+    Non è un invio idempotente: l'endpoint non documenta Idempotency-Key, quindi l'header non deve esserci.
+    Il valore di ritorno è None: la risposta non porta un identificativo da usare.
+    """
+    timeouts = []
+    client, seen = _mock(_ok({"success": True}))
+    real = client.request
+
+    async def spy(*a, **kw):
+        timeouts.append(kw.get("timeout"))
+        return await real(*a, **kw)
+
+    monkeypatch.setattr(client, "request", spy)
+
+    result = _call(client, lambda http: zs.send_private_reply(http, _creds(), "post/1", "com/9", "Ciao!"))
+
+    assert result is None
+    assert len(seen) == 1
+    req = seen[0]
+    assert req.method == "POST"
+    assert str(req.url) == f"{BASE}/v1/inbox/comments/post%2F1/com%2F9/private-reply"
+    assert req.headers["Authorization"] == f"Bearer {KEY}"
+    assert "Idempotency-Key" not in req.headers
+    assert json.loads(req.read()) == {"accountId": "acc_1", "message": "Ciao!"}
+    assert timeouts == [4.0]
+
+
+def test_send_private_reply_con_500_fa_una_sola_richiesta():
+    """AC-17 / R12: mai un secondo tentativo, nemmeno su 5xx.
+
+    Una risposta privata ripetuta potrebbe arrivare due volte al cliente (l'endpoint non è idempotente):
+    dopo un 500 deve esistere una sola richiesta HTTP e l'errore classificato come SERVER, con il suo
+    codice di stato.
+    """
+    client, seen = _mock(lambda r: httpx.Response(500, json={"error": "boom"}))
+
+    with pytest.raises(ZernioError) as exc:
+        _call(client, lambda http: zs.send_private_reply(http, _creds(), "p1", "c1", "Ciao!"))
+
+    assert exc.value.kind == ZernioErrorKind.SERVER
+    assert exc.value.status == 500
+    assert len(seen) == 1
+# SEZIONE T2 (invio)
+
+
+@pytest.mark.parametrize("funzione, status, corpo, kind", [
+    # risposta già consumata: il commento ha esaurito la sua unica risposta privata, esito certo di fallimento
+    ("reply", 400, {"details": {"privateReplyConsumed": True}}, ZernioErrorKind.BAD_REQUEST),
+    # 502 con esito dichiarato sconosciuto: il messaggio potrebbe essere partito, esito incerto
+    ("reply", 502, {"details": {"privateReplyOutcome": "unknown"}}, ZernioErrorKind.TIMEOUT),
+    # 502 senza il campo: errore generico del server, resta SERVER
+    ("reply", 502, {"error": "bad gateway"}, ZernioErrorKind.SERVER),
+    # controllo: sui DM (send_card) un 502 non cambia classificazione, nemmeno con quel corpo
+    ("card", 502, {"details": {"privateReplyOutcome": "unknown"}}, ZernioErrorKind.SERVER),
+])
+def test_send_private_reply_classifica_gli_errori_senza_ritentare(funzione, status, corpo, kind):
+    """AC-19 / R12 (contract §7, I4/I5): errori della risposta privata, nessun nuovo tentativo.
+
+    Un 400 con details.privateReplyConsumed vale BAD_REQUEST (fallimento certo); un 502 con
+    details.privateReplyOutcome "unknown" vale TIMEOUT con status 502 (esito incerto, perché il messaggio
+    potrebbe essere stato consegnato); un 502 privo di quel campo resta SERVER. Il caso "card" verifica che
+    la regola valga solo per send_private_reply e non cambi i DM. In ogni caso la richiesta è una sola
+    e il messaggio dell'errore non contiene la chiave API.
+    """
+    client, seen = _mock(lambda r: httpx.Response(status, json=corpo))
+
+    if funzione == "reply":
+        chiamata = lambda http: zs.send_private_reply(http, _creds(), "p1", "c1", "Ciao!")
+    else:
+        card = build_card_message("Bar Demo", CARD_URL)
+        chiamata = lambda http: zs.send_card(http, _creds(), "conv1", card, "idem")
+
+    with pytest.raises(ZernioError) as exc:
+        _call(client, chiamata)
+
+    assert exc.value.kind == kind
+    assert exc.value.status == status
+    assert KEY not in str(exc.value)
+    assert len(seen) == 1

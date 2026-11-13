@@ -19,6 +19,10 @@
   e nelle risposte alle storie rispondono con la promo (`_reply_with_campaign`), contatore atomico, spec viva
   `specs/carta-instagram.md`, passi 5-9 in `collaudo.md`. Prossimo: `/implement 04` (commenti, risposta privata,
   `WEBHOOK_EVENTS`; riusa `_handle_send_error`/`_record_send` ma con mappatura errori propria, contract §6).
+- **Ticket 04 FATTO il 2026-11-13** (1123 test verdi; attende l'ok del founder): commenti `comment.received` con risposta privata
+  (`_process_comment`), `WEBHOOK_EVENTS` con i commenti, `zernio_check send-private-reply`; tutto «da spec», da provare nel
+  ticket 06 (piano B pronto). Prossimo: `/implement 05` (scanner «Applica»; aggiungere anche `scanner_campaigns` e il controllo
+  di AC-06).
 - Nessun push, nessuna PR.
 
 ## Cosa fare alla ripartenza

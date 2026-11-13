@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 # --- Core puro ---
 
 WEBHOOK_NAME = "Fidelitree"
-WEBHOOK_EVENTS = ["message.received"]
+WEBHOOK_EVENTS = ["message.received", "comment.received"]
 MENU_LOCALE = "default"
 
 _AUTH_CODES = {"insufficient_permissions", "invalid_credentials"}
@@ -135,8 +135,16 @@ def build_text_body(account_id: str, text: str) -> dict:
     return {"accountId": account_id, "message": text}
 
 
+def build_private_reply_body(account_id: str, text: str) -> dict:
+    """
+    Corpo della risposta privata a un commento (contract §7): solo `accountId` e `message`. Mai `buttons` né
+    `quickReplies`: Meta può rifiutarli a un non follower e il rifiuto consuma l'unica risposta del commento (AC-17).
+    """
+    return {"accountId": account_id, "message": text}
+
+
 def build_webhook_body(account_id: str, url: str, secret: str) -> dict:
-    """Corpo della registrazione del webhook: solo `message.received`, solo l'account del negozio, firmato."""
+    """Corpo della registrazione del webhook: `message.received` e `comment.received` (AC-20), solo l'account del negozio, firmato."""
     return {
         "name": WEBHOOK_NAME,
         "url": url,
@@ -300,10 +308,12 @@ async def _request(
     json: Optional[dict] = None,
     params: Optional[dict] = None,
     headers: Optional[dict] = None,
+    classifier=classify_error,
 ) -> dict:
     """
     Una sola richiesta (mai ritentata) con `Authorization: Bearer`. Ritorna il corpo JSON (vuoto se assente);
-    solleva `ZernioError` su timeout di lettura (`TIMEOUT`), rete o connessione (`SERVER`) o status ≥ 400 (`classify_error`). Si logga solo
+    solleva `ZernioError` su timeout di lettura (`TIMEOUT`), rete o connessione (`SERVER`) o status ≥ 400
+    (`classifier`, di norma `classify_error`; riceve status e corpo JSON). Si logga solo
     metodo, path (senza query), status e tipo: mai corpi né chiave.
     """
     url = f"{settings.ZERNIO_BASE_URL.rstrip('/')}{path}"
@@ -320,7 +330,7 @@ async def _request(
         raise ZernioError(ZernioErrorKind.SERVER) from None
     body = _json_or_none(response)
     if response.status_code >= 400:
-        kind = classify_error(response.status_code, body)
+        kind = classifier(response.status_code, body)
         logger.warning("Zernio %s %s: HTTP %s (%s)", method, path, response.status_code, kind.value)
         raise ZernioError(kind, response.status_code)
     return body or {}
@@ -428,3 +438,32 @@ async def get_team_identity(http: httpx.AsyncClient, creds: ZernioCredentials) -
     ripiega su `account:<id>`. Nessuna chiamata di rete.
     """
     return None
+
+
+def _classify_private_reply_error(status: int, body: Optional[dict]) -> ZernioErrorKind:
+    """
+    Classificazione degli errori della risposta privata: come `classify_error`, tranne un 502 il cui corpo
+    contiene `details.privateReplyOutcome == "unknown"`, che è un esito incerto (la risposta può essere stata
+    consegnata) e dà `TIMEOUT`. Un 502 senza quel campo resta `SERVER`. Vale solo per questo endpoint.
+    """
+    details = body.get("details") if isinstance(body, dict) else None
+    if status == 502 and isinstance(details, dict) and details.get("privateReplyOutcome") == "unknown":
+        return ZernioErrorKind.TIMEOUT
+    return classify_error(status, body)
+
+
+async def send_private_reply(
+    http: httpx.AsyncClient, creds: ZernioCredentials, post_id: str, comment_id: str, text: str,
+) -> None:
+    """
+    Risposta privata a un commento (`POST /v1/inbox/comments/{post_id}/{comment_id}/private-reply`, contract §7).
+    Mai ritentata (AC-19, R12); timeout come gli invii dei DM. Esiti incerti → `ZernioError(TIMEOUT)`.
+    Senza account solleva `ZernioError(NOT_CONFIGURED)` prima di qualsiasi chiamata di rete. Non invia
+    `Idempotency-Key` (l'endpoint non lo documenta) e non ritorna nulla: un 2xx significa risposta consegnata.
+    """
+    body = build_private_reply_body(_account_id(creds), text)
+    await _request(
+        http, creds, "POST",
+        f"/v1/inbox/comments/{quote(post_id, safe='')}/{quote(comment_id, safe='')}/private-reply",
+        timeout=SEND_TIMEOUT, json=body, classifier=_classify_private_reply_error,
+    )
