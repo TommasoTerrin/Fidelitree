@@ -87,3 +87,10 @@ Nessun collaudo anticipato (decisione 13): tutto ciò che riguarda i commenti è
 - Archivio `feature/campagne`: `git show feature/campagne:.agents/tickets/v0.4.0/<file>`; codice utile nei commit
   `5d8a4d9` (`app/core/text.py`) e `621a278` (risposta privata).
 - `.agents/architecture/zernio-notes.md`, `.agents/workflows/collaudo.md`, `deploy.md`.
+
+## Aggiornamento 2026-11-25 — ticket 08 fatto, attende l'ok
+
+- **Ticket 08 fatto** (1140 test verdi): log della risposta privata senza id di post e commento (AC-31), con `log_safe_path` in `zernio_service`. Commit locale; nessun push.
+- **Prossimo**: `/implement 09` (atomicità di «Applica» e pulsante dopo errore di rete), poi `/implement 10` (test mancanti), poi `/review v0.4.1`.
+- **Decisioni aperte** (non in spec): `create_all` in produzione (proposta: script SQL a mano prima del deploy, come da procedura). Da decidere prima di `/release`.
+- **Accettati come rischi (F-01)**: AC-23, standby sui commenti, messaggio dei non follower, negozio in attesa con campagne.

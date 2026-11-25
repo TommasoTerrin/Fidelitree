@@ -24,4 +24,7 @@ commento. Il log deve riportare solo l'esito e l'id della campagna.
 - Commit locale in italiano: «… (ticket 08)». Riepilogo di 3 righe, attesa dell'ok. Niente push.
 
 ## Stato
-⬜ da fare
+✅ fatto il 2026-11-25 (1140 test verdi; attende l'ok)
+
+Registro TDD:
+- AC-31 → tests/test_zernio_client.py::test_risposta_privata_con_errore_non_logga_id_di_post_ne_di_commento — rosso asserzione, verde al tentativo 1 (funzione `log_safe_path` in `zernio_service`)

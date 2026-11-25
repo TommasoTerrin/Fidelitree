@@ -520,3 +520,25 @@ def test_send_private_reply_classifica_gli_errori_senza_ritentare(funzione, stat
     assert exc.value.status == status
     assert KEY not in str(exc.value)
     assert len(seen) == 1
+
+
+def test_risposta_privata_con_errore_non_logga_id_di_post_ne_di_commento(caplog):
+    """v0.4.1 AC-31: dopo un errore della risposta privata nel log non compaiono né il path con gli id di
+    post e di commento, né il testo del commento; il log riporta solo esito e id della campagna.
+
+    Gli id scelti sono riconoscibili (`post-SEGRETO-111`, `comment-SEGRETO-222`): se finiscono nel path
+    scritto da `_request` a WARNING, compaiono nel testo del log e il test fallisce. L'asserzione è
+    sull'assenza degli id nel testo catturato, con il letterale a mano, perché il criterio vieta proprio
+    che quei valori arrivino nel log. Il 500 è l'errore più comune di Zernio, e serve a far scattare il
+    log di avviso.
+    """
+    client, _seen = _mock(lambda r: httpx.Response(500, json={"error": "boom"}))
+
+    with caplog.at_level(logging.WARNING):
+        with pytest.raises(ZernioError):
+            _call(client, lambda http: zs.send_private_reply(
+                http, _creds(), "post-SEGRETO-111", "comment-SEGRETO-222", "Ciao!"))
+
+    # AC-31: il path con gli id non deve comparire nel log
+    assert "post-SEGRETO-111" not in caplog.text
+    assert "comment-SEGRETO-222" not in caplog.text

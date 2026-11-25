@@ -20,6 +20,7 @@ Endpoint, limiti e fonti: `.agents/architecture/zernio-notes.md`.
 """
 
 import logging
+import re
 from enum import Enum
 from typing import Optional
 from urllib.parse import quote
@@ -70,6 +71,18 @@ _ERROR_MESSAGES = {
     ZernioErrorKind.BAD_REQUEST: "Zernio ha rifiutato la richiesta",
     ZernioErrorKind.NOT_CONFIGURED: "Instagram non è collegato: mancano la chiave o l'account Zernio",
 }
+
+
+_COMMENT_PATH_IDS = re.compile(r"^/v1/inbox/comments/[^/]+/[^/]+")
+
+
+def log_safe_path(path: str) -> str:
+    """
+    Path da scrivere nel log: per `/v1/inbox/comments/<post>/<comment>/...` (risposta privata) sostituisce gli
+    id di post e commento con segnaposto, perché sono dati del cliente e non vanno nei log (AC-31). Gli altri
+    path restano invariati. Vale solo per il messaggio di log: il path inviato a Zernio non cambia.
+    """
+    return _COMMENT_PATH_IDS.sub("/v1/inbox/comments/<post>/<comment>", path)
 
 
 def error_message(kind: ZernioErrorKind) -> str:
@@ -323,15 +336,17 @@ async def _request(
             method, url, headers=request_headers, json=json, params=params, timeout=timeout,
         )
     except httpx.ReadTimeout:
-        logger.warning("Zernio %s %s: nessuna risposta entro il tempo", method, path)
+        logger.warning("Zernio %s %s: nessuna risposta entro il tempo", method, log_safe_path(path))
         raise ZernioError(ZernioErrorKind.TIMEOUT) from None
     except httpx.HTTPError:
-        logger.warning("Zernio %s %s: errore di rete o timeout", method, path)
+        logger.warning("Zernio %s %s: errore di rete o timeout", method, log_safe_path(path))
         raise ZernioError(ZernioErrorKind.SERVER) from None
     body = _json_or_none(response)
     if response.status_code >= 400:
         kind = classifier(response.status_code, body)
-        logger.warning("Zernio %s %s: HTTP %s (%s)", method, path, response.status_code, kind.value)
+        logger.warning(
+            "Zernio %s %s: HTTP %s (%s)", method, log_safe_path(path), response.status_code, kind.value,
+        )
         raise ZernioError(kind, response.status_code)
     return body or {}
 
