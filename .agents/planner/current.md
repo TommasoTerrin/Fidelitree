@@ -14,8 +14,8 @@
   ([README](../tickets/v0.4.1/README.md))
 - **Branch**: `feature/campagne-pilota` (già creato da `develop` il 2026-11-12, con le skill)
 - **Fase**: `implementazione` (gate 1 e gate 2 approvati il 2026-11-12; gate 3 da rifare dopo le correzioni F-02)
-- **Ticket**: 07 fatto con riserve il 2026-11-25. 08 fatto (attende l'ok). Aperti dalla correzione F-02: 09, 10
-- **Prossimo comando**: dopo il tuo ok a 08, `/implement 09`, poi `/implement 10`, poi `/review v0.4.1`, poi `/release`
+- **Ticket**: 07 e 08 fatti (attendono l'ok). 09 e 10 superati: rischi accettati (F-02, F-03)
+- **Prossimo comando**: `/review v0.4.1` (gate 3), poi `/release`
 
 ## Dove siamo
 
@@ -36,8 +36,8 @@ il 2026-11-12** (scostamento 3 ammesso, 04 bloccante con piano B, strumenti di c
 | 06 | [Documentazione e strumenti per il collaudo](../tickets/v0.4.1/06-documentazione-collaudo.md) | bloccante | agente | 01-05 | ✅ 2026-11-13 (1139 test; attende l'ok) |
 | 07 | [Script SQL su Neon e collaudo su Instagram vero](../tickets/v0.4.1/07-collaudo-instagram.md) | bloccante | founder | 06 | ✅ con riserve 2026-11-25 (passi 14, 20, 22 rinviati; 10, 23, 25 saltati; esiti in `zernio-notes.md`) |
 | 08 | [Log della risposta privata senza id](../tickets/v0.4.1/08-log-risposta-privata.md) | consigliata (F-02 a) | agente | — | ✅ 2026-11-25 (1140 test; attende l'ok) |
-| 09 | [«Applica»: atomicità e pulsante dopo errore di rete](../tickets/v0.4.1/09-applica-atomicita-e-errore-rete.md) | consigliata (F-02 b, c) | agente | — | ⬜ |
-| 10 | [Test mancanti su AC-10, AC-11, AC-15, AC-17](../tickets/v0.4.1/10-test-mancanti-criteri.md) | consigliata (F-03) | agente | — | ⬜ |
+| 09 | [«Applica»: atomicità e pulsante dopo errore di rete](../tickets/v0.4.1/09-applica-atomicita-e-errore-rete.md) | consigliata (F-02 b, c) | agente | — | ⛔ superato (rischio accettato, 2026-11-25) |
+| 10 | [Test mancanti su AC-10, AC-11, AC-15, AC-17](../tickets/v0.4.1/10-test-mancanti-criteri.md) | consigliata (F-03) | agente | — | ⛔ superato (rischio accettato, 2026-11-25) |
 
 Ordine proposto: 01 → 02 → 03 → 04 → 05 → 06 → 07 (02 prima di 03 e 05 per poter creare campagne a mano nei collaudi).
 Il 2026-11-13 il founder ha diviso il vecchio 06 «misto» in 06 (agente) e 07 (founder), senza cambiarne il contenuto.

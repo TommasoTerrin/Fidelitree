@@ -631,6 +631,7 @@ risposta pubblica ai commenti).
 - **Criteri superati**: nessuno.
 - **Contract**: invariato (nessuna firma, endpoint, modello o testo fisso cambia). Il comportamento di log e di atomicità è interno.
 - **Ticket**: 08 (AC-31), 09 (AC-32 e AC-33).
+- **Stato (2026-11-25)**: AC-32 e AC-33 **accettati come rischi** (decisione del founder): nessun ticket 09, nessun test automatico; il testo resta come criterio con la nota «accettato come rischio».
 
 ### F-03 — Test mancanti sui criteri esistenti (2026-11-25) — aggiunta
 
@@ -643,4 +644,5 @@ risposta pubblica ai commenti).
 - **Criteri nuovi**: nessuno.
 - **Criteri superati**: nessuno.
 - **Contract**: invariato.
-- **Ticket**: 10. Se un test rivela un comportamento sbagliato, il bug va in un ticket di correzione, non nel 10.
+- **Stato (2026-11-25)**: test mancanti su AC-10, AC-11, AC-15 e AC-17 **accettati come rischio** (decisione del founder): nessun ticket 10; i criteri restano coperti come oggi.
+- **Ticket**: ⛔ superato (rischio accettato). Se un test rivela un comportamento sbagliato, il bug va in un ticket di correzione, non nel 10.

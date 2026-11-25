@@ -94,3 +94,9 @@ Nessun collaudo anticipato (decisione 13): tutto ciò che riguarda i commenti è
 - **Prossimo**: `/implement 09` (atomicità di «Applica» e pulsante dopo errore di rete), poi `/implement 10` (test mancanti), poi `/review v0.4.1`.
 - **Decisioni aperte** (non in spec): `create_all` in produzione (proposta: script SQL a mano prima del deploy, come da procedura). Da decidere prima di `/release`.
 - **Accettati come rischi (F-01)**: AC-23, standby sui commenti, messaggio dei non follower, negozio in attesa con campagne.
+
+## Aggiornamento 2026-11-25 — chiusura dei ticket correttivi
+
+- **Ticket 08 ✅** (log senza id, AC-31). **Ticket 09 e 10 ⛔**: i loro punti sono rischi accettati (F-02 b, c; F-03). AC-32, AC-33 e i test mancanti su AC-10, AC-11, AC-15, AC-17 restano nella spec con la nota «accettato come rischio».
+- **Prossimo**: `/review v0.4.1` (gate 3). Il passo 1 della review richiede zero bloccanti: AC-23 è già accettato come rischio (F-01).
+- **Decisioni aperte prima di `/release`**: `create_all` in produzione (proposta: script SQL a mano prima del deploy); processo di migrazioni anche in dev (decisione 0005 da aggiornare se cambia).

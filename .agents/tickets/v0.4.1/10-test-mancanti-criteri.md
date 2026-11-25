@@ -24,4 +24,4 @@ Aggiungere i test che mancano ai criteri già in spec, perché oggi i criteri ri
 - Commit locale in italiano: «… (ticket 10)». Riepilogo di 3 righe, attesa dell'ok. Niente push.
 
 ## Stato
-⬜ da fare
+⛔ superato da F-03: test mancanti su AC-10, AC-11, AC-15, AC-17 accettati come rischi (2026-11-25).

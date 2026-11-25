@@ -29,4 +29,4 @@
 - Commit locale in italiano: «… (ticket 09)». Riepilogo di 3 righe, attesa dell'ok. Niente push.
 
 ## Stato
-⬜ da fare
+⛔ superato da F-02 (b, c): AC-32 e AC-33 accettati come rischi (2026-11-25), nessun ticket da implementare.
