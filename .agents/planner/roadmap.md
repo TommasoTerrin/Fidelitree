@@ -46,6 +46,16 @@ Il cliente commenta un post o risponde a una storia con la parola chiave e ricev
 (`InboundMessage.source`): si aggiunge la sorgente e l'evento al webhook. Attenzione: per le private reply Meta può
 rifiutare bottoni e card ai non follower (errore 2/1545133, vedi `zernio-notes.md`).
 
+### Campagne: estensioni rimandate dalla v0.4.1 (grilling del 2026-11-12)
+- **Date di inizio e fine** della campagna (ora di Roma): risposte solo nel periodo, riga «Valida dal … al …»
+  composta da sola. Nel pilota la validità la scrive il founder nel testo della promo.
+- **Campagne create dal merchant** (oggi solo il founder da `/admin`); con limiti dei campi più stretti.
+- **Promo salvata nella carta** e utilizzo unico o N volte per cliente (oggi il coupon è il DM e decide il merchant).
+- **«Porta un amico»** (affiliazione) e **dati per cliente** sulle campagne.
+- **Card inviata direttamente da un commento** `CARTA` (oggi la risposta privata invita a scrivere `CARTA` in DM).
+- **Script per aggiornare gli eventi dei webhook dei negozi già collegati** (`PUT /v1/webhooks/settings`, non provato):
+  oggi i collegati sono solo i profili del founder, che scollega e ricollega.
+
 ### Follow-gate per negozio e QR temporaneo per chi non segue
 - **Opzione per singolo negozio** del blocco "carta solo a chi segue" e **testo di invito scelto dal merchant** (in
   v0.3.0 il blocco vale per tutti e il testo è fisso).
@@ -161,6 +171,9 @@ ruff (lint) + mypy (type check) in pre-commit locale (vedi CI/CD sopra per il li
 
 ## Changelog
 
+- **2026-10-30** — **v0.3.0 in produzione** su `https://fidelitree.app` (tag `v0.3.0` su `a83cd64`): collaudo su Neon
+  `development`, env var cifrate su DO, Neon `production` azzerato con backup, dipendenze fissate dopo il primo deploy fallito
+  (SQLAlchemy 2.1), procedura di collaudo per feature (`collaudo.md`) e rollback di codice e schema in `deploy.md`.
 - **2026-10-27** — **v0.3.0** completa su `feature/instagram-cards` (ticket 01-13, 1049 test): carta via DM Instagram con
   Zernio (webhook, card con link segreto `/c/<token>`, invito a seguire per i non follower), onboarding Instagram del
   merchant dal pannello, pagina carta e PWA solo merchant, vecchio flusso cliente (OTP, wallet, `/join`, `Customer`)

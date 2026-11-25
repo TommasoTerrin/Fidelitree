@@ -32,3 +32,6 @@ desktop.ini
 
 # Contesto locale della CLI Neon
 .neon
+
+# Permessi locali di Claude Code (personali, non vanno nel repo)
+.claude/settings.local.json

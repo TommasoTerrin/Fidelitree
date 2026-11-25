@@ -5,7 +5,52 @@
 > il registro dettagliato di una versione chiusa → `.agents/tickets/vX.Y.Z/STORICO.md`
 > (v0.2.0: [STORICO.md](../tickets/v0.2.0/STORICO.md)).
 
+## Harness
+
+> Blocco letto per primo da ogni sessione (vedi `CLAUDE.md`). Lo aggiornano le skill a ogni cambio di fase e a ogni
+> commit di ticket. Fasi: `nessuna` · `grilling` · `spec` · `contract` · `implementazione` · `collaudo`.
+
+- **Versione**: **v0.4.1 — Campagne pilota: promo via DM e commenti Instagram**
+  ([README](../tickets/v0.4.1/README.md))
+- **Branch**: `develop` (merge della PR #8 fatto)
+- **Fase**: `collaudo` (gate 1 e gate 2 approvati il 2026-11-12; gate 3 approvato il 2026-11-25, rischi in F-04)
+- **Ticket**: 07 e 08 fatti (attendono l'ok). 09 e 10 superati: rischi accettati (F-02, F-03)
+- **Prossimo comando**: `/release` in corso (passo 3: backup e script SQL su `production`, ok a ogni passo)
+
 ## Dove siamo
+
+**Gate 3 chiuso il 2026-11-25**: review approvata, rischi accettati in F-04 (AC-22, bug commento), test verdi (1140). Prossimo: push, PR, merge su `develop`, poi `/release`.
+
+**v0.4.1 aperta (2026-11-12)**: spec approvata al gate 1 (30 criteri AC-01..30, schede 0001-0005 in
+`.agents/decisions/`), in [tickets/v0.4.1/README.md](../tickets/v0.4.1/README.md). Fase B di `/spec` fatta il
+2026-11-12: `domain-model.md`, `contracts.md`, ticket 01-06 e `HANDOFF.md` nella stessa cartella. **Gate 2 approvato
+il 2026-11-12** (scostamento 3 ammesso, 04 bloccante con piano B, strumenti di collaudo sì): modello e contract congelati.
+
+### Ticket v0.4.1
+
+| # | Ticket | Priorità | Chi | Dipende da | Stato |
+|---|---|---|---|---|---|
+| 01 | [Versione, modello `Campaign`, script SQL, core delle campagne](../tickets/v0.4.1/01-modello-core-sql.md) | bloccante | agente | — | ✅ 2026-11-12 (1066 test) |
+| 02 | [Dashboard admin: campagne e pausa che archivia](../tickets/v0.4.1/02-admin-campagne-pausa.md) | bloccante | agente | 01 | ✅ 2026-11-13 (1074 test; attende l'ok) |
+| 03 | [Webhook: parola chiave in DM e risposte alle storie](../tickets/v0.4.1/03-webhook-dm-campagne.md) | bloccante | agente | 01 | ✅ 2026-11-13 (1098 test; attende l'ok) |
+| 04 | [Commenti: risposta privata](../tickets/v0.4.1/04-commenti-risposta-privata.md) | bloccante (piano B) | agente | 03 | ✅ 2026-11-13 (1123 test; attende l'ok) |
+| 05 | [Scanner: «Applica»](../tickets/v0.4.1/05-scanner-applica.md) | bloccante | agente | 01 | ✅ 2026-11-13 (1137 test; attende l'ok) |
+| 06 | [Documentazione e strumenti per il collaudo](../tickets/v0.4.1/06-documentazione-collaudo.md) | bloccante | agente | 01-05 | ✅ 2026-11-13 (1139 test; attende l'ok) |
+| 07 | [Script SQL su Neon e collaudo su Instagram vero](../tickets/v0.4.1/07-collaudo-instagram.md) | bloccante | founder | 06 | ✅ con riserve 2026-11-25 (passi 14, 20, 22 rinviati; 10, 23, 25 saltati; esiti in `zernio-notes.md`) |
+| 08 | [Log della risposta privata senza id](../tickets/v0.4.1/08-log-risposta-privata.md) | consigliata (F-02 a) | agente | — | ✅ 2026-11-25 (1140 test; attende l'ok) |
+| 09 | [«Applica»: atomicità e pulsante dopo errore di rete](../tickets/v0.4.1/09-applica-atomicita-e-errore-rete.md) | consigliata (F-02 b, c) | agente | — | ⛔ superato (rischio accettato, 2026-11-25) |
+| 10 | [Test mancanti su AC-10, AC-11, AC-15, AC-17](../tickets/v0.4.1/10-test-mancanti-criteri.md) | consigliata (F-03) | agente | — | ⛔ superato (rischio accettato, 2026-11-25) |
+
+Ordine proposto: 01 → 02 → 03 → 04 → 05 → 06 → 07 (02 prima di 03 e 05 per poter creare campagne a mano nei collaudi).
+Il 2026-11-13 il founder ha diviso il vecchio 06 «misto» in 06 (agente) e 07 (founder), senza cambiarne il contenuto.
+
+**Campagne pilota (2026-11-12)**: la prima v0.4.0 delle campagne (adesioni, pagina `/p/`, secondo QR) è **archiviata**
+sul branch `feature/campagne` (non mergiare; ticket 01-03 fatti, 04 parziale). Il founder l'ha ridotta per i pilota
+(il brief iniziale è confluito nel README di v0.4.1 ed è stato eliminato). Si riparte da `develop` sul branch
+`feature/campagne-pilota`, che contiene il processo a skill (`.claude/skills`, agenti `ft-*`).
+
+**v0.3.0 è in produzione dal 2026-10-30** su `https://fidelitree.app` (tag `v0.3.0` su `a83cd64`, Neon `production`,
+app DO `fidelitree`): vedi «Sessione 2026-10-30» in fondo per cosa manca prima dei pilota. Lo storico sotto descrive come ci si è arrivati.
 
 **v0.3.0 — carta fedeltà via DM Instagram (Zernio)**, branch `feature/instagram-cards` (da `develop`, avviata il
 2026-10-22). È la **prima release in produzione dopo v0.1.0**: assorbe v0.2.x (pool del negozio, auth merchant,
@@ -289,15 +334,14 @@ rivede nel collaudo finale. QR "apri la chat": a mano dal founder (ticket 14).
   mettere in pausa, riattivare e reimpostare le password. Il primo deploy aspetta solo il collaudo (14) e l'ok al merge. Supabase più avanti, DB su Neon.
 - **Punto aperto: freno ai tentativi in memoria** (solo per email). Giusto con un solo processo (oggi); si azzera al riavvio e
   con più processi/container il limite si moltiplica (5 × N): spostarlo su DB **prima** di scalare (dettagli in `roadmap.md`).
-  Dopo il primo deploy fai la verifica del login in `deploy.md` («Primo deploy», passi 4 e 4b).
+  Dopo il primo deploy fai la verifica del login e della dashboard in `deploy.md` («Primo deploy di v0.3.0», punto 6).
 - **Punto aperto: il freno del login admin** è lo stesso contatore in memoria, con una chiave sola (`admin`): chiunque può fermare il form
   di `/admin` per 15 minuti; ripiego `X-Admin-Key` (nessun freno). Si risolve insieme al freno su DB.
 
 - Merchant creato dall'admin senza `auth_user_id`: la sua email non si può registrare (409) e non può accedere (il reset
   dalla dashboard riguarda solo i registrati: il pulsante è grigio e l'API risponde 409). Si risolve con Supabase.
-- `create_all()` non migra: serve `scripts.reset_db` (nessun dato di produzione da preservare per ora). Con il ticket 12 la tabella `merchant` ha due colonne nuove (`is_paused`, `created_at`): ogni DB già creato (Neon di sviluppo, `collaudo*.db`) va resettato.
-- `reset_db`/`seed_db` agiscono sul `DATABASE_URL` del `.env` (oggi Neon): per il collaudo usare un SQLite usa-e-getta
-  (`.agents/workflows/deploy.md`).
+- `create_all()` non migra e **dal 2026-10-30 la produzione ha dati veri**: ogni modifica allo schema richiede uno script SQL/Alembic provato su un branch Neon e un branch di backup (AGENTS.md). Scelta tra SQL a mano e Alembic ancora da fare.
+- `reset_db`/`seed_db` agiscono sul `DATABASE_URL` del `.env` (Neon `development`) o su quello del terminale; mai su `production` (`deploy.md`, «Reset/seed di un DB»).
 - Il testo di `/privacy` è una bozza da far verificare; DPA con i merchant ancora da scrivere (roadmap).
 
 ## Note per chi riprende il lavoro
@@ -318,6 +362,60 @@ Sottoagente devops: NO (2026-10-28). Pochi comandi doctl/neonctl/gh lanciabili d
 
 2026-10-29: Neon development azzerato e ricreato dai modelli attuali (8 tabelle, enum con SEND_UNCERTAIN), .env locale punta a lui; tests/conftest.py forza un SQLite temporaneo (pytest non tocca mai Neon). Scoperte: (a) il DATABASE_URL dell'app DO fidelitree punta all'endpoint di development, non a production (da correggere prima del merge); (b) le env var su DO sono in chiaro, scope build+runtime: nuove chiavi con Encrypt e solo runtime; (c) production Neon contiene resti del prototipo (merchant, treecard, alembic_version) da azzerare con lo script di wipe (reset_db non basta: lascia le tabelle orfane). Prossimo: prova locale con tunnel su Neon development, poi env var DO, wipe production, PR feature -> develop -> main con ok esplicito.
 
-## Sessione 2026-10-30 — primo deploy di v0.3.0 in produzione (in corso)
+## Sessione 2026-10-30 — primo deploy di v0.3.0 in produzione (fatto)
 
-Obiettivi in ordine: (1) prova A in locale su Neon `development` con tunnel cloudflared, `ENVIRONMENT=production` e `AUTH_PROVIDER=local`; (2) env var di DO; (3) wipe e ricreazione di Neon `production`; (4) PR feature → develop → main, deploy, smoke test, tag solo con ok; (5) rollback in `deploy.md`; (6) docs. Stato letto all'avvio: HEAD `e2092ad`, CI verde; DO esegue ancora `2a6b8aa` (v0.1.0) con `DATABASE_URL` sull'endpoint di `development` e env var in chiaro (anche `ECOLOGI_URL`/`ECOLOGI_SANDBOX_URL` morte); `develop` avanti a `main` di 7 commit, la feature avanti a `develop` di 37, nessuna divergenza. Ordine proposto per non far ricreare le tabelle di v0.1.0: env var su DO (il salvataggio ridistribuisce il commit vecchio) → wipe di `production` subito prima del push su `main`.
+Procedura reale in `deploy.md` («Primo deploy di v0.3.0»). In sintesi:
+1. **Prova A** in locale su Neon `development` con tunnel, `ENVIRONMENT=production`, `AUTH_PROVIDER=local`: ok secondo il founder; dal log registrazione, onboarding, carta di prova, «Avvia», 3 card `sent`, `/c/***`, pausa, 429, reset password, «Scollega»; 0 segreti, 0 errori 5xx. Non confermati dal log: «Riattiva», cambio password, `replay_webhook`.
+2. **Password del ruolo `neondb_owner` di `production` ruotata** (era uguale a quella di `development`, in chiaro su DO e nel `.env`). Il `.env` non cambia.
+3. **Env var su DO** con lo spec: 10 variabili `RUN_TIME`, 6 `SECRET`, variabili di v0.1.0 tolte, health check `/health`. `DATABASE_URL` = endpoint **diretto** di `production` (decisione del founder). Il salvataggio ha ridistribuito v0.1.0, fallito come previsto (e i suoi log contengono frammenti di segreti).
+4. **Backup `backup-pre-v0.3.0`** e azzeramento di `production` (DROP SCHEMA + `create_all`): 8 tabelle, 0 righe.
+5. **PR #2** (feature → develop) e **#3** (develop → main): deploy di `956583c` fallito (`No module named 'psycopg'`: SQLAlchemy 2.1 dal build senza versioni). **PR #4/#5**: dipendenze fissate alle ultime release senza vulnerabilità, SQLAlchemy 2.0.55; deploy di **`a83cd64` riuscito**, `/health` 0.3.0, log di avvio puliti. Tag `v0.3.0`, `develop` riallineato.
+6. **Smoke test 14/16**: falliscono solo i due controlli con `X-Admin-Key` (401 lista, 403 creazione). Il codice è lo stesso che passa i test: quasi certamente la chiave digitata nel terminale non è uguale a quella salvata su DO (da verificare con il founder).
+7. Docs: `collaudo.md` nuovo (parte fissa + passi per feature, regola 12 in AGENTS.md), `deploy.md` riscritto (env var dal componente/App Spec, wipe invece di `reset_db`, rollback di codice e schema con `neon branches restore`, dipendenze), `pre-release.md` compilata, `scripts/run_collaudo.py` (avvio del collaudo che rifiuta ogni DB tranne SQLite e Neon `development`).
+
+**Da fare (founder, domani)**: chiarire la chiave admin e rifare lo smoke test; negozio di prova in produzione (registrazione, `/admin`, «Avvia», onboarding Zernio, `CARTA` → card → `https://fidelitree.app/c/<token>`); poi controllo che il negozio stia su Neon `production` e non su `development`, e dei log di DO.
+
+## Cosa manca per il lancio ufficiale con i primi pilota (elenco del 2026-10-30)
+
+**A. Bloccanti: prima di dare il link al primo merchant pilota**
+1. **Verifica in produzione end-to-end** (passi in `deploy.md`, «Primo deploy di v0.3.0», punto 6): chiave admin chiarita e smoke test
+   16/16; negozio di prova (registrazione, «Avvia», onboarding Zernio, `CARTA` → card → `https://fidelitree.app/c/<token>`, scan
+   dalla PWA con punti aggiunti); il negozio compare su Neon `production` e non su `development`; log di DO senza segreti.
+2. **Nuova `ADMIN_SECRET_KEY`** scelta e digitata solo dal founder (App Spec → Edit, poi password manager): quella attuale è passata
+   dalla chat e una sua parte è nei log del deploy fallito di v0.1.0.
+3. **Cancellazione della carta su richiesta del cliente.** `/privacy` dice «il negozio elimina la carta e con essa i tuoi dati», ma
+   il merchant non ha nessun pulsante: esiste solo `DELETE /api/merchant/card/{id}` (`app/routes/merchant/api.py`), che nessuna
+   pagina usa. Serve un pulsante «Elimina carta» con conferma nella pagina di gestione che si apre scansionando il QR del cliente,
+   e verificare che l'eliminazione funzioni con movimenti e pool del mese. Ripiego temporaneo: lo fa il founder su richiesta.
+   Piccola feature: ticket, test, passi in `collaudo.md`, release.
+4. **`/privacy` verificata** (chi è titolare e chi responsabile, contatti, conservazione, cancellazione) e **decisione sul DPA**
+   con i merchant, meglio con un consulente.
+5. **Kit per il merchant**: guida passo-passo per creare l'account Zernio gratuito, copiare la chiave API e collegare un Instagram
+   **Business o Creator** (con un account personale non funziona); messaggio «dopo l'avvio» (bozza in `deploy.md`) che dica ai
+   clienti di **scrivere `CARTA`** (la voce di menu non funziona, punto 10); QR `ig.me` preparato dal founder.
+6. **Risposta a DB «freddo»**: Neon sospende `production` dopo 5 minuti senza richieste. Il primo DM dopo una pausa deve stare nei
+   5 s del webhook (risveglio del DB + invio Zernio di 1,5-3 s). Da misurare in produzione al punto 1 (ora del DM e riga di log).
+   Se sfora, togliere la sospensione al solo endpoint di `production` (consuma ore di compute del piano Neon: verificare il limite).
+
+**B. Entro la fine del primo mese (prima della prima chiusura degli alberi)**
+7. **Ecologi**: `ECOLOGI_TEST_API_KEY` su DO; chiave reale `ECOLOGI_API_KEY` e `ecologi_check` con chiave reale (nessun addebito);
+   decidere quando passare a `ECOLOGI_TEST_MODE=false`; `close_period` provato prima in test mode.
+8. **Procedura della chiusura mensile sul DB di produzione**: `deploy.md` dice di mettere il `DATABASE_URL` di produzione nel `.env`,
+   ma la regola è che il `.env` punta sempre a `development`. Riscriverla con la variabile solo nel terminale (come nel wipe) o dalla
+   console di DO, con il controllo dell'host.
+9. **Backup**: il piano Neon tiene solo **6 ore di cronologia** (verificato il 2026-10-30), quindi il ripristino a un istante vale
+   solo per le ultime 6 ore. Decidere: branch di backup periodico (per esempio settimanale e sempre prima di una release) oppure piano
+   a pagamento.
+
+**C. Consigliati, non bloccano**
+10. Bug del collaudo: voce di menu «🌳 La mia carta» che non produce eventi (da segnalare a Zernio); primo DM dei non follower in
+    ritardo di minuti (avvisare i merchant).
+11. **Monitoraggio**: oggi DO avvisa solo per deploy e dominio falliti. Aggiungere un controllo di disponibilità su `/health`
+    (uptime check di DO o un servizio gratuito) con avviso per email.
+12. Confermare «Wait for CI» nella console di DO.
+13. Migrazione da python-jose a **PyJWT** (vulnerabilità di jose/ecdsa ignorate in CI, non sfruttabili con solo HS256); scelta
+    **Alembic o SQL a mano** prima della prima modifica allo schema.
+14. Portare su `main` con la prossima release la documentazione e `scripts/run_collaudo.py` (oggi solo su `develop`).
+15. Debito minore: warning di deprecazione del `TestClient` di Starlette 1.x (`httpx2`, argomento `timeout` nei test); freno al login
+    in memoria (vincola a 1 processo e 1 istanza: su DB prima di scalare); eliminare il branch Neon `backup-pre-v0.3.0` (solo resti
+    del prototipo).

@@ -35,6 +35,7 @@ Merchant 1 ──< Card >── (nessun Customer: il cliente è l'indice cieco d
    ├──< PointTransaction   (registro scan/conversion: fonte di verità)
    ├──< MerchantPool       (contatore del pool del mese)
    ├──< TreePlanting       (piantumazioni di fine mese)
+   ├──< Campaign           (promozioni del negozio, da v0.4.1: nessun dato dei clienti)
    └──< ProcessedWebhookEvent (dedup dei webhook, 7 giorni)
 
 ZernioSendCounter (quota_scope, period) → invii riusciti del mese per team Zernio
@@ -48,6 +49,7 @@ AuthCredential (user_id = Merchant.auth_user_id, nessuna FK) → hash della pass
 | **PointTransaction** | `merchant_id`, `card_id` (non FK), `kind` (`scan`\|`conversion`), `delta`, `period`, `created_at` | **registro = fonte di verità** e audit |
 | **MerchantPool** | PK `(merchant_id, period)`, `points` | contatore del pool, aggiornato nella **stessa transazione** dello scan |
 | **TreePlanting** | `merchant_id`, `period`, `level`, `tree_count`, `pool_points`, `ecologi_ref`, `test` | `UNIQUE(merchant_id, period, test)`: idempotenza della chiusura |
+| **Campaign** (da v0.4.1) | `merchant_id` (FK, `ON DELETE CASCADE`), `name`, `keyword` (come scritta dal founder, mai normalizzata), `promo_text` (≤ 850), `value_cents` (0-5000, 0 = nessun importo), `request_limit` (`NULL` = nessun limite), `is_archived`, contatori `dm_requests`, `comment_requests`, `uses`, `created_at` | **non salva dati dei clienti** (né testo, né IGSID, né id di commento); lo stato attiva/archiviata/ferma si deriva (`campaign_status`). Schema creato da `migrations/0001_campagne.sql` (idempotente, a mano: `deploy.md`); `create_all()` la creerebbe da sola ma non la modifica |
 | **ProcessedWebhookEvent** | PK `event_id` (`X-Zernio-Event-Id`), `merchant_id`, `received_at`, `outcome` (`received` → esito) | inserito **per primo**: i retry Zernio diventano no-op; conservato 7 giorni |
 | **ZernioSendCounter** | PK `(quota_scope, period)`, `sent` | quota Zernio di 10.000 invii al mese **per team** (oggi l'ambito è `account:<id>`); solo avviso, non blocca |
 | **AuthCredential** | PK `user_id` (uuid = `Merchant.auth_user_id`), `email` (unica, minuscola), `password_hash`, `token_version`, `created_at` | solo provider `local`; **nessuna FK** verso `merchant` (se si passa a Supabase la tabella si elimina); `password_hash` fuori dal `repr`. Si cancella con il merchant (API admin) o se la registrazione fallisce a metà |
@@ -97,9 +99,14 @@ un errore su un negozio non blocca gli altri (resta non chiuso e si ritenta).
 1. hook_id → Merchant (sconosciuto → 404)
 2. firma X-Zernio-Signature = HMAC-SHA256(secret del negozio, corpo grezzo), compare_digest (errata → 401)
 3. INSERT ProcessedWebhookEvent(X-Zernio-Event-Id) — già presente → 200, fine (retry Zernio)
+3b. event == comment.received (da v0.4.1) → flusso dei commenti, sotto; ogni altro evento segue i passi 4-12
 4. parse message.received → account.accountId del negozio? direction incoming?      no → 200 (ignorato)
 5. metadata.standby? → standby_detected_at = ora (avviso nel pannello), nessuna carta → 200
-6. trigger: testo normalizzato == INSTAGRAM_CARD_KEYWORD  oppure  postback FIDELITREE_CARD   no → 200 (ignorato)
+6. trigger: testo normalizzato == INSTAGRAM_CARD_KEYWORD  oppure  postback FIDELITREE_CARD
+   no → ramo campagne (da v0.4.1, anche per la risposta a una storia: stesso `message.received`): testo normalizzato ==
+        parola di una campagna NON archiviata di un negozio ATTIVO? sì → contatore +1 con un solo UPDATE … RETURNING,
+        DM di solo testo con la promo (o «offerte terminate» oltre il limite), `isFollower` ignorato, nessuna carta
+        (Idempotency-Key = <evento>:promo, stessa finestra di 24 h, stessa quota); no → 200 (ignorato)
 7. isFollower == false? → NESSUNA carta: testo fisso "segui @negozio, poi riscrivi CARTA" (outcome follow_requested,
    stessa finestra di 24 h, stessa quota). true o null (dato non disponibile) → si prosegue con la carta
 8. negozio ATTIVO o IN PAUSA: carta = get_or_create(merchant, HMAC(IGSID)); salva conversation.id e last_inbound_at = message.sentAt
@@ -118,8 +125,17 @@ un errore su un negozio non blocca gli altri (resta non chiuso e si ritenta).
 evento senza id o un `X-Zernio-Event-Id` già visto → 200 senza elaborare. Una riga evento rimasta `received` indica
 un'elaborazione interrotta: il retry di Zernio non la ripete, per non rischiare un doppio invio.
 
-Il riconoscitore di trigger lavora su `InboundMessage` con un campo `source` (`dm_text`, `dm_postback`): commenti e
-risposte alle storie si aggiungeranno come nuove sorgenti, senza toccare i passi 8-12.
+**Commenti (`comment.received`, da v0.4.1)**: stessa route, firma e dedup (passi 1-3). Si leggono solo `account.accountId`,
+`comment.id`, `comment.platformPostId`, `comment.text`: account diverso o campi mancanti → ignorato. Commento == parola di `CARTA`
+→ risposta privata «scrivici CARTA qui in chat», in ogni stato del negozio, senza carta né contatori. Commento == parola di una
+campagna non archiviata di un negozio attivo → richieste da commento +1 e risposta privata con lo stesso testo dei DM; altro →
+ignorato. La risposta privata è `POST /v1/inbox/comments/{postId}/{commentId}/private-reply` (nessuna risposta pubblica, nessuna
+finestra di 24 h nostra: i 7 giorni li controlla Meta, nessun nuovo tentativo); un timeout o un esito sconosciuto → `send_uncertain`
+(contato, negozio non attivato), chiave rifiutata → `key_invalid`, ogni altro errore → `send_failed` (mai standby); la richiesta
+è contata comunque. Un invio riuscito conta +1 in quota. Nel log solo negozio, evento, esito, id campagna e canale.
+
+Il riconoscitore di trigger lavora su `InboundMessage` con un campo `source` (`dm_text`, `dm_postback`); i commenti hanno un
+parser e un flusso propri (`parse_comment_received`, `_process_comment`), senza toccare i passi 8-12.
 
 ### 2. Onboarding Instagram del merchant (`/merchant/settings`)
 
@@ -127,7 +143,7 @@ risposte alle storie si aggiungeranno come nuove sorgenti, senza toccare i passi
 registrazione merchant (invariata) → incolla chiave Zernio
    → GET /v1/accounts?platform=instagram&status=connected (validazione reale; 401 → "chiave non valida")
    → chiave salvata cifrata, scelta dell'account Instagram
-   → genera hook_id + secret → POST /v1/webhooks/settings {url /webhooks/zernio/<hook_id>, secret, events [message.received], accountIds}
+   → genera hook_id + secret → POST /v1/webhooks/settings {url /webhooks/zernio/<hook_id>, secret, events [message.received, comment.received], accountIds}
    → menu persistente: vuoto? imposta "🌳 La mia carta" : lascia quello esistente e avvisa
      (se c'è già la nostra voce vale come impostata; un errore sul menu non blocca il collegamento)
    → stato awaiting_test_dm: "scrivi CARTA al tuo negozio da un altro profilo"
@@ -143,6 +159,12 @@ Il cliente apre `/c/<token>` dal link della card: vede tree points, cashback, av
 del pool e un **QR che contiene solo l'id della carta** (non il token: una foto del QR non apre la carta). Il merchant
 lo inquadra da `/merchant/scanner` (PWA) → `/merchant/card/<id>/manage` (cookie merchant + carta del suo negozio) →
 +tree points → registro, pool e conversione come in v0.2.0 (solo se il negozio è **attivo**: vedi «Stato del servizio»).
+
+**Campagne nello scanner (da v0.4.1)**: la pagina di gestione mostra, per ogni campagna non archiviata del negozio, un bottone
+«Applica <nome> (+X €)»; dopo la conferma `POST /api/merchant/card/{id}/campaigns/{cid}/apply` accredita l'importo **attuale** come
+cashback (`cashback_cents`) e conta l'utilizzo (`uses`) con due `UPDATE` atomici in un solo commit. Non tocca tree points, pool,
+conversione né registro. Con importo > 0 e negozio non attivo → 403 (disattivato anche nel bottone); una campagna senza importo
+conta solo l'utilizzo e si applica sempre.
 
 La pagina carta risponde con `Cache-Control: no-store` e `Referrer-Policy: no-referrer` (il saldo cambia a ogni scan,
 l'URL è il segreto); token sconosciuto o revocato → stessa 404 amichevole. Le pagine HTML merchant senza sessione valida
@@ -161,6 +183,13 @@ POST /admin/api/merchants/{id}/approve | pause | resume | reset-password
 ```
 
 **Flusso di approvazione**: il founder manda al merchant il link `/merchant/register` → il merchant si iscrive (nasce **in attesa**: Instagram sì, carta vera ai clienti no) → gli scrive (es. su WhatsApp) → il founder lo **avvia** dalla dashboard (`approve`: `is_approved=true`, `is_paused=false`) → il merchant è **attivo**. Periodo di prova finito o abbonamento non pagato → «Metti in pausa» (può solo togliere saldo); pagato → «Riattiva». Nessun pagamento in app, nessuna email, nessun link di invito.
+
+**Campagne (da v0.4.1)**: per ogni negozio la dashboard ha il pulsante «Campagne» (lista con stato e contatori, form di creazione e
+modifica, «Archivia», «Ripristina», «Elimina» con conferma). Endpoint `GET|POST /admin/api/merchants/{id}/campaigns`,
+`PUT|DELETE …/campaigns/{cid}`, `POST …/campaigns/{cid}/archive|restore`, con le stesse protezioni degli altri (cookie + `Origin`, o
+`X-Admin-Key`). La parola chiave non può coincidere (normalizzata) con `CARTA` né con quella di un'altra campagna non archiviata
+dello stesso negozio (409). **«Metti in pausa» archivia nello stesso commit tutte le campagne non archiviate**; «Riattiva» e
+«Avvia» non le ripristinano (lo fa il founder, una per una).
 
 **Reset della password**: «Reimposta password» genera una password temporanea di 12 caratteri (alfabeto senza caratteri ambigui) con `secrets.choice`, la imposta con `PasswordAdminProvider.set_password` (nuovo hash, `token_version + 1`: le sessioni aperte decadono), azzera il freno del login di quell'email (altrimenti il merchant fermato dal 429 non potrebbe usarla) e la mostra **una sola volta** (campo `temporary_password` della risposta, pulsante «Copia»). Non si salva in chiaro, non si logga, il `repr` della risposta non la mostra; la risposta è `no-store`. Il merchant la cambia da `/merchant/settings`.
 
@@ -227,7 +256,7 @@ Tutto passa da `AuthProvider` (`app/core/auth.py`), scelto da `AUTH_PROVIDER`; l
 |---|---|---|
 | GET /health | pubblico | health check con `version` (da `pyproject.toml`) |
 | GET /sw.js | pubblico | service worker della PWA merchant (scope `/merchant/`) |
-| POST /webhooks/zernio/{hook_id} | firma HMAC del negozio | DM Instagram → carta → card di risposta |
+| POST /webhooks/zernio/{hook_id} | firma HMAC del negozio | DM Instagram → carta → card di risposta; (da v0.4.1) campagne in DM, risposte alle storie e commenti → DM / risposta privata |
 | GET /c/{token} | link segreto | pagina carta con QR (id carta), saldo e pool del negozio |
 | GET /carta-di-prova | pubblico | carta fittizia per i clienti nuovi di un negozio in attesa (nessun dato, `noindex`, no-store) |
 | GET /privacy | pubblico | informativa per i clienti |
@@ -237,12 +266,14 @@ Tutto passa da `AuthProvider` (`app/core/auth.py`), scelto da `AUTH_PROVIDER`; l
 | GET /admin | cookie admin o `X-Admin-Key` (altrimenti 303 al login) | pagina della dashboard (la lista arriva dal JSON) |
 | GET /admin/api/merchants | cookie admin o `X-Admin-Key` (401) | lista dei merchant: stato del servizio, stato Instagram, carte, punti del mese; nessun segreto |
 | POST /admin/api/merchants/{id}/approve, /pause, /resume | cookie admin + `Origin` (403) o `X-Admin-Key` (401) | avvia (approva e toglie la pausa), metti in pausa, riattiva; ritornano la riga aggiornata (404, 409 per pausa/riattiva di un negozio in attesa) |
+| GET, POST /admin/api/merchants/{id}/campaigns; PUT, DELETE …/campaigns/{cid}; POST …/campaigns/{cid}/archive, /restore | come sopra (cookie admin + `Origin`, o `X-Admin-Key`) | campagne del negozio (da v0.4.1): lista, crea (201), modifica, archivia, ripristina, elimina; 404 se negozio o campagna non coincidono, 409 per la parola chiave in conflitto, 400 per un valore non valido |
 | POST /admin/api/merchants/{id}/reset-password | come sopra | password temporanea mostrata solo nella risposta (404, 409 senza credenziale, 400 provider senza password) |
 | GET /merchant/scanner, /merchant/settings, /merchant/card/{id}/manage | cookie merchant | pagine merchant (PWA); banner di stato e pulsanti di aggiunta disattivati se il negozio è in attesa o in pausa |
 | GET /api/merchant/me, PUT /api/merchant/me/settings | cookie merchant | profilo e impostazioni di conversione |
 | POST /api/merchant/me/password | cookie merchant | cambio password (400 nuova non valida, 401 attuale errata); riemette il cookie |
 | POST /api/merchant/instagram/key, GET /api/merchant/instagram/accounts, POST /api/merchant/instagram/account, GET /api/merchant/instagram, DELETE /api/merchant/instagram | cookie merchant | onboarding Instagram/Zernio e pannello |
 | POST /api/merchant/add-tree-points/{id} | cookie merchant | scan: tree points (+ conversione automatica); **403** se il negozio non è attivo e il delta è positivo |
+| POST /api/merchant/card/{id}/campaigns/{cid}/apply | cookie merchant | applica una campagna alla carta: accredita l'importo attuale come cashback e conta l'utilizzo (da v0.4.1); 404 carta o campagna non del negozio, **403** se il negozio non è attivo e l'importo è > 0 |
 | POST /api/merchant/add-point/{id} | cookie merchant | +/- cashback in euro; **403** se il negozio non è attivo e l'importo è positivo |
 | DELETE /api/merchant/card/{id} | cookie merchant | elimina carta propria (cancellazione su richiesta del cliente) |
 | CRUD /api/merchant/…, POST /api/merchant/{id}/approve | X-Admin-Key (403) | gestione merchant, approvazione (toglie anche la pausa), soglie e `is_paused` (il DELETE elimina anche la credenziale `local`) |

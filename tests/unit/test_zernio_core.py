@@ -122,7 +122,7 @@ def test_build_webhook_body():
     assert body == {
         "name": "Fidelitree",
         "url": "https://app.example/webhooks/zernio/h",
-        "events": ["message.received"],
+        "events": ["message.received", "comment.received"],
         "secret": "s3cret",
         "accountIds": ["acc_1"],
         "isActive": True,

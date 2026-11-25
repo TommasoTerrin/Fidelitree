@@ -27,9 +27,9 @@ python local_main.py
 Servono nel `.env` anche `ENCRYPTION_KEY`, `IGSID_HMAC_KEY` e `CARD_LINK_KEY` (l'app non parte senza): come
 generarle è in `.env.example`.
 
-Per provare l'app con dati di prova senza toccare il database vero (reset + seed + accessi):
-vedi **"Collaudo locale"** in [.agents/workflows/deploy.md](.agents/workflows/deploy.md). Per provare il flusso
-Instagram con un tunnel https: **"Collaudo end-to-end del flusso Instagram"** nello stesso file.
+Il `.env` locale punta al branch Neon `development`, mai a `production`. Per provare l'app in locale con un tunnel
+https e Instagram (o con un SQLite usa-e-getta e i dati del seed) vedi
+[.agents/workflows/collaudo.md](.agents/workflows/collaudo.md). Deploy e rollback: [.agents/workflows/deploy.md](.agents/workflows/deploy.md).
 
 ## Test
 

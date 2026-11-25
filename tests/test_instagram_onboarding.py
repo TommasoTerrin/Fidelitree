@@ -273,7 +273,7 @@ def test_collegamento_registra_il_webhook_e_imposta_il_menu(auth_client, zernio,
     stored = _stored(session, merchant)
     hook_id = stored["webhook_hook_id"]
     assert hook_id and body["url"] == f"{TEST_PUBLIC_BASE_URL}/webhooks/zernio/{hook_id}"
-    assert body["events"] == ["message.received"] and body["accountIds"] == [INSTAGRAM_ACCOUNT_ID]
+    assert body["events"] == ["message.received", "comment.received"] and body["accountIds"] == [INSTAGRAM_ACCOUNT_ID]
     assert body["secret"] and body["secret"] != hook_id
     assert decrypt_secret(stored["webhook_secret_enc"]) == body["secret"]
     assert body["secret"] not in stored["webhook_secret_enc"]

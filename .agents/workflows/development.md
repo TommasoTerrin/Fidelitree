@@ -14,15 +14,27 @@ Flusso: `develop` → `feature/<nome>` → merge in `develop` → (quando pronta
 
 ## Ciclo di una feature
 
-1. **Planner**: leggi/aggiorna `.agents/planner/current.md` con cosa stai per fare.
-2. **Branch**: `git checkout develop && git pull && git checkout -b feature/<nome>`.
-3. **Sviluppo**: commit piccoli e frequenti; il progetto deve restare funzionante dopo ogni commit.
-4. **Test automatici**: `python -m pytest` (obbligatorio verde prima del merge). Aggiungi test per la nuova feature.
-5. **Test manuali**: collaudo locale su DB usa-e-getta (`deploy.md`, sezione "Collaudo locale") e verifica il flusso toccato (vedi flussi in `.agents/architecture/overview.md`).
-6. **Merge in develop**: `git checkout develop && git merge feature/<nome>` e push.
-7. **Release** (solo quando develop è pronto): segui `.agents/checklists/pre-release.md`, poi merge in `main` + tag.
-8. **Post-deploy**: `.agents/workflows/deploy.md` per la verifica su DigitalOcean e sul database.
-9. **Documentazione**: aggiorna AGENTS.md / .agents/ se sono cambiati comandi, endpoint o architettura; sposta l'item da `current.md` al changelog di `roadmap.md`.
+La procedura passo passo sta nelle skill del progetto, `.claude/skills/<nome>/SKILL.md` (markdown semplice: con
+Claude Code si lanciano come comandi, con un altro agente si seguono a mano). Ordine e gate: tabella in
+[`CLAUDE.md`](../../CLAUDE.md). In sintesi:
+
+1. **`/new-feature`**: versione e branch decisi insieme (`feature/<nome>` da `develop` aggiornato), cartella
+   `.agents/tickets/vX.Y.Z/`, grilling a giri con domande bloccanti / consigliate / opzionali.
+2. **`/spec`**: spec con casi d'uso e criteri `AC-NN` (**gate 1**), poi modello di dominio, contract congelato, triage
+   e ticket (**gate 2**). Le decisioni vanno subito nella documentazione viva (`.agents/decisions/`,
+   `.agents/glossario.md`, `.agents/specs/`), non in AGENTS.md.
+3. **`/implement NN`**: un ticket per sessione, TDD con `ft-test-writer` e `ft-implementer` separati; `python -m pytest`
+   verde, commit locale piccolo, `current.md` e `HANDOFF.md` aggiornati, passi in `collaudo.md` se cambia ciò che vede
+   un utente.
+4. **`/fix`** (in qualsiasi momento): aggiunta, bug o decisione cambiata → voce `F-NN` nella spec, criteri e ticket
+   nuovi, contract riapprovato se cambia.
+5. **`/review`** (**gate 3**): tracciabilità, review sulla spec e sulle regole, poi push, PR `feature/<nome>` →
+   `develop`, CI verde e merge, ogni passo con l'ok del founder.
+6. **`/release`**: collaudo manuale **in locale da `develop`** (`collaudo.md`), checklist `pre-release.md` della versione,
+   migrazioni ed env var, PR `develop` → `main` (deploy automatico), smoke test, tag, `develop` riallineato, chiusura
+   della versione (`STORICO.md`, changelog di `roadmap.md`, `current.md`). Se il collaudo fallisce: `/fix`, branch
+   `fix/<nome>` da `develop`, PR verso `develop`, collaudo ripetuto.
+7. **`/improve-architecture`** (ogni tanto, o a fine versione): dove il codice si sta aggrovigliando.
 
 ## Rito di release (versione)
 

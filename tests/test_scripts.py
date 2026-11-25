@@ -1,5 +1,5 @@
 """
-Test degli script di supporto: seed del DB, smoke test, reset del DB.
+Test degli script di supporto: seed del DB, smoke test, reset del DB, avvio per il collaudo.
 Tutto su SQLite in-memory (fixture `session`/`client`), senza rete e senza Ecologi.
 """
 
@@ -26,7 +26,7 @@ from app.models.models import (
 )
 from app.services import ecologi_service, instagram_service, tree_service, zernio_service
 from app.version import get_version
-from scripts import ecologi_check, replay_webhook, reset_db, seed_db, smoke_test_prod, zernio_check
+from scripts import ecologi_check, replay_webhook, reset_db, run_collaudo, seed_db, smoke_test_prod, zernio_check
 from scripts.smoke_test_prod import run_smoke_test
 from tests.conftest import WEBHOOK_TEST_SECRET, ZERNIO_TEST_KEY
 
@@ -702,6 +702,35 @@ def test_replay_webhook_standby_sender_ore_e_follower(session, instagram_merchan
     assert abs((utc_now() - msg.sent_at) - timedelta(hours=5)) < timedelta(minutes=1)
 
 
+def test_replay_webhook_comment_manda_un_comment_received_senza_conversation_id(session, instagram_merchant):
+    """v0.4.1 ticket 06 (strumento di collaudo, contract §9): `--comment` manda un evento `comment.received`.
+
+    Dopo l'esecuzione, senza `--conversation-id` (che serve solo ai DM, quindi qui non va chiesto):
+    - il codice di uscita è 0 e il server riceve una sola richiesta;
+    - il corpo ha la firma valida e `parse_comment_received` lo rilegge (non `None`, quindi l'evento è davvero
+      `comment.received`) con il testo uguale a TESTO e l'account del negozio, perché il ramo dei commenti scarta
+      gli account altrui;
+    - `post-id` e `comment-id` sono quelli passati; il confronto è con letterali scelti dal test, non con i
+      default dello script.
+    """
+    server = _FakeServer()
+    argv = ["--merchant-id", str(instagram_merchant.id), "--comment", "Natale!",
+            "--post-id", "post-77", "--comment-id", "com-88", "--event-id", "evt-commento"]
+
+    assert replay_webhook.main(argv, session=session, http=server.client) == 0
+
+    assert len(server.requests) == 1
+    request = server.requests[0]
+    raw = request.read()
+    assert instagram_service.verify_signature(WEBHOOK_TEST_SECRET, raw, request.headers["X-Zernio-Signature"])
+    assert request.headers["X-Zernio-Event-Id"] == "evt-commento"
+    comment = instagram_service.parse_comment_received(json.loads(raw), request.headers["X-Zernio-Event-Id"])
+    assert comment is not None
+    assert comment.text == "Natale!"
+    assert comment.account_id == instagram_merchant.zernio_account_id
+    assert (comment.post_id, comment.comment_id) == ("post-77", "com-88")
+
+
 def test_replay_webhook_follower_si(session, instagram_merchant):
     server = _FakeServer()
     _replay(session, instagram_merchant, server, "--follower", "si")
@@ -776,6 +805,21 @@ def test_replay_webhook_text_e_postback_si_escludono(session):
         )
 
 
+def test_replay_webhook_dm_senza_conversation_id_e_rifiutato_senza_inviare(session, instagram_merchant, capsys):
+    """v0.4.1, strumento di collaudo del ticket 06: un DM senza `--conversation-id` esce con codice != 0 e nomina l'opzione mancante; il
+    server finto non riceve nulla, perché `--conversation-id` resta obbligatorio quando non si usa `--comment`."""
+    server = _FakeServer()
+
+    with pytest.raises(SystemExit) as exit_info:
+        replay_webhook.main(
+            ["--merchant-id", str(instagram_merchant.id), "--text", "CARTA"], session=session, http=server.client,
+        )
+
+    assert exit_info.value.code not in (0, None)
+    assert "--conversation-id" in capsys.readouterr().err
+    assert server.requests == []
+
+
 def test_replay_webhook_help_non_richiede_il_db(capsys):
     with pytest.raises(SystemExit) as exit_info:
         replay_webhook.main(["--help"])
@@ -815,3 +859,23 @@ def test_smoke_test_controlla_la_dashboard_admin(client, mock_ecologi, capsys):
 def test_smoke_test_controlla_la_carta_di_prova(client, mock_ecologi, capsys):
     assert run_smoke_test("", settings.ADMIN_SECRET_KEY, http=client) is True
     assert "[OK] Pagina /carta-di-prova raggiungibile" in capsys.readouterr().out
+
+
+# --- avvio per il collaudo ---
+
+def test_run_collaudo_accetta_sqlite_e_neon_development():
+    assert run_collaudo.check_database_url("sqlite:///collaudo.db") == "SQLite usa-e-getta"
+    url = "postgresql://u:p@ep-morning-credit-alqqrsao.c-3.eu-central-1.aws.neon.tech/neondb?sslmode=require"
+    assert run_collaudo.check_database_url(url) == "ep-morning-credit-alqqrsao"
+
+
+@pytest.mark.parametrize("url", [
+    "postgresql://u:segreto@ep-proud-darkness-al7fkv7n.c-3.eu-central-1.aws.neon.tech/neondb?sslmode=require",
+    "postgresql://u:segreto@db.example.com/x",
+    "postgresql:///senza-host",
+])
+def test_run_collaudo_rifiuta_ogni_altro_db_senza_stampare_l_url(url):
+    with pytest.raises(SystemExit) as exc:
+        run_collaudo.check_database_url(url)
+    assert "RIFIUTATO" in str(exc.value)
+    assert "segreto" not in str(exc.value) and "postgresql://" not in str(exc.value)

@@ -7,6 +7,9 @@ Regole di business
   default `CARTA`) oppure tocca la voce "🌳 La mia carta" del menu persistente (postback con payload
   fisso). Maiuscole, accenti, punteggiatura ed emoji sono ignorati; la corrispondenza è esatta dopo la
   normalizzazione ("carta" vale, "vorrei la carta" no). Gli altri messaggi sono ignorati in silenzio.
+- **Parole chiave delle campagne** (v0.4.1): un testo (DM o risposta a una storia) uguale, dopo la normalizzazione,
+  alla parola di una campagna non archiviata di un negozio attivo riceve un DM di testo con la promo (o «offerte
+  terminate» oltre il limite); `isFollower` non conta e nessuna carta viene toccata. `CARTA` e il menu non cambiano.
 - **Risposta**: una sola card (generic template) con titolo = nome del negozio, sottotitolo fisso e un
   bottone "Apri la carta". Nessun dato dinamico nel messaggio. Unico ripiego: un testo fisso con il link.
 - **Carta solo a chi segue** (2026-10-23): `isFollower` falso → nessuna carta, solo un testo fisso di invito a
@@ -26,8 +29,6 @@ salva la carta, risolve il token della pagina carta e invia tramite `zernio_serv
 
 import hashlib
 import hmac
-import re
-import unicodedata
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Optional
@@ -35,6 +36,8 @@ from typing import Optional
 from pydantic import BaseModel
 
 from app.core.errors import InvalidInputError, MessageTooLongError
+# normalize_text vive in app/core/text.py; si ri-esporta qui perché `instagram_service.normalize_text` resti importabile.
+from app.core.text import INSTAGRAM_TEXT_MAX, normalize_text  # noqa: F401
 
 # --- Core puro ---
 
@@ -51,6 +54,7 @@ CARD_BUTTON_TITLE_MAX = 20
 FALLBACK_TEXT_MAX = 640  # minimo documentato per il testo con bottoni su Instagram
 
 _MESSAGE_RECEIVED = "message.received"
+_COMMENT_RECEIVED = "comment.received"
 _SOURCE_TEXT = "dm_text"
 _SOURCE_POSTBACK = "dm_postback"
 _DIRECTION_INCOMING = "incoming"
@@ -127,6 +131,49 @@ def parse_message_received(payload: dict, event_id: str) -> Optional[InboundMess
     )
 
 
+class InboundComment(BaseModel):
+    """Commento di un cliente a un post, già normalizzato (contract §6). Nessun dato dell'autore."""
+
+    event_id: str
+    account_id: str
+    comment_id: str
+    post_id: str
+    text: Optional[str] = None
+
+
+def parse_comment_received(payload: dict, event_id: str) -> Optional[InboundComment]:
+    """
+    Legge il payload di un evento webhook Zernio `comment.received`. Ritorna `None` se l'evento è un altro.
+    Solleva `InvalidInputError` se mancano o sono vuoti `account.accountId`, `comment.id` o
+    `comment.platformPostId`. `comment.text` è facoltativo. Nessun altro campo è letto (né autore né data).
+    """
+    if payload.get("event") != _COMMENT_RECEIVED:
+        return None
+    account_id = _required(payload, "account", "accountId")
+    comment_id = _required(payload, "comment", "id")
+    post_id = _required(payload, "comment", "platformPostId")
+    return InboundComment(
+        event_id=event_id,
+        account_id=str(account_id),
+        comment_id=str(comment_id),
+        post_id=str(post_id),
+        text=(payload.get("comment") or {}).get("text"),
+    )
+
+
+COMMENT_CARD_INVITE = "Per ricevere la tua carta scrivici {keyword} qui in chat"  # senza punto finale
+
+
+def build_comment_card_invite_text(card_keyword: str) -> str:
+    """
+    Testo della risposta privata a un commento con la parola chiave della carta (contract §6, D7):
+    invita a scrivere la parola in chat. Solleva `MessageTooLongError` oltre `INSTAGRAM_TEXT_MAX`.
+    """
+    text = COMMENT_CARD_INVITE.format(keyword=card_keyword)
+    _check_length("text", text, INSTAGRAM_TEXT_MAX)
+    return text
+
+
 def verify_signature(secret: str, raw_body: bytes, signature: Optional[str]) -> bool:
     """
     Verifica `X-Zernio-Signature`: HMAC-SHA256 esadecimale del corpo grezzo con il secret del negozio.
@@ -136,20 +183,6 @@ def verify_signature(secret: str, raw_body: bytes, signature: Optional[str]) -> 
         return False
     expected = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected.encode("ascii"), signature.strip().lower().encode("utf-8"))
-
-
-def normalize_text(text: Optional[str]) -> str:
-    """
-    Normalizza il testo di un messaggio per il confronto con la parola chiave: NFKD senza segni
-    diacritici, `casefold`, solo lettere, cifre e spazi (punteggiatura ed emoji cadono), spazi compattati.
-    `None` → stringa vuota.
-    """
-    if not text:
-        return ""
-    decomposed = unicodedata.normalize("NFKD", text)
-    stripped = "".join(ch for ch in decomposed if not unicodedata.combining(ch)).casefold()
-    letters = "".join(ch if ch.isalnum() else " " for ch in stripped)
-    return re.sub(r"\s+", " ", letters).strip()
 
 
 class Trigger(str, Enum):
@@ -293,7 +326,7 @@ from app.core.enums import InstagramStatus, WebhookOutcome  # noqa: E402
 from app.core.errors import InvalidSignatureError, NotFoundError  # noqa: E402
 from app.models.models import Card, Merchant, ProcessedWebhookEvent, ZernioSendCounter  # noqa: E402
 from app.core.enums import ServiceState  # noqa: E402
-from app.services import card_service, zernio_service  # noqa: E402
+from app.services import campaign_service, card_service, zernio_service  # noqa: E402
 from app.services.db_crud import card_crud, merchant_crud  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -513,11 +546,117 @@ async def _reply_with_card(
     return WebhookOutcome.SENT
 
 
+async def _reply_with_campaign(
+    session: Session, http: httpx.AsyncClient, merchant: Merchant, creds: "zernio_service.ZernioCredentials",
+    msg: InboundMessage, now: datetime,
+) -> WebhookOutcome:
+    """
+    Passo della campagna per un DM che non è la richiesta della carta (contract §6, AC-11, AC-12).
+
+    Solo i testi si confrontano con le parole delle campagne; un postback diverso dal nostro è ignorato.
+    Nessuna campagna riconosciuta (o negozio non attivo) → `IGNORED`. La richiesta è già contata dal service:
+    fuori dalle 24 ore → `OUT_OF_WINDOW` senza invio. Altrimenti si invia il testo con chiave `<evento>:promo`
+    e si registra l'invio; `isFollower` è ignorato e nessuna carta viene letta o scritta. Un testo troppo lungo
+    → `SEND_FAILED` senza invio. Nei log solo id campagna e canale, mai testo né IGSID.
+    """
+    if msg.source != _SOURCE_TEXT:
+        return WebhookOutcome.IGNORED
+    try:
+        reply = campaign_service.handle_campaign_request(session, merchant, msg.text, campaign_service.RequestChannel.DM)
+    except MessageTooLongError:
+        logger.warning("Webhook: testo della campagna troppo lungo negozio=%s evento=%s canale=dm", merchant.id, msg.event_id)
+        return WebhookOutcome.SEND_FAILED
+    if reply is None:
+        return WebhookOutcome.IGNORED
+    logger.info("Webhook: campagna=%s canale=dm negozio=%s evento=%s", reply.campaign_id, merchant.id, msg.event_id)
+    if not can_reply(msg.sent_at, now):
+        return WebhookOutcome.OUT_OF_WINDOW
+    try:
+        await zernio_service.send_text(http, creds, msg.conversation_id, reply.text, f"{msg.event_id}:promo")
+    except zernio_service.ZernioError as error:
+        return _handle_send_error(session, merchant, creds, error, msg.event_id, now)
+    _record_send(session, merchant, creds, now)
+    return WebhookOutcome.SENT
+
+
+def _handle_private_reply_error(
+    session: Session, merchant: Merchant, creds: "zernio_service.ZernioCredentials",
+    error: "zernio_service.ZernioError", event_id: str, now: datetime,
+) -> WebhookOutcome:
+    """
+    Esito di una risposta privata fallita (mappatura propria, contract §6 punto 5, AC-18): timeout →
+    `SEND_UNCERTAIN` con quota +1 senza attivare il negozio; chiave rifiutata → `KEY_INVALID` e `SEND_FAILED`;
+    ogni altro tipo (anche `NOT_THREAD_OWNER`, `NOT_FOLLOWER`, `QUOTA`) → `SEND_FAILED`. Nessun nuovo tentativo.
+    Si logga solo tipo dell'errore, negozio ed evento.
+    """
+    logger.warning("Webhook: risposta privata non riuscita (%s) negozio=%s evento=%s", error.kind.value, merchant.id, event_id)
+    if error.kind == zernio_service.ZernioErrorKind.TIMEOUT:
+        _record_send(session, merchant, creds, now, activate=False)
+        return WebhookOutcome.SEND_UNCERTAIN
+    if error.kind == zernio_service.ZernioErrorKind.AUTH:
+        merchant.instagram_status = InstagramStatus.KEY_INVALID
+        session.add(merchant)
+        session.commit()
+    return WebhookOutcome.SEND_FAILED
+
+
+async def _process_comment(
+    session: Session, http: httpx.AsyncClient, merchant: Merchant, creds: "zernio_service.ZernioCredentials",
+    payload: dict, event_id: str, now: datetime,
+) -> WebhookOutcome:
+    """
+    Flusso di `comment.received` (contract §6). Payload incompleto o account diverso → `IGNORED`. Un commento
+    uguale, dopo la normalizzazione, alla parola chiave della carta riceve in risposta privata l'invito a
+    scrivere la parola in chat, in ogni stato del negozio (D7); nessun contatore di campagna, nessuna carta.
+    Altri testi passano da `handle_campaign_request` con canale commento: nessuna campagna → `IGNORED`,
+    altrimenti risposta privata con il testo della campagna; un testo troppo lungo → `SEND_FAILED`.
+    Nessuna finestra di 24 ore. Nei log solo id campagna e canale, mai testo né id di commento o post.
+    """
+    try:
+        comment = parse_comment_received(payload, event_id)
+    except InvalidInputError:
+        logger.warning("Webhook: payload incompleto negozio=%s evento=%s", merchant.id, event_id)
+        return WebhookOutcome.IGNORED
+    if comment is None or comment.account_id != merchant.zernio_account_id:
+        return WebhookOutcome.IGNORED
+    wanted = normalize_text(settings.INSTAGRAM_CARD_KEYWORD)
+    if wanted and normalize_text(comment.text) == wanted:
+        try:
+            text = build_comment_card_invite_text(settings.INSTAGRAM_CARD_KEYWORD)
+        except MessageTooLongError:
+            logger.warning("Webhook: invito del commento troppo lungo negozio=%s evento=%s", merchant.id, event_id)
+            return WebhookOutcome.SEND_FAILED
+    else:
+        # Ramo campagne (contract §6 punto 3): la richiesta è contata dal service; nessuna finestra di 24 ore.
+        try:
+            reply = campaign_service.handle_campaign_request(
+                session, merchant, comment.text, campaign_service.RequestChannel.COMMENT)
+        except MessageTooLongError:
+            logger.warning("Webhook: testo della campagna troppo lungo negozio=%s evento=%s canale=commento",
+                           merchant.id, event_id)
+            return WebhookOutcome.SEND_FAILED
+        if reply is None:
+            return WebhookOutcome.IGNORED
+        logger.info("Webhook: campagna=%s canale=commento negozio=%s evento=%s", reply.campaign_id, merchant.id, event_id)
+        text = reply.text
+    try:
+        await zernio_service.send_private_reply(http, creds, comment.post_id, comment.comment_id, text)
+    except zernio_service.ZernioError as error:
+        return _handle_private_reply_error(session, merchant, creds, error, event_id, now)
+    _record_send(session, merchant, creds, now)
+    return WebhookOutcome.SENT
+
+
 async def _process_message(
     session: Session, http: httpx.AsyncClient, merchant: Merchant, creds: "zernio_service.ZernioCredentials",
     payload: dict, event_id: str, now: datetime,
 ) -> WebhookOutcome:
-    """Dal payload già verificato e registrato all'esito (passi 6-16 di `handle_webhook`)."""
+    """
+    Dal payload già verificato e registrato all'esito (passi 6-16 di `handle_webhook`). Smista per `event`:
+    `comment.received` va al flusso dei commenti; ogni altro valore segue il flusso dei DM.
+    """
+    if payload.get("event") == _COMMENT_RECEIVED:
+        return await _process_comment(session, http, merchant, creds, payload, event_id, now)
     try:
         msg = parse_message_received(payload, event_id)
     except InvalidInputError:
@@ -529,7 +668,7 @@ async def _process_message(
         _mark_standby(session, merchant, now)
         return WebhookOutcome.STANDBY
     if detect_trigger(msg, settings.INSTAGRAM_CARD_KEYWORD) is None:
-        return WebhookOutcome.IGNORED
+        return await _reply_with_campaign(session, http, merchant, creds, msg, now)
     if msg.is_follower is False:  # `None` (dato non disponibile) → card: da rivedere nel collaudo finale
         return await _invite_to_follow(session, http, merchant, creds, msg, now)
     return await _reply_with_card(session, http, merchant, creds, msg, now)

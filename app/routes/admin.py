@@ -14,6 +14,11 @@ Endpoint:
   GET  /admin                                        → pagina con la lista dei merchant
   GET  /admin/api/merchants                          → lista JSON
   POST /admin/api/merchants/{id}/approve|pause|resume|reset-password
+  GET  /admin/api/merchants/{id}/campaigns           → lista JSON delle campagne del negozio
+  POST /admin/api/merchants/{id}/campaigns           → crea una campagna (201)
+  PUT  /admin/api/merchants/{id}/campaigns/{cid}     → modifica una campagna
+  POST /admin/api/merchants/{id}/campaigns/{cid}/archive|restore
+  DELETE /admin/api/merchants/{id}/campaigns/{cid}   → elimina una campagna (200 {"deleted": true})
 """
 
 from fastapi import APIRouter, Depends, Form, Request, Response
@@ -28,8 +33,10 @@ from app.core.dependencies import (
     require_same_origin, set_admin_cookie,
 )
 from app.core.security import is_admin_session_token
+from app.schemas.campaign import CampaignRequest, CampaignsResponse
+from app.services.campaign_service import CampaignRow
 from app.schemas.merchant import AdminMerchantsResponse, AdminResetPasswordResponse
-from app.services import merchant_service
+from app.services import campaign_service, merchant_service
 from app.services.merchant_service import AdminAction, AdminMerchantRow
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -139,3 +146,102 @@ async def reset_password(merchant_id: int, response: Response, session: Session 
     merchant = merchant_service.get_merchant_for_admin(session, merchant_id)
     temporary = merchant_service.reset_merchant_password(get_auth_provider(), merchant)
     return AdminResetPasswordResponse(merchant_id=merchant.id, temporary_password=temporary)
+
+
+@router.get(
+    "/api/merchants/{merchant_id}/campaigns",
+    response_model=CampaignsResponse,
+    dependencies=[Depends(require_admin_session)],
+)
+async def list_campaigns(merchant_id: int, response: Response, session: Session = Depends(get_session)):
+    """
+    Campagne del negozio: non archiviate prima, poi archiviate, dalla più recente (AC-01). 404 negozio
+    inesistente, 401 senza sessione né `X-Admin-Key`.
+    """
+    _private(response)
+    merchant = merchant_service.get_merchant_for_admin(session, merchant_id)
+    return CampaignsResponse(campaigns=campaign_service.list_campaigns(session, merchant))
+
+
+@router.post(
+    "/api/merchants/{merchant_id}/campaigns",
+    response_model=CampaignRow,
+    status_code=201,
+    dependencies=[Depends(require_admin_action)],
+)
+async def create_campaign(
+    merchant_id: int, body: CampaignRequest, response: Response, session: Session = Depends(get_session)
+):
+    """
+    Crea una campagna del negozio (AC-02): 201 con la riga. 400 dati non validi, 409 parola chiave
+    riservata o già in uso, 404 negozio inesistente.
+    """
+    _private(response)
+    merchant = merchant_service.get_merchant_for_admin(session, merchant_id)
+    return campaign_service.create_campaign(session, merchant, body.model_dump(), utc_now())
+
+
+@router.put(
+    "/api/merchants/{merchant_id}/campaigns/{campaign_id}",
+    response_model=CampaignRow,
+    dependencies=[Depends(require_admin_action)],
+)
+async def update_campaign(
+    merchant_id: int, campaign_id: int, body: CampaignRequest, response: Response,
+    session: Session = Depends(get_session),
+):
+    """
+    Modifica una campagna (AC-04): 200 con la riga. 404 negozio o campagna inesistenti, 400 dati non
+    validi, 409 parola chiave riservata o già in uso.
+    """
+    _private(response)
+    merchant = merchant_service.get_merchant_for_admin(session, merchant_id)
+    return campaign_service.update_campaign(session, merchant, campaign_id, body.model_dump())
+
+
+@router.post(
+    "/api/merchants/{merchant_id}/campaigns/{campaign_id}/archive",
+    response_model=CampaignRow,
+    dependencies=[Depends(require_admin_action)],
+)
+async def archive_campaign(
+    merchant_id: int, campaign_id: int, response: Response, session: Session = Depends(get_session)
+):
+    """Archivia una campagna (AC-05), idempotente: 200 con la riga. 404 negozio o campagna inesistenti."""
+    _private(response)
+    merchant = merchant_service.get_merchant_for_admin(session, merchant_id)
+    return campaign_service.archive_campaign(session, merchant, campaign_id)
+
+
+@router.post(
+    "/api/merchants/{merchant_id}/campaigns/{campaign_id}/restore",
+    response_model=CampaignRow,
+    dependencies=[Depends(require_admin_action)],
+)
+async def restore_campaign(
+    merchant_id: int, campaign_id: int, response: Response, session: Session = Depends(get_session)
+):
+    """
+    Ripristina una campagna archiviata (AC-06): 200 con la riga. 404 negozio o campagna inesistenti,
+    409 se la parola chiave è ora riservata o in uso.
+    """
+    _private(response)
+    merchant = merchant_service.get_merchant_for_admin(session, merchant_id)
+    return campaign_service.restore_campaign(session, merchant, campaign_id)
+
+
+@router.delete(
+    "/api/merchants/{merchant_id}/campaigns/{campaign_id}",
+    dependencies=[Depends(require_admin_action)],
+)
+async def delete_campaign(
+    merchant_id: int, campaign_id: int, response: Response, session: Session = Depends(get_session)
+):
+    """
+    Elimina definitivamente una campagna, contatori compresi: 200 `{"deleted": true}`. 404 negozio o
+    campagna inesistenti, anche al secondo «Elimina» della stessa campagna.
+    """
+    _private(response)
+    merchant = merchant_service.get_merchant_for_admin(session, merchant_id)
+    campaign_service.delete_campaign(session, merchant, campaign_id)
+    return {"deleted": True}

@@ -121,6 +121,18 @@
             </button>
         </div>
 
+        {# Campagne non archiviate (AC-21): senza campagne il blocco non compare. Il nome entra con l'autoescape di Jinja.
+           Il bottone è disabilitato se la campagna accredita un importo e il negozio non è attivo (can_add falso). #}
+        {% if campaigns %}
+        <div id="campaigns-section" class="mt-6 space-y-3">
+            {% for campaign in campaigns %}
+            <button type="button" data-campaign-id="{{ campaign.id }}"
+                {% if campaign.value_cents > 0 and not can_add %}disabled{% endif %}
+                class="w-full bg-emerald-50 text-emerald-700 font-bold py-3 rounded-2xl text-base border border-emerald-100 disabled:opacity-40 disabled:cursor-not-allowed">{{ campaign.label }}</button>
+            {% endfor %}
+        </div>
+        {% endif %}
+
     </div>
 
     <!-- Modal di conferma -->
@@ -278,6 +290,39 @@
             modal.classList.remove('hidden');
         }
 
+        {% if campaigns %}
+        // ===================== CAMPAGNE: «APPLICA» =====================
+        // Questo blocco esiste solo se il negozio ha campagne: senza, la pagina è identica a prima (AC-21).
+
+        // Prepara l'applicazione di una campagna e apre la finestra di conferma già presente. Il testo della
+        // campagna (nome compreso, scritto dal founder) entra nella finestra SOLO con textContent, mai con
+        // innerHTML. Con «ANNULLA» (hideModal) non parte nessuna richiesta: la POST parte solo da submitPending.
+        function prepareCampaignApply(button) {
+            const campaignId = button.dataset.campaignId;
+            pendingAction = {
+                url: `/api/merchant/card/${cardId}/campaigns/${campaignId}/apply`,
+                payload: null,  // nessun corpo: campagna e carta stanno nel percorso
+                isCampaign: true,
+            };
+            resetModalStyle();
+            modalTitle.textContent = 'Confermi?';
+            // L'etichetta del bottone è già «Applica <nome> (+X €)»: la mostriamo così com'è.
+            modalText.textContent = button.textContent.trim();
+            btnConfirm.textContent = 'SÌ, CONFERMO';
+            modal.classList.remove('hidden');
+        }
+
+        // Delega unica sul blocco delle campagne (assente se il negozio non ne ha). I bottoni `disabled`
+        // non generano mai l'evento click.
+        const campaignsSection = document.getElementById('campaigns-section');
+        if (campaignsSection) {
+            campaignsSection.addEventListener('click', (event) => {
+                const button = event.target.closest('button[data-campaign-id]');
+                if (button && !button.disabled) prepareCampaignApply(button);
+            });
+        }
+        {% endif %}
+
         // ===================== MODAL & UTILITIES =====================
 
         function resetModalStyle() {
@@ -307,7 +352,8 @@
                 const res = await fetch(pendingAction.url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(pendingAction.payload)
+                    // «Applica» non ha corpo: gli altri flussi mandano il loro payload.
+                    body: pendingAction.payload === null ? undefined : JSON.stringify(pendingAction.payload)
                 });
 
                 if (!res.ok) {
@@ -324,6 +370,11 @@
                     const pointsConverted = data.converted.conversions * conversionThreshold;
                     showToast(`💶 Convertiti ${pointsConverted} punti in € ${data.converted.cashback_added.toFixed(2)} di cashback`, false, 2500);
                     reloadDelay = 2500;
+                } else if (pendingAction.isCampaign) {
+                    // Risposta di «Applica»: importo accreditato in euro (0 = solo l'utilizzo è stato contato).
+                    showToast(data.applied_cashback > 0
+                        ? `Accreditati € ${data.applied_cashback.toFixed(2)} di cashback ✅`
+                        : 'Campagna applicata ✅');
                 } else {
                     showToast('Card aggiornata! ✅');
                 }

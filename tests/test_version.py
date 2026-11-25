@@ -7,6 +7,7 @@ import tomllib
 from pathlib import Path
 
 from app import version
+from scripts import smoke_test_prod
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -17,8 +18,19 @@ def _versione_da_pyproject() -> str:
         return tomllib.load(f)["project"]["version"]
 
 
+def test_versione_0_4_1_in_pyproject_e_nello_smoke_test():
+    """
+    v0.4.1 AC-29: `pyproject.toml` ed `EXPECTED_VERSION` dello smoke test di
+    produzione valgono entrambi "0.4.1"; il letterale viene dal contract (§1),
+    non da `get_version()`, così un bump dimenticato in uno dei due punti fa
+    fallire il test.
+    """
+    assert _versione_da_pyproject() == "0.4.1"
+    assert smoke_test_prod.EXPECTED_VERSION == "0.4.1"
+
+
 def test_get_version_coincide_con_pyproject():
-    assert version.get_version() == "0.3.0"
+    assert version.get_version() == "0.4.1"
     assert version.get_version() == _versione_da_pyproject()
 
 
@@ -36,4 +48,4 @@ def test_health_espone_versione(client):
     body = resp.json()
     assert body["status"] == "ok"
     assert body["app"] == "Fidelitree"
-    assert body["version"] == "0.3.0"
+    assert body["version"] == "0.4.1"
