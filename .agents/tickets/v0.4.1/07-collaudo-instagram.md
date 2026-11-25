@@ -44,4 +44,4 @@ tag). Il deploy non è dentro questo ticket: lo fa `/release`, passo per passo c
 - A fine ticket: riepilogo di 3 righe e attesa dell'ok. Niente push né PR. Push e merge solo in `/review`.
 
 ## Stato
-⬜ da fare (lunedì 2026-11-16)
+✅ con riserve, 2026-11-25. Eseguiti: script SQL su `development` (12 colonne), collaudo dashboard, DM, commenti, scanner, log. Rinviati: passo 14 (profilo che non segue, con il messaggio «devi prima seguire la pagina» da chiarire), passo 20 (negozio in attesa), passo 22 (storie). Saltati: 10, 23, 25. Esiti in `.agents/architecture/zernio-notes.md`.

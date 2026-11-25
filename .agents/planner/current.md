@@ -13,9 +13,9 @@
 - **Versione**: **v0.4.1 — Campagne pilota: promo via DM e commenti Instagram**
   ([README](../tickets/v0.4.1/README.md))
 - **Branch**: `feature/campagne-pilota` (già creato da `develop` il 2026-11-12, con le skill)
-- **Fase**: `implementazione` (gate 1 e gate 2 approvati il 2026-11-12)
-- **Ticket**: 06 fatto il 2026-11-13 (attende l'ok); poi 07 (founder: SQL su Neon e collaudo su Instagram vero, lunedì 2026-11-16)
-- **Prossimo comando**: `/implement 07` (con il founder, lunedì 2026-11-16), poi `/review` e `/release`
+- **Fase**: `implementazione` (gate 1 e gate 2 approvati il 2026-11-12; gate 3 da rifare dopo le correzioni F-02)
+- **Ticket**: 07 fatto con riserve il 2026-11-25. Aperti dalla correzione F-02 (2026-11-25): 08, 09, 10
+- **Prossimo comando**: `/implement 08`, poi `/implement 09` e `/implement 10`, poi `/review v0.4.1`, poi `/release`
 
 ## Dove siamo
 
@@ -34,7 +34,10 @@ il 2026-11-12** (scostamento 3 ammesso, 04 bloccante con piano B, strumenti di c
 | 04 | [Commenti: risposta privata](../tickets/v0.4.1/04-commenti-risposta-privata.md) | bloccante (piano B) | agente | 03 | ✅ 2026-11-13 (1123 test; attende l'ok) |
 | 05 | [Scanner: «Applica»](../tickets/v0.4.1/05-scanner-applica.md) | bloccante | agente | 01 | ✅ 2026-11-13 (1137 test; attende l'ok) |
 | 06 | [Documentazione e strumenti per il collaudo](../tickets/v0.4.1/06-documentazione-collaudo.md) | bloccante | agente | 01-05 | ✅ 2026-11-13 (1139 test; attende l'ok) |
-| 07 | [Script SQL su Neon e collaudo su Instagram vero](../tickets/v0.4.1/07-collaudo-instagram.md) | bloccante | founder | 06 | ⬜ (lunedì 2026-11-16) |
+| 07 | [Script SQL su Neon e collaudo su Instagram vero](../tickets/v0.4.1/07-collaudo-instagram.md) | bloccante | founder | 06 | ✅ con riserve 2026-11-25 (passi 14, 20, 22 rinviati; 10, 23, 25 saltati; esiti in `zernio-notes.md`) |
+| 08 | [Log della risposta privata senza id](../tickets/v0.4.1/08-log-risposta-privata.md) | consigliata (F-02 a) | agente | — | ⬜ |
+| 09 | [«Applica»: atomicità e pulsante dopo errore di rete](../tickets/v0.4.1/09-applica-atomicita-e-errore-rete.md) | consigliata (F-02 b, c) | agente | — | ⬜ |
+| 10 | [Test mancanti su AC-10, AC-11, AC-15, AC-17](../tickets/v0.4.1/10-test-mancanti-criteri.md) | consigliata (F-03) | agente | — | ⬜ |
 
 Ordine proposto: 01 → 02 → 03 → 04 → 05 → 06 → 07 (02 prima di 03 e 05 per poter creare campagne a mano nei collaudi).
 Il 2026-11-13 il founder ha diviso il vecchio 06 «misto» in 06 (agente) e 07 (founder), senza cambiarne il contenuto.

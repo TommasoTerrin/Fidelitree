@@ -227,3 +227,38 @@ Da verificare nel collaudo del ticket 07 (era il 06 prima della divisione del 20
 | Account Zernio gratuito riceve `comment.received` e manda risposte private | **da verificare**; se no, piano B (decisione 13): `WEBHOOK_EVENTS` torna a `["message.received"]` e il ramo commenti si spegne |
 | Risposta privata a un **non follower** (Meta `2`/`1545133` per bottoni e card; qui solo testo) e conteggio nella quota | **da verificare** |
 | Un negozio già collegato sottoscrive `comment.received` solo dopo «Scollega» e nuovo collegamento (D9) | da spec, **da verificare** |
+
+### Collaudo v0.4.1 (ticket 07) — esiti parziali del 2026-11-25, dettati dal founder
+
+Ambiente: Neon `development`, server locale con tunnel Cloudflare (`PUBLIC_BASE_URL` del tunnel), `ENVIRONMENT=production`, `AUTH_PROVIDER=local`. Script `migrations/0001_campagne.sql` applicato su `development` (8 tabelle prima, 12 colonne di `campaign` dopo; indice `ix_campaign_merchant_id`). Il negozio è stato ricollegato a Zernio dopo il cambio di tunnel.
+
+| Passo (collaudo.md) | Esito |
+|---|---|
+| 1-4 Dashboard: crea, validazioni, modifica, archivia, ripristina, elimina, pausa e riattivazione | ok |
+| 2 Nome `natale!` (409), `CARTA` (409), nome di 2 caratteri (400): messaggio leggibile in alto nella pagina | ok |
+| 5 DM `NATALE`: promo ricevuta, richieste da DM +1 | ok |
+| 6 DM `natale!!` ok; `natale per me` nessuna risposta | ok |
+| 7 Limite 1 esaurito: «offerte terminate» | ok |
+| 8 Campagna archiviata: nessuna risposta | ok |
+| 9 DM `CARTA`: card arrivata sia con promo attiva sia archiviata | ok |
+| 10 Scollega e ricollega | **saltato**: il collegamento fatto dopo il cambio di tunnel usava già il codice attuale; da fare solo se i commenti non arrivano |
+| 11 Commento `NATALE` da profilo che segue: DM con promo, nessuna risposta pubblica, richieste da commento +1 | ok |
+| 12 Commento `CARTA`: DM con invito a scrivere `CARTA`; poi DM `CARTA` → card | ok |
+| 13 Secondo commento `NATALE` dallo stesso profilo | ok (conteggio da controllare in `/admin`) |
+| 14 Profilo che **non segue** il negozio (commento `NATALE`) | **non verificato**: con il profilo di prova dopo «smetti di seguire» il DM arriva (esito positivo); con un altro profilo è comparso «per accedere alla promo devi prima seguire la pagina» (testo non presente nel nostro codice: probabile Instagram o Zernio, da confermare). Il profilo di quel messaggio non è stato identificato. **Decisione del founder: si rinvia a dopo il MVP**, con test più seri sul tema follower |
+
+Passi 15-25 (scanner «Applica», storia, replay del commento, log, ricollegamento finale): **da fare**.
+
+**Seguito del collaudo v0.4.1 (2026-11-25, dettato dal founder)**
+
+| Passo | Esito |
+|---|---|
+| 15-17 Scanner: pulsanti «Applica» in fondo alla gestione carta; «Applica NATALE» con conferma; cashback +2,50 € a ogni conferma (arrivato a 12,50 €) | ok. **Comportamento voluto per l'MVP**: nessun limite per carta su «Applica»; il merchant sceglie a chi dare la promo finché è attiva. Da riprendere dopo il lancio (cambio di spec e contract, via `/fix`) |
+| 18 Campagna senza importo: toast «Campagna applicata», cashback invariato, utilizzi +1 | ok |
+| 19 Negozio con campagne archiviate: pagina senza blocco «Applica» | ok |
+| 20 Negozio in attesa con campagne: importo disattivato, banner | **rinviato** al pilota (serve un negozio in attesa, con carta e campagne) |
+| 21 `/c/<token>`: solo il saldo cashback, livello e alberi invariati | ok |
+| 22 Risposta a una storia con `NATALE` | **non verificato**: il founder ha deciso di rinviare alle prime campagne (il dettaglio del DM non è stato confermato) |
+| 23 Replay del commento | saltato (prova locale, non serve con Instagram vero) |
+| 24 Log senza testi, promo o id | ok, controllato dal founder nella finestra del server. Il file `collaudo.log` presente nella cartella è vecchio (10 novembre) e non riflette questo collaudo |
+| 25 «Scollega» e ricollega finale | **saltato** dal founder (non fondamentale); il webhook dei commenti funziona già |

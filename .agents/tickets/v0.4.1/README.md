@@ -224,6 +224,7 @@ Attore: merchant con la PWA. Flusso: scansiona il QR della carta, vede le campag
 - **AC-23** Con «sì»: cashback della carta + importo **attuale** della campagna e utilizzi +1, in **una** transazione,
   con incrementi atomici (due «Applica» confermati = due utilizzi e due accrediti, nessun incremento perso). La
   risposta riporta il cashback aggiornato e l'importo accreditato. Importo 0 → solo l'utilizzo.
+  — **accettato come rischio (F-01)**: la parte sugli incrementi atomici in caso di richieste simultanee non è garantita né testata.
 - **AC-24** Negozio in attesa o in pausa e importo > 0 → 403 prima di scrivere, con il controllo di oggi
   dell'aggiunta di cashback (D8 sostituito); nello scanner i bottoni «Applica» con importo sono disattivati con il
   banner di oggi. (Un negozio in pausa non ha campagne non archiviate: AC-08.)
@@ -597,3 +598,49 @@ Fuori scope: rimandate in [roadmap](../../planner/roadmap.md) (date di inizio e 
 promo salvata nella carta / limite per cliente, «porta un amico», dati per cliente, card inviata da un commento);
 scartate in [fuori-scope.md](../../fuori-scope.md) (pagina `/p/` e QR della promo, più promozioni per campagna,
 risposta pubblica ai commenti).
+
+## Modifiche e correzioni
+
+### F-01 — AC-23 accettato come rischio e rischi accettati (2026-11-25) — decisione cambiata
+
+- **Cosa**: il founder accetta come rischio che due «Applica» contemporanei sulla stessa carta non garantiscano il conteggio di entrambi. Nessun test di concorrenza per questo caso.
+- **Perché**: il caso (due conferme nello stesso istante sulla stessa carta) è molto raro, e il danno è piccolo (il cliente perde al massimo un accredito). Emerso dalla review di gate 3 (ft-reviewer), come bloccante.
+- **Criteri nuovi**: nessuno.
+- **Criteri superati**: AC-23 → accettato come rischio (F-01). Il criterio resta nel testo, con la nota «accettato come rischio»: nessun test di concorrenza.
+- **Rischi accettati** (decisi dal founder il 2026-11-25):
+  - **Standby sui commenti**: un commento gestito da un'altra app riceve comunque la risposta privata (la spec parla solo di DM).
+  - **Follower e messaggio non chiarito**: il messaggio «per accedere alla promo devi prima seguire la pagina» non è nel nostro codice (probabile Instagram o Zernio) e il comportamento con un non follower non è verificato. Rinviato al post-MVP, con test più seri.
+  - **Negozio in attesa con campagne**: non provato dal vivo. Rinviato al pilota.
+  - **«Applica» senza limite per carta**: il merchant decide a chi dare la promo finché è attiva. Comportamento voluto per l'MVP.
+- **Contract**: invariato.
+- **Ticket**: nessuno (decisione di spec).
+
+### F-02 — Correzioni da review di gate 3 (2026-11-25) — bug
+
+- **Cosa**: tre correzioni emerse dalla review.
+  - (a) **Log della risposta privata**: il log di `zernio_service._request` scrive il path della richiesta, che contiene id di post e di commento. Il log non deve contenere quegli id.
+  - (b) **Pulsante «Applica» riabilitato dopo un errore di rete**: se la prima richiesta è andata a buon fine, il merchant può accreditare due volte.
+  - (c) **Campagna eliminata o archiviata durante «Applica»**: il controllo sulla campagna e l'accredito non sono nella stessa condizione, quindi l'accredito può passare anche se la campagna è sparita.
+- **Perché**:
+  - (a): i log non devono contenere id che collegano un cliente a un commento (decisione D10).
+  - (b) e (c): un doppio accredito o un accredito con campagna sparita sono errori sul cashback.
+- **Criteri nuovi**:
+  - **AC-31** La risposta privata non scrive nel log né il path con gli id di post e di commento, né il testo del commento; il log riporta solo l'esito e l'id della campagna.
+  - **AC-32** «Applica» accredita solo se la campagna è attiva **nello stesso istante** dell'accredito. Se la campagna è stata eliminata o archiviata tra la lettura e la scrittura, nessun accredito, nessun utilizzo e risposta di errore leggibile.
+  - **AC-33** Dopo un errore di rete su «Applica», il pulsante resta bloccato finché l'esito non è noto: il merchant ricarica la pagina per vedere il cashback reale e non accredita di nuovo alla cieca.
+- **Criteri superati**: nessuno.
+- **Contract**: invariato (nessuna firma, endpoint, modello o testo fisso cambia). Il comportamento di log e di atomicità è interno.
+- **Ticket**: 08 (AC-31), 09 (AC-32 e AC-33).
+
+### F-03 — Test mancanti sui criteri esistenti (2026-11-25) — aggiunta
+
+- **Cosa**: aggiungere i test che mancano per i criteri già nella spec. Nessun comportamento nuovo, nessun criterio nuovo.
+- **Perché**: la review ha trovato criteri dichiarati coperti che in realtà non lo sono.
+  - **AC-10** (follower): manca il caso `isFollower: true`.
+  - **AC-11** (contatore delle richieste): il test non distingue una lettura fresca da una stantia.
+  - **AC-15** (limite via commento): manca un commento oltre il limite che riceva «offerte terminate».
+  - **AC-17** (commento dell'account del negozio): manca il caso in cui l'autore è il negozio stesso.
+- **Criteri nuovi**: nessuno.
+- **Criteri superati**: nessuno.
+- **Contract**: invariato.
+- **Ticket**: 10. Se un test rivela un comportamento sbagliato, il bug va in un ticket di correzione, non nel 10.
