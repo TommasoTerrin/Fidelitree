@@ -1,5 +1,7 @@
 # v0.4.1 — Campagne pilota: promo via DM e commenti Instagram
 
+> **Stato: REVIEW APPROVATA il 2026-11-25** (gate 3). Rischi accettati: F-04.
+
 > **Stato: SPEC APPROVATA il 2026-11-12, gate 2 approvato il 2026-11-12** (modello, contract e ticket 01-06:
 > [domain-model.md](domain-model.md), [contracts.md](contracts.md); scostamenti accettati, il 3 ammette campagne
 > con il negozio in pausa; 04 bloccante con piano B; strumenti di collaudo approvati). Al gate 1: D1-D7, D9,
@@ -80,7 +82,7 @@ dall'archivio» nel verbale).
 
 ## Default scelti dall'agente (da confermare al gate)
 
-- **D1** — **Importo «vuoto» = 0 centesimi** (colonna obbligatoria con default 0): lo scanner mostra «Applica <nome>»
+- **D1** — **Importo «vuoto» = 0 centesimi** (colonna NOT NULL; il default 0 sta nel modello Python, nessun DEFAULT nel DB, come da contract): lo scanner mostra «Applica <nome>»
   senza «(+X €)» e l'utilizzo accredita 0.
 - **D2** — **Ordine nel webhook dei DM**: dedup → account → solo messaggi in arrivo → standby (nessuna risposta, nessun
   contatore, come oggi) → `CARTA` o voce di menu (flusso di oggi, invariato) → parola chiave di campagna → ignorato.
@@ -220,7 +222,7 @@ Attore: merchant con la PWA. Flusso: scansiona il QR della carta, vede le campag
 
 - **AC-21** La gestione della carta mostra le campagne non archiviate del negozio (D12) con «Applica <nome> (+X €)»,
   o «Applica <nome>» con importo 0. Senza campagne la pagina è identica a oggi.
-- **AC-22** «Applica» apre una conferma sì/no; con «no» non parte nessuna richiesta.
+- **AC-22** «Applica» apre una conferma sì/no; con «no» non parte nessuna richiesta. **Accettato come rischio (F-04)**: nessun test automatico del modale, coperto dal passo 16 del collaudo.
 - **AC-23** Con «sì»: cashback della carta + importo **attuale** della campagna e utilizzi +1, in **una** transazione,
   con incrementi atomici (due «Applica» confermati = due utilizzi e due accrediti, nessun incremento perso). La
   risposta riporta il cashback aggiornato e l'importo accreditato. Importo 0 → solo l'utilizzo.
@@ -646,3 +648,15 @@ risposta pubblica ai commenti).
 - **Contract**: invariato.
 - **Stato (2026-11-25)**: test mancanti su AC-10, AC-11, AC-15 e AC-17 **accettati come rischio** (decisione del founder): nessun ticket 10; i criteri restano coperti come oggi.
 - **Ticket**: ⛔ superato (rischio accettato). Se un test rivela un comportamento sbagliato, il bug va in un ticket di correzione, non nel 10.
+
+### F-04 — Chiusura di gate 3: rischi accettati e default di `value_cents` (2026-11-25) — decisione
+
+- **Cosa**: il founder accetta come rischi, e chiude la versione:
+  - (a) **AC-22** (conferma sì/no di «Applica») senza test automatico del modale: copertura solo dal passo 16 del collaudo manuale.
+  - (b) **Commento con testo non stringa**: un `comment.received` con `text` non stringa fa rispondere il webhook con 500 e il commento si perde. Nessun test, nessuna correzione in questa versione.
+  - (c) **Default di `value_cents`**: il default 0 sta nel modello Python; lo script SQL non ha `DEFAULT`, come da contract. Il test di migrazione resta invariato.
+- **Perché**: decisione del founder dopo i rapporti di review di gate 3 (asse spec e asse standard) e i test manuali su Instagram (ticket 07).
+- **Rilievi consigliati non presi in questa versione** (rinviati, non bloccanti): vincolo nel DB sulla parola chiave (AC-04), `require_same_origin` sulla POST «Applica», test del webhook dei commenti con account diverso e payload incompleto, refactoring di `instagram_service.py`.
+- **Criteri nuovi**: nessuno. **Criteri superati**: nessuno.
+- **Contract**: invariato.
+- **Ticket**: nessuno (decisione di spec).

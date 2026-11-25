@@ -12,12 +12,14 @@
 
 - **Versione**: **v0.4.1 — Campagne pilota: promo via DM e commenti Instagram**
   ([README](../tickets/v0.4.1/README.md))
-- **Branch**: `feature/campagne-pilota` (già creato da `develop` il 2026-11-12, con le skill)
-- **Fase**: `implementazione` (gate 1 e gate 2 approvati il 2026-11-12; gate 3 da rifare dopo le correzioni F-02)
+- **Branch**: `develop` dopo il merge (oggi ancora `feature/campagne-pilota`, da `develop` il 2026-11-12)
+- **Fase**: `collaudo` (gate 1 e gate 2 approvati il 2026-11-12; gate 3 approvato il 2026-11-25, rischi in F-04)
 - **Ticket**: 07 e 08 fatti (attendono l'ok). 09 e 10 superati: rischi accettati (F-02, F-03)
-- **Prossimo comando**: `/review v0.4.1` (gate 3), poi `/release`
+- **Prossimo comando**: `/release` (dopo push, PR e merge su `develop` con ok esplicito a ogni passo)
 
 ## Dove siamo
+
+**Gate 3 chiuso il 2026-11-25**: review approvata, rischi accettati in F-04 (AC-22, bug commento), test verdi (1140). Prossimo: push, PR, merge su `develop`, poi `/release`.
 
 **v0.4.1 aperta (2026-11-12)**: spec approvata al gate 1 (30 criteri AC-01..30, schede 0001-0005 in
 `.agents/decisions/`), in [tickets/v0.4.1/README.md](../tickets/v0.4.1/README.md). Fase B di `/spec` fatta il

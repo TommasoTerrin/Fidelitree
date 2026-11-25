@@ -105,3 +105,11 @@ Nessun collaudo anticipato (decisione 13): tutto ciò che riguarda i commenti è
 
 - Lo script `migrations/0001_campagne.sql` si applica a mano su Neon `production`, dopo il branch di backup e prima del merge su `main`, come da `deploy.md`. Il `create_all` resta come rete di sicurezza: trova la tabella già creata e non fa nulla.
 - Per `/release`: sessione nuova con contesto pulito, dopo l'ok al merge su `develop` della review.
+
+## Decisione 2026-11-25 — review di gate 3 chiusa
+
+- Review (ft-reviewer e ft-standards) con 1140 test verdi (1056 su `develop`). Il founder, dopo i test manuali su Instagram, accetta come rischi AC-22 senza test automatico e il bug del commento con testo non stringa (F-04).
+- Default di `value_cents`: nel modello Python, niente `DEFAULT` nello script SQL (come da contract). Il test di migrazione invariato.
+- Rilievi consigliati rinviati in roadmap (AC-04 vincolo DB, `require_same_origin` su «Applica», test webhook commenti, refactoring `instagram_service.py`).
+- Prossimo: push, PR su `develop`, CI, merge, ciascuno con ok esplicito; poi `/release`.
+
