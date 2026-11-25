@@ -21,7 +21,7 @@ import requests
 
 # Versione che la release deve esporre su /health. Va aggiornata a ogni bump di `pyproject.toml`
 # (un test la confronta con la versione letta da lì).
-EXPECTED_VERSION = "0.3.0"
+EXPECTED_VERSION = "0.4.1"
 
 
 def _is_html(resp) -> bool:

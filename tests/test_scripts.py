@@ -702,6 +702,35 @@ def test_replay_webhook_standby_sender_ore_e_follower(session, instagram_merchan
     assert abs((utc_now() - msg.sent_at) - timedelta(hours=5)) < timedelta(minutes=1)
 
 
+def test_replay_webhook_comment_manda_un_comment_received_senza_conversation_id(session, instagram_merchant):
+    """v0.4.1 ticket 06 (strumento di collaudo, contract §9): `--comment` manda un evento `comment.received`.
+
+    Dopo l'esecuzione, senza `--conversation-id` (che serve solo ai DM, quindi qui non va chiesto):
+    - il codice di uscita è 0 e il server riceve una sola richiesta;
+    - il corpo ha la firma valida e `parse_comment_received` lo rilegge (non `None`, quindi l'evento è davvero
+      `comment.received`) con il testo uguale a TESTO e l'account del negozio, perché il ramo dei commenti scarta
+      gli account altrui;
+    - `post-id` e `comment-id` sono quelli passati; il confronto è con letterali scelti dal test, non con i
+      default dello script.
+    """
+    server = _FakeServer()
+    argv = ["--merchant-id", str(instagram_merchant.id), "--comment", "Natale!",
+            "--post-id", "post-77", "--comment-id", "com-88", "--event-id", "evt-commento"]
+
+    assert replay_webhook.main(argv, session=session, http=server.client) == 0
+
+    assert len(server.requests) == 1
+    request = server.requests[0]
+    raw = request.read()
+    assert instagram_service.verify_signature(WEBHOOK_TEST_SECRET, raw, request.headers["X-Zernio-Signature"])
+    assert request.headers["X-Zernio-Event-Id"] == "evt-commento"
+    comment = instagram_service.parse_comment_received(json.loads(raw), request.headers["X-Zernio-Event-Id"])
+    assert comment is not None
+    assert comment.text == "Natale!"
+    assert comment.account_id == instagram_merchant.zernio_account_id
+    assert (comment.post_id, comment.comment_id) == ("post-77", "com-88")
+
+
 def test_replay_webhook_follower_si(session, instagram_merchant):
     server = _FakeServer()
     _replay(session, instagram_merchant, server, "--follower", "si")
@@ -774,6 +803,21 @@ def test_replay_webhook_text_e_postback_si_escludono(session):
         replay_webhook.main(
             ["--merchant-id", "1", "--conversation-id", "c", "--text", "x", "--postback"], session=session,
         )
+
+
+def test_replay_webhook_dm_senza_conversation_id_e_rifiutato_senza_inviare(session, instagram_merchant, capsys):
+    """v0.4.1, strumento di collaudo del ticket 06: un DM senza `--conversation-id` esce con codice != 0 e nomina l'opzione mancante; il
+    server finto non riceve nulla, perché `--conversation-id` resta obbligatorio quando non si usa `--comment`."""
+    server = _FakeServer()
+
+    with pytest.raises(SystemExit) as exit_info:
+        replay_webhook.main(
+            ["--merchant-id", str(instagram_merchant.id), "--text", "CARTA"], session=session, http=server.client,
+        )
+
+    assert exit_info.value.code not in (0, None)
+    assert "--conversation-id" in capsys.readouterr().err
+    assert server.requests == []
 
 
 def test_replay_webhook_help_non_richiede_il_db(capsys):

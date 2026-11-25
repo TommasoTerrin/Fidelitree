@@ -23,7 +23,7 @@ from app.core.auth import PasswordAdminProvider, get_auth_provider
 from app.core.clock import utc_now
 from app.core.dependencies import get_session, get_optional_merchant
 from app.models.models import Merchant, Card
-from app.services import card_service, merchant_service, tree_service
+from app.services import campaign_service, card_service, merchant_service, tree_service
 
 router = APIRouter(prefix="/merchant", tags=["Merchant Views"])
 templates = Jinja2Templates(directory="app/templates")
@@ -104,7 +104,8 @@ async def manage_card_page(
     """
     Serve la pagina di gestione della card: saldi, pool del mese del negozio, tree points e cashback.
     Se il negozio non è attivo (in attesa o in pausa) mostra il banner e disattiva i pulsanti di aggiunta
-    (`can_add`): la rimozione resta attiva.
+    (`can_add`): la rimozione resta attiva. Il contesto `campaigns` (AC-21) elenca le campagne non
+    archiviate per i bottoni «Applica»; senza campagne il blocco non compare.
     Senza sessione merchant valida → 303 al login; carta inesistente o di un altro negozio → 404.
     """
     if merchant is None:
@@ -123,5 +124,6 @@ async def manage_card_page(
             "service_state": state,
             "can_add": card_service.can_add_balance(state),
             "pool": tree_service.current_pool_progress(session, merchant, utc_now()),
+            "campaigns": campaign_service.scanner_campaigns(session, merchant),
         }
     )

@@ -161,7 +161,7 @@ history della shell, mettila in una variabile d'ambiente del terminale.
 ## Procedura di release
 
 1. **Collaudo manuale** in locale (`collaudo.md`) e checklist `pre-release.md`.
-2. **Se cambia lo schema**: script SQL/Alembic provato su un branch Neon, e branch di backup di `production` subito prima del merge
+2. **Se cambia lo schema**: script SQL/Alembic provato su un branch Neon (procedura: «Applicare uno script SQL»), e branch di backup di `production` subito prima del merge
    (vedi «Rollback»). Se cambiano le env var: spec DO aggiornato prima del merge (ricorda che il salvataggio ridistribuisce il commit attivo).
 3. **PR** `feature/<nome>` → `develop` (`gh pr create --base develop`), CI verde, merge; poi PR `develop` → `main`, CI verde, merge:
    parte il deploy automatico. Nessun merge su `develop`/`main` senza l'ok esplicito del founder.
@@ -180,9 +180,42 @@ history della shell, mettila in una variabile d'ambiente del terminale.
    Controlla versione, `/privacy`, `/carta-di-prova`, `/admin/login`, `/c/<inesistente>` 404, webhook con hook sconosciuto 404,
    manifest e service worker, pagine del vecchio flusso 404, API admin senza chiave rifiutata e con `X-Admin-Key` 200, creazione e
    cancellazione di un merchant di prova.
-6. **Verifica il DB** (console Neon, branch `production`): le 8 tabelle presenti.
+6. **Verifica il DB** (console Neon, branch `production`): le tabelle attese presenti (8 con la v0.3.0, 9 dalla v0.4.1 con `campaign`).
 7. **Tag**, con l'ok del founder: `git tag -a vX.Y.Z <commit di main> -m "..."` e `git push origin vX.Y.Z` (stesso valore di `pyproject.toml`).
 8. **Riallinea develop**: `git checkout develop`, `git merge --ff-only origin/main`, `git push`.
+
+## Applicare uno script SQL (`migrations/`)
+
+Gli script in `migrations/NNNN_nome.sql` si applicano **a mano**, nessun comando dell'app li esegue (decisione
+`.agents/decisions/0005-migrazioni-sql-a-mano.md`; Alembic resta in roadmap). Sono idempotenti (`CREATE … IF NOT EXISTS`):
+rieseguirli non dà errori e non tocca i dati. Il primo è **`0001_campagne.sql`** (v0.4.1): una sola tabella `campaign` con il
+suo indice, nessun `ALTER`, nessun tipo nuovo. Non c'è `psql` sulla macchina del founder: si esegue dall'**SQL Editor della
+console Neon** (progetto `still-firefly-21838974`, scegli il branch in alto, incolla il contenuto del file, «Run»).
+
+**Quando**: la prova su `development` è nel ticket di collaudo della versione; quella su `production` la fa `/release`, dopo il
+branch di backup e **prima** del merge su `main` (la nuova app, avviandosi, creerebbe `campaign` da sola con `create_all()`, ma
+lo script resta il riferimento versionato e il controllo sotto evita colonne diverse dal modello).
+
+1. **Backup di `production`** (sempre, anche per una sola tabella nuova):
+   `neon branches create --project-id still-firefly-21838974 --name backup-<AAAA-MM-GG> --parent production --no-compute --no-secrets`.
+2. **Prova su `development`**: nell'SQL Editor, branch `development`, controlla le tabelle esistenti:
+   `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY 1;`
+   Se `campaign` **esiste già**, guarda le colonne (`SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'campaign' ORDER BY ordinal_position;`):
+   devono essere le 12 dello script (`id`, `merchant_id`, `name`, `keyword`, `promo_text`, `value_cents`, `request_limit`,
+   `is_archived`, `dm_requests`, `comment_requests`, `uses`, `created_at`). Se sono diverse (resto della vecchia v0.4.0 su
+   `feature/campagne`), `IF NOT EXISTS` le **lascerebbe com'erano**: **fermati e chiedi** prima di eliminarla (`DROP TABLE campaign`
+   solo con l'ok del founder). Se non esiste, esegui lo script e ripeti la query sulle colonne: 12 colonne, indice
+   `ix_campaign_merchant_id` (`SELECT indexname FROM pg_indexes WHERE tablename = 'campaign';`). Poi avvia l'app su `development`
+   (`python -m scripts.run_collaudo`): `/health` ok e `/admin` mostra la sezione «Campagne».
+3. **Produzione**: stesso controllo del punto 2 sul branch `production` (la tabella non deve esistere: la v0.3.0 non la conosce),
+   poi lo script, poi la stessa query sulle colonne. Ordine rispetto al deploy: **script prima, merge dopo**, così l'app nuova
+   trova la tabella già come la vuole il modello.
+
+**Rollback dello schema** (v0.4.1): la v0.3.0 ignora la tabella `campaign`, quindi tornare al codice vecchio **non richiede** di
+toccare il DB. Per toglierla davvero: `DROP TABLE campaign;` — si perdono **tutte** le campagne e i loro contatori (richieste da DM
+e da commento, utilizzi), nessun altro dato (la tabella è collegata solo a `merchant`, e nessuna tabella punta a lei). Se serve
+tornare a prima dello script, `neon branches restore` dal backup del punto 1 (il resto dei dati scritti dopo il backup si perde:
+vedi «Rollback»).
 
 ## Rollback
 

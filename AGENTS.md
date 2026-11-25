@@ -3,7 +3,10 @@
 > **Punto di ingresso unico** per qualsiasi coding agent (Claude Code, Codex, Gemini CLI, OpenCode, ...).
 > Leggi questo file prima di toccare il codice. Approfondimenti in [`.agents/`](.agents/).
 
-> **Versione corrente: v0.3.0 — carta fedeltà via DM Instagram (Zernio)**, sviluppata su `feature/instagram-cards`
+> **In sviluppo: v0.4.1 — Campagne pilota: promo via DM e commenti Instagram**, su `feature/campagne-pilota` (spec in
+> [`.agents/tickets/v0.4.1/`](.agents/tickets/v0.4.1/README.md), decisioni in [`.agents/decisions/`](.agents/decisions/README.md)).
+>
+> **Versione in produzione: v0.3.0 — carta fedeltà via DM Instagram (Zernio)**, sviluppata su `feature/instagram-cards`
 > (ticket in [`.agents/tickets/v0.3.0/`](.agents/tickets/v0.3.0/README.md)). È la prima release in produzione dopo
 > v0.1.0: assorbe v0.2.x (pool del negozio, auth merchant), mai rilasciata. Storia di v0.2.0:
 > [`.agents/tickets/v0.2.0/`](.agents/tickets/v0.2.0/README.md). Lo stato del lavoro è in
@@ -91,10 +94,15 @@ python -m scripts.close_period [--month AAAA-MM] [--cap N] [--yes]
 python -m scripts.ecologi_check [--trees N] [--merchant-name NOME] [--month AAAA-MM]
 
 # Zernio: chiamate reali con una chiave (ZERNIO_CHECK_API_KEY nel .env o nell'ambiente, oppure richiesta a video) o quella di un merchant
-python -m scripts.zernio_check accounts | conversations | send-card | send-text [--merchant-id N]
+python -m scripts.zernio_check accounts | conversations | send-card | send-text | send-private-reply [--merchant-id N]
 
 # Collaudo locale del webhook: evento message.received firmato verso il server (che invia DAVVERO a Zernio)
 python -m scripts.replay_webhook --merchant-id N --conversation-id ID [--text CARTA | --postback] [--standby] [--follower si|no] [--event-id ID]
+# oppure un comment.received firmato (senza --conversation-id): risposta privata con post e commento finti
+python -m scripts.replay_webhook --merchant-id N --comment TESTO [--post-id ID] [--comment-id ID] [--event-id ID]
+
+# Migrazioni: script SQL a mano in migrations/ (nessun comando): console Neon, prima development poi production
+# dopo il branch di backup (procedura in .agents/workflows/deploy.md, «Applicare uno script SQL»)
 
 # Collaudo manuale (.agents/workflows/collaudo.md): tunnel https + server con i log dell'app.
 # run_collaudo si rifiuta con un DB che non sia Neon development o SQLite
@@ -126,19 +134,21 @@ app/
   schemas/              # Pydantic request/response
   services/             # un modulo per funzionalità: core puro + shell (vedi sotto)
     card_service.py     # carte, cashback, conversione tree points → cashback; stato del servizio (service_state, permessi di aggiunta/rimozione)
-    instagram_service.py # trigger, card di risposta, finestra 24 h, quota, webhook → carta (o carta di prova), link della carta
+    instagram_service.py # trigger, card di risposta, finestra 24 h, quota, webhook → carta (o carta di prova), campagne in DM e commenti (risposta privata), link della carta
     zernio_service.py   # client API Zernio + zernio_credentials_for (UNICO punto che sa da dove arriva la chiave)
     merchant_service.py # registrazione, login con freno, cambio password, impostazioni, onboarding Instagram, dashboard admin (login admin, lista, stato, reset password)
+    campaign_service.py # campagne promozionali: core puro (validazione, parola chiave, testi dei DM) + shell (CRUD admin, archiviazione con la pausa, richieste da DM e commento, «Applica» dello scanner)
     tree_service.py     # pool del negozio, livelli, chiusura periodo
     ecologi_service.py  # client Impact API Ecologi
-    db_crud/            # accesso DB puro
+    db_crud/            # accesso DB puro (card_crud, merchant_crud, campaign_crud)
   routes/
-    admin.py            # dashboard del founder /admin (login, lista, approva/pausa/riattiva, reset password)
+    admin.py            # dashboard del founder /admin (login, lista, approva/pausa/riattiva, reset password, campagne dei negozi)
     consumer/           # pagina carta /c/{token}, carta di prova /carta-di-prova, /privacy
     merchant/           # api + auth + pagine merchant
     webhooks.py         # POST /webhooks/zernio/{hook_id}
   templates/            # Jinja2 (consumer/, merchant/, admin/, partials/ condivisi: pwa, toast, levels, service_banner)
   static/               # PWA merchant: manifest.webmanifest, sw.js (servito anche da GET /sw.js), icone
+migrations/             # script SQL a mano numerati (0001_campagne.sql), idempotenti: si applicano su Neon, non dall'app
 scripts/                # reset_db, seed_db, close_period, ecologi_check, zernio_check, replay_webhook, run_collaudo, smoke_test_prod
 tests/                  # pytest + conftest (SQLite in-memory); tests/unit/ = core puro senza DB
 ```
@@ -159,10 +169,13 @@ tests/                  # pytest + conftest (SQLite in-memory); tests/unit/ = co
 8. **Niente segreti nel codice**: tutto passa da `.env` (locale) / env vars DigitalOcean (prod). `.env.example` documenta le variabili obbligatorie.
 9. **Prima di una release**: segui [.agents/checklists/pre-release.md](.agents/checklists/pre-release.md).
 10. **Decisioni architetturali importanti**: fermati e chiedi conferma all'utente prima di implementare.
-11. **Aggiorna il planner**: a inizio lavoro leggi [.agents/planner/current.md](.agents/planner/current.md) e aggiornalo a fine sessione.
+11. **Aggiorna il planner**: a inizio lavoro leggi [.agents/planner/current.md](.agents/planner/current.md) (blocco «Harness»: versione, fase, ticket, prossimo comando) e aggiornalo a fine sessione.
 12. **Collaudo manuale per feature**: ogni feature (o ticket) che cambia ciò che vede un utente aggiunge i suoi passi (URL, azione, atteso) in fondo a [.agents/workflows/collaudo.md](.agents/workflows/collaudo.md). Il founder li esegue in locale, su Neon `development`, prima del merge su `main`.
+13. **Processo a skill**: il ciclo di una feature (grilling → spec → contract e ticket → TDD → review → release) segue le skill in [`.claude/skills/`](.claude/skills/), con ordine e gate in [CLAUDE.md](CLAUDE.md). Un agente diverso da Claude Code le legge come procedure in markdown.
 
 ## Vincoli e trade-off accettati (non "sistemarli" senza chiedere)
+
+> **Dal 2026-11-11 le decisioni nuove non si aggiungono qui**: vanno in [`.agents/decisions/`](.agents/decisions/README.md) (una scheda per decisione) e le regole vigenti per area in [`.agents/specs/`](.agents/specs/README.md). Le voci sotto restano valide finché non vengono migrate nelle schede.
 
 - **Chiave Ecologi unica di piattaforma** (decisione 2026-10-09, sostituisce quella per-merchant del 2026-07-09): sta in env (`ECOLOGI_API_KEY`), il founder paga tutti gli alberi. I merchant non hanno account Ecologi.
 - **Ecologi: due chiavi, un solo URL, nome del negozio pubblico** (2026-10-14): non esiste un sandbox, la prova è il flag `"test": true` sullo stesso `ECOLOGI_BASE_URL`; `ECOLOGI_TEST_MODE` sceglie tra `ECOLOGI_TEST_API_KEY` e `ECOLOGI_API_KEY` (nessun fallback, nessun blocco legato a `ENVIRONMENT`). Il `name` mandato a Ecologi è `<negozio> · <mese> <anno>` e compare nella foresta pubblica **senza gestione del consenso** (i merchant sono pochi e informati a voce). Si salva solo `treeUrl` in `TreePlanting.ecologi_ref`.
@@ -174,7 +187,7 @@ tests/                  # pytest + conftest (SQLite in-memory); tests/unit/ = co
 - **Stato del servizio: in attesa / attivo / in pausa** (2026-10-27, ticket 12 — **implementato**): derivato da `Merchant.is_approved` e `Merchant.is_paused` (nessun enum in DB; `ServiceState` e `card_service.service_state`; un non approvato è sempre «in attesa», la pausa conta solo se approvato). **In attesa** (iscritto, non approvato): può collegare Instagram e fare il DM di prova, ma a un cliente nuovo la card (e l'eventuale testo di ripiego) porta a `<PUBLIC_BASE_URL>/carta-di-prova` (carta fittizia, nessun dato, nessuna riga `Card`, nessun indice cieco salvato); un cliente che ha già una carta riceve il link vero. **In attesa o in pausa** (prova finita o abbonamento non pagato, deciso a mano): lo scanner può solo **togliere** cashback e tree points (403 per ogni aggiunta, prima di scrivere; delta 0 resta ammesso), nessun accredito e **nessuna conversione** (nemmeno togliendo: il merchant può abbassare la soglia dalle impostazioni); l'avviso sta solo nello scanner e nelle pagine del merchant (banner e pulsanti di aggiunta disattivati), **il cliente non vede nessuna differenza** (`/c/<token>` identica in ogni stato, verificato a byte). La chiusura mensile non cambia (conta `is_approved`): un negozio in pausa partecipa con i punti raccolti prima. Nessuno stato «sospeso dal merchant»: per fermarsi usa «Scollega» e chiede la pausa. Il cambio di stato è manuale, dalla dashboard `/admin` (ticket 13: «Avvia» approva e toglie la pausa; «Metti in pausa» e «Riattiva» valgono solo per un negozio già approvato, 409 su uno in attesa; anche `POST /api/merchant/{id}/approve` toglie la pausa); nessun pagamento in app.
 - **Dashboard admin `/admin`** (2026-10-27, ticket 13 — **implementato**): accesso con `ADMIN_SECRET_KEY` (nessun account admin, nessuna modifica allo schema). `POST /admin/login` confronta la password in tempo costante e imposta il cookie `admin_session` (JWT `role=admin` firmato con `JWT_SECRET_KEY`, httpOnly, SameSite=Strict, **12 ore**, valido solo sotto `/admin`, `Secure` in produzione); le API `/admin/api/*` accettano anche l'header `X-Admin-Key` (curl, smoke test), mentre `require_admin_key` e `/api/merchant/*` restano com'erano. Una `ADMIN_SECRET_KEY` vuota non fa entrare nessuno. Pagine HTML senza sessione → 303 al login, API → 401. **Freno**: lo stesso del login merchant con chiave fissa `admin` (5 errori in 15 minuti → 429, in memoria: stessi limiti). Il contatore è globale, quindi chiunque può fermare il *form* per 15 minuti con 5 tentativi sbagliati: l'header `X-Admin-Key` non ha freno (chiave casuale lunga) ed è la via di ripiego. **CSRF**: i POST con sessione a cookie (login compreso) devono avere `Origin` (o `Referer`) uguale all'header `Host`, altrimenti 403 (`Origin: null` vale come estraneo; con un `X-Admin-Key` corretto il controllo non serve); le risposte admin hanno `Cache-Control: no-store`, `noindex` e `Referrer-Policy: same-origin` (con `no-referrer` il browser manderebbe `Origin: null` e ogni azione darebbe 403). La sessione non è revocabile: il logout cancella solo il cookie e il JWT scade da solo in 12 ore (cambiare `ADMIN_SECRET_KEY` non la annulla; cambiare `JWT_SECRET_KEY` sì, ma chiude anche le sessioni dei merchant). **Lista** (`GET /admin/api/merchants`, al massimo 200 righe dalle più recenti): nome attività, email, telefono, iscrizione, stato del servizio, stato Instagram («Collegato con Zernio» e non «Attivo», per non confonderlo con lo stato del servizio), `@username` pubblico, carte e punti del mese; mai chiavi, secret, `hook_id`, hash o id del provider. Filtro per stato e ricerca per nome/email lato client; la pagina costruisce il DOM solo con `textContent` (i nomi li scrivono i merchant). **Azioni** (`POST /admin/api/merchants/{id}/approve|pause|resume|reset-password`): `approve` imposta `is_approved` e toglie la pausa (da ogni stato); `pause` e `resume` valgono solo per un negozio approvato (409 su uno in attesa); un'azione ripetuta non cambia nulla; id inesistente 404. `reset-password` genera una password temporanea di 12 caratteri (alfabeto senza caratteri ambigui), la imposta con `set_password` (le sessioni aperte del merchant decadono), **azzera il freno del login di quell'email** (il 429 del merchant dice di chiedere il reset) e la mostra **una sola volta** nella risposta (mai nel DB in chiaro né nei log; 409 se il negozio non ha una credenziale, cioè creato dall'API admin; 400 con un provider diverso da `local`). Il founder non crea profili, non elimina e non modifica i dati del negozio dalla dashboard (restano nell'API admin con `X-Admin-Key`).
 - ~~**Iscrizione cliente obbligatoria, niente carte anonime né WhatsApp** (2026-10-09)~~ — **ANNULLATO il 2026-10-22**: la carta nasce da un DM Instagram, il cliente non ha account né autenticazione e vede la carta con un link segreto. Spariscono OTP cliente, wallet, QR `/join/{negozio}` e `Customer`. WhatsApp resta escluso.
-- **Carta via DM Instagram con Zernio** (2026-10-22): trigger = DM con la parola chiave **unica di piattaforma** (`INSTAGRAM_CARD_KEYWORD`, default `CARTA`; maiuscole, accenti, punteggiatura ed emoji ignorati, corrispondenza esatta) oppure voce del menu persistente "🌳 La mia carta" (impostata all'onboarding solo se il menu del negozio è vuoto). Gli altri messaggi sono ignorati in silenzio. Commenti e storie → DM sono **fuori scope** (roadmap) ma il riconoscitore di trigger è separato per aggiungerli.
+- **Carta via DM Instagram con Zernio** (2026-10-22): trigger = DM con la parola chiave **unica di piattaforma** (`INSTAGRAM_CARD_KEYWORD`, default `CARTA`; maiuscole, accenti, punteggiatura ed emoji ignorati, corrispondenza esatta) oppure voce del menu persistente "🌳 La mia carta" (impostata all'onboarding solo se il menu del negozio è vuoto). Gli altri messaggi sono ignorati in silenzio. Commenti e risposte alle storie sono **in v0.4.1** (campagne pilota: risposta privata al commento, DM alla parola chiave di una campagna): regole in `.agents/specs/carta-instagram.md` e `.agents/specs/campagne.md`, non ancora in produzione.
 - **Risposta = una sola card** (2026-10-22): un invio per azione, generic template con titolo = nome del negozio (≤ 80 caratteri, validato anche in registrazione), sottotitolo fisso, un bottone "Apri la carta". **Nessun dato dinamico** nel messaggio: punti, livello e cashback solo nella pagina carta. Limiti di caratteri verificati nel core. Unico ripiego: testo fisso con il link se Meta rifiuta la card a un non follower (errore 2/1545133). La card **non si vede su Instagram desktop** (limite Meta): accettato, l'uso è in negozio da telefono.
 - **Carta solo a chi segue il negozio** (2026-10-23, modifica la regola "card a tutti"): `message.sender.instagramProfile.isFollower` del webhook decide. `true` → card; `false` → **nessuna carta**, solo un testo fisso "per avere la carta segui @negozio, poi riscrivi CARTA" (`outcome` `follow_requested`, nessuna riga `Card`); `null` (dato non disponibile) → card, da rivedere nel collaudo finale con un profilo che segue e uno che non segue. Chi non segue non ha i vantaggi (cashback, punti, alberi). Il ripiego "testo con il link" resta solo come rete di sicurezza se Meta rifiuta comunque la card (2/1545133). Il blocco vale per tutti i negozi; opzione per singolo negozio e testo scelto dal merchant sono in roadmap.
 - **QR "apri la chat" in negozio** (2026-10-23): link `https://ig.me/m/<username>` stampato come QR, fatto **a mano dal founder** su richiesta del merchant. Fuori dall'app. Nelle istruzioni ai merchant basta una riga: *per stampare un QR che apre la chat, contatta il founder* (lo prepara a mano da `https://ig.me/m/<username>`).
@@ -214,3 +227,7 @@ tests/                  # pytest + conftest (SQLite in-memory); tests/unit/ = co
 | [.agents/checklists/pre-release.md](.agents/checklists/pre-release.md) | Checklist prima del merge su main |
 | [.agents/planner/roadmap.md](.agents/planner/roadmap.md) | Backlog e feature future |
 | [.agents/planner/current.md](.agents/planner/current.md) | Stato corrente del lavoro |
+| [.agents/specs/](.agents/specs/README.md) | Come funziona oggi ogni area del sistema (spec vive) |
+| [.agents/decisions/](.agents/decisions/README.md) | Decisioni architetturali e di business, una scheda ciascuna |
+| [.agents/glossario.md](.agents/glossario.md) | Vocabolario del dominio, unico per spec, codice e test |
+| [.agents/fuori-scope.md](.agents/fuori-scope.md) | Idee valutate e scartate, con il motivo |

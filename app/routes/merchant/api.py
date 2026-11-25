@@ -19,7 +19,8 @@ from app.core.dependencies import get_session, get_current_merchant, require_adm
 from app.core.clock import utc_now
 from app.core.money import cents_to_euro
 from app.models.models import Merchant
-from app.services import card_service, merchant_service, tree_service
+from app.services import campaign_service, card_service, merchant_service, tree_service
+from app.schemas.campaign import ApplyCampaignResponse
 from app.services.db_crud import card_crud, merchant_crud
 from app.services.zernio_service import get_zernio_http
 from app.schemas.card import AddPointsRequest, AddTreePointsRequest, CardResponse, ConvertedInfo, ScanResponse
@@ -289,6 +290,21 @@ async def add_tree_points(
         converted=converted,
         pool=tree_service.current_pool_progress(session, merchant, now),
     )
+
+
+@router.post("/card/{card_id}/campaigns/{campaign_id}/apply", response_model=ApplyCampaignResponse)
+async def apply_campaign(
+    card_id: uuid.UUID,
+    campaign_id: int,
+    session: Session = Depends(get_session),
+    merchant: Merchant = Depends(get_current_merchant),
+):
+    """
+    Applica una campagna alla carta di un proprio cliente (AC-23, AC-24, AC-25): accredita l'importo attuale e conta un
+    utilizzo. Errori: 403 negozio non attivo con importo positivo, 404 carta o campagna non del negozio.
+    """
+    result = campaign_service.apply_campaign(session, merchant, card_id, campaign_id)
+    return ApplyCampaignResponse(card=result.card, applied_cashback=cents_to_euro(result.applied_cents))
 
 
 @router.delete("/card/{card_id}")

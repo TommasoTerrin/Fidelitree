@@ -90,8 +90,15 @@
         }
 
         // Chiamata alle API admin con il cookie di sessione. Sessione scaduta (401) → torna al login.
-        async function api(path, method) {
-            const response = await fetch(path, { method, headers: { 'Accept': 'application/json' } });
+        // Con `body` (oggetto) lo invia come JSON: serve a creare e modificare le campagne.
+        async function api(path, method, body) {
+            const headers = { 'Accept': 'application/json' };
+            const options = { method, headers };
+            if (body !== undefined) {
+                headers['Content-Type'] = 'application/json';
+                options.body = JSON.stringify(body);
+            }
+            const response = await fetch(path, options);
             if (response.status === 401) {
                 window.location.href = '/admin/login';
                 throw new Error('Sessione scaduta');
@@ -155,8 +162,134 @@
             }
             actions.appendChild(actionButton('Reimposta password', 'bg-slate-900 text-white', () => resetPassword(row),
                 !row.can_reset_password, row.can_reset_password ? '' : 'Questo negozio non ha una password (creato dall\'API admin)'));
+            actions.appendChild(actionButton('Campagne', 'bg-slate-100 text-slate-700', () => toggleCampaigns(row, card)));
             card.appendChild(actions);
             return card;
+        }
+
+        // --- Campagne di un negozio (contract §9) ---
+        // Come per il resto della pagina, il DOM nasce solo da createElement/textContent: nome, parola
+        // chiave e testo promo li scrive l'utente e non devono mai poter eseguire codice.
+        const CAMPAIGN_STATUS_LABEL = { active: 'attiva', archived: 'archiviata', stopped: 'ferma: negozio non attivo' };
+
+        // Apre o chiude la sezione delle campagne sotto la scheda del negozio.
+        async function toggleCampaigns(row, card) {
+            const existing = card.querySelector('[data-campaigns]');
+            if (existing) { existing.remove(); return; }
+            const section = el('div', 'border-t border-slate-100 pt-3 space-y-3');
+            section.dataset.campaigns = String(row.id);
+            card.appendChild(section);
+            await loadCampaigns(row, section);
+        }
+
+        // Ricarica la lista dal server e ridisegna la sezione (l'ordine è quello ricevuto dall'API).
+        async function loadCampaigns(row, section, editing) {
+            hideMessage();
+            try {
+                const data = await api('/admin/api/merchants/' + row.id + '/campaigns', 'GET');
+                section.replaceChildren(...renderCampaigns(row, section, data.campaigns, editing));
+            } catch (error) {
+                showMessage(error.message, false);
+            }
+        }
+
+        // Esegue un'azione sulla campagna e ricarica la lista; l'errore (400/409...) si mostra come testo.
+        async function campaignAction(row, section, campaign, action) {
+            hideMessage();
+            try {
+                const path = '/admin/api/merchants/' + row.id + '/campaigns/' + campaign.id;
+                if (action === 'delete') await api(path, 'DELETE');
+                else await api(path + '/' + action, 'POST');
+                await loadCampaigns(row, section);
+            } catch (error) {
+                showMessage(error.message, false);
+            }
+        }
+
+        // Salva il form: crea (POST) o, se `campaign` c'è, modifica (PUT con il corpo completo).
+        async function saveCampaign(row, section, campaign, form) {
+            hideMessage();
+            const limit = form.limit.value.trim();
+            const body = {
+                name: form.name.value,
+                keyword: form.keyword.value,
+                promo_text: form.promo.value,
+                value_eur: form.value.value.trim() || '0',
+                request_limit: limit === '' ? null : Number(limit),
+            };
+            try {
+                const base = '/admin/api/merchants/' + row.id + '/campaigns';
+                if (campaign) await api(base + '/' + campaign.id, 'PUT', body);
+                else await api(base, 'POST', body);
+                await loadCampaigns(row, section);
+            } catch (error) {
+                showMessage(error.message, false);
+            }
+        }
+
+        function campaignField(form, key, label, value, type) {
+            const wrap = el('label', 'block text-xs font-bold text-slate-500');
+            wrap.appendChild(document.createTextNode(label));
+            const input = el('input', 'mt-1 w-full p-2 bg-white border-2 border-slate-100 rounded-xl text-sm font-normal text-slate-800');
+            input.type = type || 'text';
+            input.value = value;
+            form[key] = input;
+            wrap.appendChild(input);
+            return wrap;
+        }
+
+        function renderCampaignForm(row, section, campaign) {
+            const form = el('div', 'space-y-2 bg-slate-50 rounded-2xl p-3');
+            form.appendChild(el('p', 'text-xs font-black text-slate-600', campaign ? 'Modifica campagna' : 'Nuova campagna'));
+            form.appendChild(campaignField(form, 'name', 'Nome', campaign ? campaign.name : ''));
+            form.appendChild(campaignField(form, 'keyword', 'Parola chiave', campaign ? campaign.keyword : ''));
+            form.appendChild(campaignField(form, 'promo', 'Testo promo', campaign ? campaign.promo_text : ''));
+            form.appendChild(campaignField(form, 'value', 'Importo in euro (0 = nessun importo)',
+                campaign ? (campaign.value_cents / 100).toFixed(2) : '0'));
+            form.appendChild(campaignField(form, 'limit', 'Limite di richieste (vuoto = nessun limite)',
+                campaign && campaign.request_limit !== null ? String(campaign.request_limit) : '', 'number'));
+            const buttons = el('div', 'flex gap-2');
+            buttons.appendChild(actionButton('Salva', 'bg-green-600 text-white', () => saveCampaign(row, section, campaign, form)));
+            if (campaign) buttons.appendChild(actionButton('Annulla', 'bg-slate-100 text-slate-700', () => loadCampaigns(row, section)));
+            form.appendChild(buttons);
+            return form;
+        }
+
+        function renderCampaigns(row, section, campaigns, editing) {
+            const nodes = [];
+            if (!campaigns.length) nodes.push(el('p', 'text-sm text-slate-400', 'Nessuna campagna'));
+            campaigns.forEach((c) => {
+                const item = el('div', 'border border-slate-100 rounded-2xl p-3 space-y-1');
+                item.dataset.campaignId = String(c.id);
+                item.appendChild(el('p', 'font-bold text-slate-800 break-words', c.name));
+                item.appendChild(el('p', 'text-xs text-slate-500', 'Parola chiave: ' + c.keyword));
+                item.appendChild(el('p', 'text-xs text-slate-500',
+                    c.value_cents === 0 ? 'nessun importo' : (c.value_cents / 100).toFixed(2) + ' €'));
+                item.appendChild(el('p', 'text-xs text-slate-500',
+                    c.request_limit === null ? 'nessun limite' : 'Limite: ' + c.request_limit));
+                item.appendChild(el('p', 'text-xs text-slate-500', 'Stato: ' + (CAMPAIGN_STATUS_LABEL[c.status] || c.status)));
+                item.appendChild(el('p', 'text-xs text-slate-400',
+                    c.dm_requests + ' richieste DM · ' + c.comment_requests + ' richieste commento · ' + c.uses + ' usi'));
+                const buttons = el('div', 'flex flex-wrap gap-2');
+                buttons.appendChild(actionButton('Modifica', 'bg-slate-100 text-slate-700',
+                    () => loadCampaigns(row, section, c)));
+                if (c.is_archived) {
+                    buttons.appendChild(actionButton('Ripristina', 'bg-green-600 text-white',
+                        () => campaignAction(row, section, c, 'restore')));
+                } else {
+                    buttons.appendChild(actionButton('Archivia', 'bg-slate-100 text-slate-700',
+                        () => campaignAction(row, section, c, 'archive')));
+                }
+                buttons.appendChild(actionButton('Elimina', 'bg-red-600 text-white', () => {
+                    if (window.confirm('Eliminare la campagna ' + c.name + '? Non si può annullare.')) {
+                        campaignAction(row, section, c, 'delete');
+                    }
+                }));
+                item.appendChild(buttons);
+                nodes.push(item);
+            });
+            nodes.push(renderCampaignForm(row, section, editing));
+            return nodes;
         }
 
         function render() {

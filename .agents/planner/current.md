@@ -5,7 +5,49 @@
 > il registro dettagliato di una versione chiusa → `.agents/tickets/vX.Y.Z/STORICO.md`
 > (v0.2.0: [STORICO.md](../tickets/v0.2.0/STORICO.md)).
 
+## Harness
+
+> Blocco letto per primo da ogni sessione (vedi `CLAUDE.md`). Lo aggiornano le skill a ogni cambio di fase e a ogni
+> commit di ticket. Fasi: `nessuna` · `grilling` · `spec` · `contract` · `implementazione` · `collaudo`.
+
+- **Versione**: **v0.4.1 — Campagne pilota: promo via DM e commenti Instagram**
+  ([README](../tickets/v0.4.1/README.md))
+- **Branch**: `develop` dopo il merge (oggi ancora `feature/campagne-pilota`, da `develop` il 2026-11-12)
+- **Fase**: `collaudo` (gate 1 e gate 2 approvati il 2026-11-12; gate 3 approvato il 2026-11-25, rischi in F-04)
+- **Ticket**: 07 e 08 fatti (attendono l'ok). 09 e 10 superati: rischi accettati (F-02, F-03)
+- **Prossimo comando**: `/release` (dopo push, PR e merge su `develop` con ok esplicito a ogni passo)
+
 ## Dove siamo
+
+**Gate 3 chiuso il 2026-11-25**: review approvata, rischi accettati in F-04 (AC-22, bug commento), test verdi (1140). Prossimo: push, PR, merge su `develop`, poi `/release`.
+
+**v0.4.1 aperta (2026-11-12)**: spec approvata al gate 1 (30 criteri AC-01..30, schede 0001-0005 in
+`.agents/decisions/`), in [tickets/v0.4.1/README.md](../tickets/v0.4.1/README.md). Fase B di `/spec` fatta il
+2026-11-12: `domain-model.md`, `contracts.md`, ticket 01-06 e `HANDOFF.md` nella stessa cartella. **Gate 2 approvato
+il 2026-11-12** (scostamento 3 ammesso, 04 bloccante con piano B, strumenti di collaudo sì): modello e contract congelati.
+
+### Ticket v0.4.1
+
+| # | Ticket | Priorità | Chi | Dipende da | Stato |
+|---|---|---|---|---|---|
+| 01 | [Versione, modello `Campaign`, script SQL, core delle campagne](../tickets/v0.4.1/01-modello-core-sql.md) | bloccante | agente | — | ✅ 2026-11-12 (1066 test) |
+| 02 | [Dashboard admin: campagne e pausa che archivia](../tickets/v0.4.1/02-admin-campagne-pausa.md) | bloccante | agente | 01 | ✅ 2026-11-13 (1074 test; attende l'ok) |
+| 03 | [Webhook: parola chiave in DM e risposte alle storie](../tickets/v0.4.1/03-webhook-dm-campagne.md) | bloccante | agente | 01 | ✅ 2026-11-13 (1098 test; attende l'ok) |
+| 04 | [Commenti: risposta privata](../tickets/v0.4.1/04-commenti-risposta-privata.md) | bloccante (piano B) | agente | 03 | ✅ 2026-11-13 (1123 test; attende l'ok) |
+| 05 | [Scanner: «Applica»](../tickets/v0.4.1/05-scanner-applica.md) | bloccante | agente | 01 | ✅ 2026-11-13 (1137 test; attende l'ok) |
+| 06 | [Documentazione e strumenti per il collaudo](../tickets/v0.4.1/06-documentazione-collaudo.md) | bloccante | agente | 01-05 | ✅ 2026-11-13 (1139 test; attende l'ok) |
+| 07 | [Script SQL su Neon e collaudo su Instagram vero](../tickets/v0.4.1/07-collaudo-instagram.md) | bloccante | founder | 06 | ✅ con riserve 2026-11-25 (passi 14, 20, 22 rinviati; 10, 23, 25 saltati; esiti in `zernio-notes.md`) |
+| 08 | [Log della risposta privata senza id](../tickets/v0.4.1/08-log-risposta-privata.md) | consigliata (F-02 a) | agente | — | ✅ 2026-11-25 (1140 test; attende l'ok) |
+| 09 | [«Applica»: atomicità e pulsante dopo errore di rete](../tickets/v0.4.1/09-applica-atomicita-e-errore-rete.md) | consigliata (F-02 b, c) | agente | — | ⛔ superato (rischio accettato, 2026-11-25) |
+| 10 | [Test mancanti su AC-10, AC-11, AC-15, AC-17](../tickets/v0.4.1/10-test-mancanti-criteri.md) | consigliata (F-03) | agente | — | ⛔ superato (rischio accettato, 2026-11-25) |
+
+Ordine proposto: 01 → 02 → 03 → 04 → 05 → 06 → 07 (02 prima di 03 e 05 per poter creare campagne a mano nei collaudi).
+Il 2026-11-13 il founder ha diviso il vecchio 06 «misto» in 06 (agente) e 07 (founder), senza cambiarne il contenuto.
+
+**Campagne pilota (2026-11-12)**: la prima v0.4.0 delle campagne (adesioni, pagina `/p/`, secondo QR) è **archiviata**
+sul branch `feature/campagne` (non mergiare; ticket 01-03 fatti, 04 parziale). Il founder l'ha ridotta per i pilota
+(il brief iniziale è confluito nel README di v0.4.1 ed è stato eliminato). Si riparte da `develop` sul branch
+`feature/campagne-pilota`, che contiene il processo a skill (`.claude/skills`, agenti `ft-*`).
 
 **v0.3.0 è in produzione dal 2026-10-30** su `https://fidelitree.app` (tag `v0.3.0` su `a83cd64`, Neon `production`,
 app DO `fidelitree`): vedi «Sessione 2026-10-30» in fondo per cosa manca prima dei pilota. Lo storico sotto descrive come ci si è arrivati.

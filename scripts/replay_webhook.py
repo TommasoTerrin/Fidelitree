@@ -7,8 +7,12 @@ Lo script non parla mai con Zernio: manda solo il webhook al nostro server.
 
 Utilizzo (dalla root del progetto, con il server avviato):
     python -m scripts.replay_webhook --merchant-id N --conversation-id ID
-        [--text CARTA | --postback] [--sender-id finto-igsid] [--standby] [--follower si|no]
-        [--hours-ago H] [--event-id ID] [--url http://127.0.0.1:8001]
+        [--text CARTA | --postback | --comment TESTO] [--sender-id finto-igsid] [--standby] [--follower si|no]
+        [--post-id ID] [--comment-id ID] [--hours-ago H] [--event-id ID] [--url http://127.0.0.1:8001]
+
+`--comment TESTO` manda invece un evento `comment.received` firmato (esclude `--text` e `--postback`): in quel caso
+`--conversation-id` non serve, e `--post-id` / `--comment-id` (valori finti di default) indicano il post e il
+commento a cui il server risponderà in privato. `--conversation-id` resta obbligatorio per i DM.
 
 `--follower` imposta `instagramProfile.isFollower` (se omesso il campo manca: il server lo tratta come
 "dato non disponibile"). `--event-id` fissa l'id dell'evento (`X-Zernio-Event-Id`): lanciato due volte con lo
@@ -37,6 +41,8 @@ from app.services import instagram_service, zernio_service
 from app.services.zernio_service import ZernioError
 
 DEFAULT_SENDER_ID = "finto-igsid"
+DEFAULT_POST_ID = "finto-post-id"
+DEFAULT_COMMENT_ID = "finto-comment-id"
 REQUEST_TIMEOUT = 15.0  # secondi: il server può impiegare fino a ~4 s per invio verso Zernio
 
 
@@ -49,10 +55,18 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--merchant-id", type=int, required=True)
-    parser.add_argument("--conversation-id", required=True, help="conversation.id di Zernio dove il server risponderà")
+    parser.add_argument(
+        "--conversation-id",
+        help="conversation.id di Zernio dove il server risponderà (obbligatorio per i DM, non con --comment)",
+    )
     kind = parser.add_mutually_exclusive_group()
     kind.add_argument("--text", help=f"testo del messaggio (default: {settings.INSTAGRAM_CARD_KEYWORD})")
     kind.add_argument("--postback", action="store_true", help="simula il tocco sulla voce di menu 'La mia carta'")
+    kind.add_argument("--comment", help="invia un evento comment.received con questo testo di commento")
+    parser.add_argument("--post-id", default=DEFAULT_POST_ID, help=f"platformPostId finto (default: {DEFAULT_POST_ID})")
+    parser.add_argument(
+        "--comment-id", default=DEFAULT_COMMENT_ID, help=f"id finto del commento (default: {DEFAULT_COMMENT_ID})",
+    )
     parser.add_argument("--sender-id", default=DEFAULT_SENDER_ID, help=f"IGSID finto (default: {DEFAULT_SENDER_ID})")
     parser.add_argument("--standby", action="store_true", help="metadata.standby = true (un'altra app possiede la chat)")
     parser.add_argument("--follower", choices=["si", "no"], help="instagramProfile.isFollower (default: assente)")
@@ -68,7 +82,18 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def build_payload(args: argparse.Namespace, account_id: str, event_id: str) -> dict:
-    """Payload `message.received` nel formato di `zernio-notes.md`, con i valori scelti dalla riga di comando."""
+    """
+    Payload `message.received` nel formato di `zernio-notes.md`, con i valori scelti dalla riga di comando.
+    Con `--comment` ritorna invece un `comment.received` (contract v0.4.1 §9 e §11): `account.accountId` del
+    negozio, `comment.id`, `comment.platformPostId` e `comment.text`, cioè i soli campi letti dal parser.
+    """
+    if args.comment is not None:
+        return {
+            "id": event_id,
+            "event": "comment.received",
+            "account": {"accountId": account_id},
+            "comment": {"id": args.comment_id, "platformPostId": args.post_id, "text": args.comment},
+        }
     sent_at = (utc_now() - timedelta(hours=args.hours_ago)).isoformat().replace("+00:00", "Z")
     sender: dict = {"id": args.sender_id, "name": "Cliente di prova", "username": "cliente_prova"}
     if args.follower:
@@ -142,7 +167,11 @@ def main(
     Esegue il comando e ritorna il codice di uscita. `session` e `http` si iniettano nei test; di default
     si apre una sessione sul DB del `.env` (import tardivo dell'app: `--help` non la avvia) e un client httpx.
     """
-    args = _build_parser().parse_args(argv)
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+    # Il DM ha bisogno della conversazione dove rispondere; il commento no (la risposta privata usa post e commento).
+    if args.comment is None and not args.conversation_id:
+        parser.error("--conversation-id è obbligatorio se non si usa --comment")
     try:
         if session is None:
             from app.main import engine  # import tardivo: evita di avviare l'app per --help

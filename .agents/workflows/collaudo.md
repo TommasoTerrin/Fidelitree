@@ -111,3 +111,61 @@ URL (sempre con il prefisso del tunnel `https://<nome>.trycloudflare.com`):
 Neon `development` con `ENVIRONMENT=production`: ok secondo il founder; dal log registrazione, onboarding, carta di prova,
 «Avvia», 3 card `sent`, `/c/***` aperta, pausa, 429, reset password e «Scollega» (200), 0 segreti e 0 errori 5xx.
 Non confermati dal log: «Riattiva», cambio password, evento duplicato con `replay_webhook`.
+
+## v0.4.1 — campagne
+
+> Aggiunti dal ticket 02 (dashboard admin). Altri passi (webhook, commenti, scanner) arrivano con i ticket 03-05.
+
+1. `/admin` → «Campagne» di un negozio attivo → crea `NATALE` (testo, importo 2,50 €, nessun limite): compare «attiva»
+   con contatori a 0.
+2. Crea una seconda campagna `natale!` → errore 409 leggibile; crea `CARTA` → 409; nome di 2 caratteri → 400.
+3. Modifica importo e limite; «Archivia» → «archiviata»; «Ripristina» → «attiva»; «Elimina» → conferma → sparisce.
+4. «Metti in pausa» il negozio → le sue campagne risultano archiviate; «Riattiva» → restano archiviate.
+
+> Aggiunti dal ticket 03 (webhook dei DM). Su un negozio attivo con la campagna `NATALE` (passo 1 sopra), con
+> `python -m scripts.replay_webhook` o con un DM vero.
+
+5. `--text NATALE` → DM con la promo e la riga «Per utilizzare questa offerta devi avere la nostra carta fedeltà…»; in
+   `/admin` richieste da DM = 1.
+6. `--text "natale!!"` → stessa risposta; `--text "natale per me"` → nessuna risposta, contatore invariato.
+7. Campagna con limite 1 e una richiesta già contata → `--text NATALE` → «Le offerte disponibili sono terminate…».
+8. Campagna archiviata o negozio in pausa → nessuna risposta, contatori invariati.
+9. `--text CARTA` → la card di oggi, invariata.
+
+> Aggiunti dal ticket 04 (commenti), da fare con Instagram vero nel ticket 07.
+
+10. «Scollega» e ricollega il profilo del negozio (sottoscrive `comment.received`).
+11. Da un profilo cliente commenta `NATALE` sotto un post → arriva un DM con la promo; sotto il post nessuna risposta
+    pubblica; in `/admin` richieste da commento = 1.
+12. Commenta `CARTA` → DM «Per ricevere la tua carta scrivici CARTA qui in chat»; poi DM `CARTA` → card di oggi.
+13. Commenta `NATALE` una seconda volta dallo stesso profilo → seconda risposta privata (un commento nuovo è una richiesta nuova).
+14. Da un profilo che **non segue** il negozio: commento `NATALE` → DM consegnato? (esito in `zernio-notes.md`).
+
+> Aggiunti dal ticket 05 (scanner «Applica»), da fare nel ticket 07. Negozio attivo con la campagna `NATALE` (2,50 €) e una seconda
+> campagna senza importo; si prova dal telefono (PWA) o dal browser, dopo aver scansionato una carta.
+
+15. Pagina di gestione della carta → in fondo i bottoni «Applica NATALE (+2,50 €)» e «Applica <nome>».
+16. «Applica NATALE» → finestra di conferma con l'etichetta → «ANNULLA»: nulla cambia, nessuna richiesta.
+17. «Applica NATALE» → «SÌ, CONFERMO» → toast «Accreditati € 2.50 di cashback», dopo l'aggiornamento il cashback è
+    +2,50 €; in `/admin` utilizzi = 1.
+18. «Applica» sulla campagna senza importo → cashback invariato, toast «Campagna applicata», utilizzi +1.
+19. Negozio senza campagne (o con tutte archiviate) → pagina come prima, nessun blocco di bottoni.
+20. Negozio in attesa con campagne: «Applica» con importo disattivato e banner; quello senza importo resta attivo.
+21. `/c/<token>` della carta → mostra solo il nuovo saldo cashback; livello e alberi invariati.
+
+> Aggiunti dal ticket 06 (completamento della sezione). Si fanno nel ticket 07, insieme ai passi 10-21.
+
+22. **Risposta a una storia**: dal profilo cliente rispondi alla storia del negozio scrivendo `NATALE` → arriva il DM con la
+    promo (stessa risposta del passo 5); in `/admin` richieste da DM +1. Se non arriva nulla il payload di Zernio per le
+    storie è diverso da quello atteso (`message.received` con `metadata.storyReply`): **fermati e chiedi**, esito in
+    `zernio-notes.md`.
+23. **Commento senza Instagram** (prova locale del flusso, con il server avviato e un negozio attivo con `NATALE`):
+    `python -m scripts.replay_webhook --merchant-id 1 --comment NATALE` → `HTTP 200` ed esito `sent` (o l'esito di
+    errore di Zernio, perché `post-id` e `comment-id` finti non esistono: l'invio è comunque **vero**, quindi lo si fa solo
+    per vedere il giro del server). Con `--comment CARTA` l'invito a scrivere `CARTA`; con `--comment "natale per me"`
+    nessuna risposta (`ignored`). `--post-id` e `--comment-id` si possono fissare, e con `--event-id` uguale due volte si
+    prova il retry (un solo invio). Non sostituisce i passi 10-14, che provano anche la consegna di Meta.
+24. **Log**: dopo i passi 5-23 la «Chiusura» (controllo dei log) non deve trovare né il testo di un commento, né
+    il testo delle promo, né id di commento o di post: nel log compaiono solo id della campagna e canale.
+25. **«Scollega» e ricollega** alla fine: dopo il ricollegamento il webhook su Zernio ha di nuovo gli eventi
+    `message.received` e `comment.received` (passo 10).

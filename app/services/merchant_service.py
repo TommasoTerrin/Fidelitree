@@ -404,7 +404,7 @@ from app.core.errors import (  # noqa: E402
 from app.core.money import euro_to_cents  # noqa: E402
 from app.core.security import create_admin_session_token  # noqa: E402
 from app.models.models import Merchant, ZernioSendCounter  # noqa: E402
-from app.services import tree_service, zernio_service  # noqa: E402
+from app.services import campaign_service, tree_service, zernio_service  # noqa: E402
 from app.services.db_crud import card_crud, merchant_crud  # noqa: E402
 from app.services.instagram_service import MENU_ITEM_TITLE  # noqa: E402
 
@@ -523,7 +523,27 @@ def update_merchant_as_admin(session: Session, merchant: Merchant, changes: dict
     overrides = {k: changes[k] for k in _THRESHOLD_FIELDS if k in changes}
     if overrides:
         tree_service.effective_thresholds(merchant, overrides)
-    return merchant_crud.update_merchant(session, merchant, changes)
+    return _update_archiving_on_pause(session, merchant, changes)
+
+
+def _update_archiving_on_pause(session: Session, merchant: Merchant, changes: dict) -> Merchant:
+    """
+    Salva `changes` sul negozio archiviandone le campagne se la modifica lo porta in pausa (AC-08).
+
+    Lo stato dopo si calcola dai valori che verranno salvati, senza rileggere il DB. L'archiviazione precede
+    `update_merchant` (che fa il commit): stessa transazione. Se il salvataggio fallisce (anche con un 400
+    dopo l'archiviazione) si fa `rollback()` e nessuna campagna resta archiviata (contract §8).
+    """
+    before = service_state(merchant.is_approved, merchant.is_paused)
+    after = service_state(
+        changes.get("is_approved", merchant.is_approved), changes.get("is_paused", merchant.is_paused)
+    )
+    try:
+        campaign_service.archive_on_pause(session, merchant.id, before, after)
+        return merchant_crud.update_merchant(session, merchant, changes)
+    except Exception:
+        session.rollback()
+        raise
 
 
 # --- Shell: dashboard admin ---
@@ -577,7 +597,7 @@ def set_merchant_state(session: Session, merchant: Merchant, action: AdminAction
     is_approved, is_paused = apply_admin_action(action, merchant.is_approved, merchant.is_paused)
     if (is_approved, is_paused) == (merchant.is_approved, merchant.is_paused):
         return merchant
-    return merchant_crud.update_merchant(session, merchant, {"is_approved": is_approved, "is_paused": is_paused})
+    return _update_archiving_on_pause(session, merchant, {"is_approved": is_approved, "is_paused": is_paused})
 
 
 def approve_merchant(session: Session, merchant: Merchant) -> Merchant:
