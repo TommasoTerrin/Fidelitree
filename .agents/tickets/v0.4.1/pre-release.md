@@ -13,9 +13,9 @@
 - [ ] Tag `v0.4.1` identico alla versione
 
 ## Schema (migrazione `migrations/0001_campagne.sql`)
-- [ ] Branch di backup di `production` creato
+- [x] Branch di backup di `production` creato (`backup-2026-11-25`, `br-dark-dawn-aljzsdfc`)
 - [x] Script provato su Neon `development` (12 colonne, indice `ix_campaign_merchant_id`, app avviata) — ticket 07
-- [ ] Su `production`: `campaign` non esiste; script applicato; 12 colonne e indice presenti (**prima** del merge)
+- [x] Su `production` (2026-11-25): 8 tabelle senza `campaign`; script applicato; 12 colonne, `campaign_pkey` e `ix_campaign_merchant_id` presenti (prima del merge)
 - [ ] Rollback chiaro: codice v0.3.0 ignora `campaign`; `DROP TABLE campaign` solo accettando di perdere campagne e contatori
 
 ## Collaudo manuale (sezione «v0.4.1 — campagne» di `collaudo.md`)
