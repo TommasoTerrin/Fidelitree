@@ -100,3 +100,8 @@ Nessun collaudo anticipato (decisione 13): tutto ciò che riguarda i commenti è
 - **Ticket 08 ✅** (log senza id, AC-31). **Ticket 09 e 10 ⛔**: i loro punti sono rischi accettati (F-02 b, c; F-03). AC-32, AC-33 e i test mancanti su AC-10, AC-11, AC-15, AC-17 restano nella spec con la nota «accettato come rischio».
 - **Prossimo**: `/review v0.4.1` (gate 3). Il passo 1 della review richiede zero bloccanti: AC-23 è già accettato come rischio (F-01).
 - **Decisioni aperte prima di `/release`**: `create_all` in produzione (proposta: script SQL a mano prima del deploy); processo di migrazioni anche in dev (decisione 0005 da aggiornare se cambia).
+
+## Decisione 2026-11-25 — SQL a mano anche in produzione
+
+- Lo script `migrations/0001_campagne.sql` si applica a mano su Neon `production`, dopo il branch di backup e prima del merge su `main`, come da `deploy.md`. Il `create_all` resta come rete di sicurezza: trova la tabella già creata e non fa nulla.
+- Per `/release`: sessione nuova con contesto pulito, dopo l'ok al merge su `develop` della review.
