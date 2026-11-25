@@ -12,10 +12,10 @@
 
 - **Versione**: **v0.4.1 — Campagne pilota: promo via DM e commenti Instagram**
   ([README](../tickets/v0.4.1/README.md))
-- **Branch**: `develop` dopo il merge (oggi ancora `feature/campagne-pilota`, da `develop` il 2026-11-12)
+- **Branch**: `develop` (merge della PR #8 fatto)
 - **Fase**: `collaudo` (gate 1 e gate 2 approvati il 2026-11-12; gate 3 approvato il 2026-11-25, rischi in F-04)
 - **Ticket**: 07 e 08 fatti (attendono l'ok). 09 e 10 superati: rischi accettati (F-02, F-03)
-- **Prossimo comando**: `/release` (dopo push, PR e merge su `develop` con ok esplicito a ogni passo)
+- **Prossimo comando**: `/release` in corso (passo 3: backup e script SQL su `production`, ok a ogni passo)
 
 ## Dove siamo
 
